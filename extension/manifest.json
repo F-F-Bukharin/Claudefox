@@ -19,6 +19,7 @@
     "tabs",
     "activeTab",
     "nativeMessaging",
+    "clipboardWrite",
     "<all_urls>"
   ],
   "background": {

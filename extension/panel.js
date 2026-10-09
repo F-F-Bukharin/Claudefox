@@ -372,7 +372,36 @@ function scheduleRender() {
 const WHO = { user: 'You', assistant: 'Claude', system: 'Claude in Zen', error: 'Claude in Zen' };
 const STEP_MARK = { run: '…', ok: '✓', bad: '✕' };
 
+// Light formatting for replies: **bold**, `code`, "- " bullets. Built as DOM nodes, never HTML.
+function fillRich(el, text) {
+  el.textContent = '';
+  const lines = String(text).split('\n');
+  lines.forEach((line, i) => {
+    const bullet = /^\s*[-*]\s+/.exec(line);
+    if (bullet) { el.appendChild(document.createTextNode('• ')); line = line.slice(bullet[0].length); }
+    for (const part of line.split(/(\*\*[^*]+\*\*|`[^`]+`)/)) {
+      if (!part) continue;
+      if (/^\*\*[^*]+\*\*$/.test(part)) { const b = document.createElement('strong'); b.textContent = part.slice(2, -2); el.appendChild(b); }
+      else if (/^`[^`]+`$/.test(part)) { const c = document.createElement('code'); c.textContent = part.slice(1, -1); el.appendChild(c); }
+      else el.appendChild(document.createTextNode(part));
+    }
+    if (i < lines.length - 1) el.appendChild(document.createTextNode('\n'));
+  });
+}
+
+async function copyText(text, btn) {
+  try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; }
+  catch { btn.textContent = 'Copy failed'; }
+  setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+}
+
+let lastChatSig = '';
+
 function renderChat() {
+  // Rebuilding the list clears any text the user has selected, so only rebuild when something changed.
+  const sig = JSON.stringify(chat) + '|' + (state.switching ? 1 : 0);
+  if (sig === lastChatSig) return;
+  lastChatSig = sig;
   const box = $('messages');
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
   for (const el of box.querySelectorAll('.msg')) el.remove();
@@ -403,8 +432,16 @@ function renderChat() {
     if (m.text || !m.pending) {
       const body = document.createElement('div');
       body.className = 'body';
-      body.textContent = m.text;
+      if (m.role === 'assistant') fillRich(body, m.text); else body.textContent = m.text;
       if (m.text) div.appendChild(body);
+      if (m.text && m.role === 'assistant' && !m.pending) {
+        const cp = document.createElement('button');
+        cp.className = 'link copy';
+        cp.textContent = 'Copy';
+        cp.title = 'Copy this reply';
+        cp.addEventListener('click', () => copyText(m.text, cp));
+        div.appendChild(cp);
+      }
     }
     if (m.pending) {
       const row = document.createElement('div');
