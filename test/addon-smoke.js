@@ -156,12 +156,23 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     check('unlinked update asks the helper to build', native.sent.some(m => m.type === 'update_addon'));
     await helperSays({ type: 'update_result', ok: true, version: '0.5.0' });
 
-    // account switch
-    await fromPanel({ type: 'switchAccount' });
-    check('switch asks the helper', native.sent.some(m => m.type === 'claude_switch') && g('cizState').get().switching === true);
-    await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'other@example.com' });
-    await helperSays({ type: 'claude_switch_done', ok: true });
-    check('switch done: logged, flag cleared', !g('cizState').get().switching && g('cizState').log().some(e => /now signed in as other@example.com/.test(e.text)));
+    // accounts (Google-style list: switch, add, retry after a usage limit)
+    await helperSays({ type: 'accounts', login: null, accounts: [
+      { id: 'main', email: 'me@example.com', loggedIn: true, active: true },
+      { id: 'a1', email: 'other@example.com', loggedIn: true, active: false }] });
+    check('the accounts list is kept for the panel', g('cizState').get().accounts.length === 2 && g('cizState').get().accounts[1].email === 'other@example.com');
+    await fromPanel({ type: 'accountUse', id: 'a1', retry: 'try that again' });
+    check('switch asks the helper', native.sent.some(m => m.type === 'account_use' && m.id === 'a1'));
+    await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: true, email: 'other@example.com' });
+    check('switch done: logged, conversation reset, message retried',
+      g('cizState').get().chatSession === '' && g('cizState').log().some(e => /Chat now uses other@example.com/.test(e.text))
+      && panelIn.some(m => m.type === 'retry' && m.text === 'try that again'));
+    await fromPanel({ type: 'accountAdd' });
+    check('add asks the helper', native.sent.some(m => m.type === 'account_add'));
+    await helperSays({ type: 'account_result', action: 'login_started', id: 'a2', ok: true, isNew: true });
+    check('an open sign-in window reaches the panel', (g('cizState').get().accountLogin || {}).id === 'a2');
+    await helperSays({ type: 'account_result', action: 'login', id: 'a2', ok: true, email: 'third@example.com' });
+    check('a finished sign-in clears it and says who', g('cizState').get().accountLogin === null && g('cizState').log().some(e => /Signed in as third@example.com/.test(e.text)));
 
     // file tools setting (sign-out check is at the end)
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'notes' });

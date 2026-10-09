@@ -21,8 +21,23 @@ fs.writeFileSync(fake, `#!${process.execPath}
 const fs = require('fs'); const { spawn } = require('child_process');
 const argv = process.argv.slice(2);
 if (argv[0] === 'auth') {
-  fs.appendFileSync(${JSON.stringify(record)} + '.auth', argv[1] + '\\n');
-  if (argv[1] === 'status') process.stdout.write(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'new@example.com' }));
+  // One fake sign-in per profile folder (CLAUDE_CONFIG_DIR), like real Claude Code.
+  const dir = process.env.CLAUDE_CONFIG_DIR || '';
+  const f = require('path').join(dir, 'fake-login.json');
+  fs.appendFileSync(${JSON.stringify(record)} + '.auth', argv[1] + ' ' + dir + '\\n');
+  if (argv[1] === 'login') {
+    let email = 'new@example.com';
+    try { email = fs.readFileSync(${JSON.stringify(record)} + '.next-email', 'utf8').trim(); } catch {}
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(f, JSON.stringify({ email }));
+  }
+  if (argv[1] === 'logout') { try { fs.unlinkSync(f); } catch {} }
+  if (argv[1] === 'status') {
+    let st = null;
+    try { st = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
+    process.stdout.write(JSON.stringify(st ? { loggedIn: true, authMethod: 'claude.ai', email: st.email, subscriptionType: 'pro' } : { loggedIn: false, authMethod: 'none' }));
+    process.exit(st ? 0 : 1);
+  }
   process.exit(0);
 }
 fs.writeFileSync(${JSON.stringify(record)} + '.pid', String(process.pid));
@@ -159,12 +174,40 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     const cancelled = await next(m => m.type === 'chat_done' && m.id === 'c6', 4000);
     check('cancel ends the turn', !cancelled.ok && /Cancelled/.test(cancelled.error), `${Date.now() - t0} ms`);
 
-    toHelper({ type: 'claude_switch' });
-    await next(m => m.type === 'claude_switch_started');
-    const st = await next(m => m.type === 'claude_status', 8000);
-    const sw = await next(m => m.type === 'claude_switch_done', 8000);
-    const authLog = fs.readFileSync(record + '.auth', 'utf8').trim().split('\n');
-    check('switch: logout, then sign-in, then fresh status', authLog.join(',') === 'logout,login,status' && sw.ok && st.email === 'new@example.com', authLog.join(','));
+    // Accounts: one Claude Code profile per account, Google-style.
+    const mainDir = path.join(tmp, 'claude-in-zen', 'claude');
+    toHelper({ type: 'accounts' });
+    let list = await next(m => m.type === 'accounts', 8000);
+    check('accounts: main profile listed, signed out, active', list.accounts.length === 1 && list.accounts[0].id === 'main' && !list.accounts[0].loggedIn && list.accounts[0].active);
+    fs.writeFileSync(record + '.next-email', 'one@example.com');
+    toHelper({ type: 'account_add' });
+    const started = await next(m => m.type === 'account_result' && m.action === 'login_started', 8000);
+    const added = await next(m => m.type === 'account_result' && m.action === 'login', 15000);
+    const newId = added.id;
+    check('add account: sign-in window, then the new account is active', started.isNew && added.ok && added.email === 'one@example.com' && /^a[0-9a-z]+$/.test(newId));
+    list = await next(m => m.type === 'accounts' && m.accounts.some(a => a.id === newId), 8000);
+    check('accounts list puts the active account first', list.accounts[0].id === newId && list.accounts[0].active && list.accounts[0].loggedIn && list.accounts.length === 2);
+    const newDir = path.join(tmp, 'claude-in-zen', 'accounts', newId);
+    toHelper({ type: 'chat', id: 'acc1', text: 'hi from the new account' });
+    await next(m => m.type === 'chat_done' && m.id === 'acc1', 15000);
+    check('chat turns run on the active account profile', JSON.parse(fs.readFileSync(record, 'utf8')).config === newDir);
+    toHelper({ type: 'account_add' });
+    await next(m => m.type === 'account_result' && m.action === 'login_started', 8000);
+    const again = await next(m => m.type === 'account_result' && m.action === 'login', 15000);
+    const dirsAfter = fs.readdirSync(path.join(tmp, 'claude-in-zen', 'accounts'));
+    check('adding the same account twice keeps one and switches to it', again.ok && again.already && again.id === newId && dirsAfter.length === 1, dirsAfter.join(','));
+    toHelper({ type: 'account_use', id: 'main' });
+    const used = await next(m => m.type === 'account_result' && m.action === 'use', 8000);
+    const stMain = await next(m => m.type === 'claude_status' && m.accountId === 'main', 8000);
+    check('switching back to main needs no sign-in', used.ok && stMain.accountId === 'main' && !stMain.loggedIn, JSON.stringify({ used, stMain }));
+    toHelper({ type: 'account_remove', id: 'main' });
+    const refuse = await next(m => m.type === 'account_result' && m.action === 'remove', 8000);
+    check('the active account cannot be removed while others exist', !refuse.ok && /Switch to another/.test(refuse.error));
+    toHelper({ type: 'account_remove', id: newId });
+    const removed = await next(m => m.type === 'account_result' && m.action === 'remove', 8000);
+    const authLog = fs.readFileSync(record + '.auth', 'utf8');
+    check('removing an account logs it out and deletes its profile', removed.ok && !fs.existsSync(newDir) && authLog.includes('logout ' + newDir));
+    check('main profile was never logged out by switching', !authLog.includes('logout ' + mainDir));
 
     toHelper({ type: 'chat', id: 'c8', text: 'SLEEP' });
     await sleep(800);

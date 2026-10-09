@@ -63,7 +63,13 @@ async function handlePanel(msg, port) {
     case 'setFiles':   return setFiles(!!msg.value, msg.mode, msg.folder);
     case 'retryNative': nativeRetries = 0; return connectNative();
     case 'checkClaude': return requestClaudeStatus(true);
-    case 'switchAccount': return switchAccount();
+    case 'accounts':      return sendNative({ type: 'accounts' });
+    case 'accountUse':    return accountAction('account_use', msg.id, msg.retry);
+    case 'switchAccount':                                   // 0.4 panels: "Log out and add another account"
+    case 'accountAdd':    return accountAction('account_add');
+    case 'accountSignIn': return accountAction('account_signin', msg.id);
+    case 'accountRemove': return accountAction('account_remove', msg.id);
+    case 'accountCancel': return sendNative({ type: 'account_cancel' });
     case 'updateAddon':
       if (cizState.get().linked) {
         // Linked to the project folder: a reload picks up every change, and reconnecting restarts the helper too.
@@ -366,7 +372,7 @@ function connectNative() {
   port.onDisconnect.addListener(p => {
     const err = (p && p.error) || browser.runtime.lastError;
     nativePort = null;
-    if (cizState.get().switching) cizState.set({ switching: false });
+    if (cizState.get().accountLogin) cizState.set({ accountLogin: null });
     failChats('The helper stopped, so the answer was cut off.');
     if (err && /No such native application/i.test(err.message)) {
       cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
@@ -399,12 +405,53 @@ function sendNative(msg) {
   }
 }
 
-async function switchAccount() {
-  if (cizState.get().agent !== 'active') return;
-  if (chatRuns.size) return cizState.addLog('error', 'Claude is still answering. Switch accounts after it finishes.');
-  if (!sendNative({ type: 'claude_switch' })) return cizState.addLog('error', 'Account switch failed: the helper is not connected.');
-  await cizState.set({ switching: true });
-  await cizState.addLog('info', 'Logging Claude Code out…');
+// ---------------------------------------------------------------- accounts
+// The helper keeps one Claude Code profile per account (Google-style switching). The add-on relays the
+// panel's requests, keeps the list in state, and can retry a message after a switch (usage limit).
+
+let pendingRetry = null;   // { id, text }: send this again once the switch to account id is done
+
+async function accountAction(type, id, retry) {
+  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first.');
+  if (chatRuns.size && type !== 'account_signin') return cizState.addLog('error', 'Claude is still answering. Try again after it finishes.');
+  const accountId = String(id || '');
+  if (!sendNative({ type, id: accountId })) return cizState.addLog('error', 'Accounts: the helper is not connected.');
+  if (type === 'account_use' && retry && typeof retry === 'string') pendingRetry = { id: accountId, text: retry.slice(0, 50000) };
+  if (type === 'account_add') await cizState.addLog('info', 'Opening a sign-in window for another Claude account…');
+}
+
+function accountLabel(id) {
+  const a = (cizState.get().accounts || []).find(x => x.id === id);
+  return (a && a.email) || 'the account';
+}
+
+async function onAccountResult(msg) {
+  const id = String(msg.id || '');
+  switch (msg.action) {
+    case 'use':
+      if (!msg.ok) { pendingRetry = null; return cizState.addLog('error', `Switch failed: ${msg.error}`); }
+      await cizState.set({ chatSession: '' });   // conversations belong to the account that had them
+      await cizState.addLog('info', `Chat now uses ${msg.email || accountLabel(id)}`);
+      if (pendingRetry && pendingRetry.id === id) postToPanels({ type: 'retry', text: pendingRetry.text });
+      pendingRetry = null;
+      return;
+    case 'login_started':
+      await cizState.set({ accountLogin: { id, isNew: !!msg.isNew, at: Date.now() } });
+      return cizState.addLog('info', 'A sign-in window is open: pick the Claude account in the browser and click Authorize. The panel notices when you are done.');
+    case 'login':
+      await cizState.set({ accountLogin: null });
+      if (!msg.ok) return cizState.addLog(/Cancelled/.test(msg.error) ? 'info' : 'error', `Sign-in: ${msg.error}`);
+      await cizState.set({ chatSession: '' });
+      return cizState.addLog('info', msg.already
+        ? `${msg.email} was already on the list. Switched to it.`
+        : `Signed in as ${msg.email || 'the new account'}. The chat uses it now.`);
+    case 'add':
+    case 'signin':
+      if (!msg.ok) return cizState.addLog('error', `Sign-in: ${msg.error}`);
+      return;
+    case 'remove':
+      return cizState.addLog(msg.ok ? 'info' : 'error', msg.ok ? 'Account removed from Claude in Zen.' : `Remove failed: ${msg.error}`);
+  }
 }
 
 let claudeCheckAsked = false;   // log the next status answer (set by the panel's "check" link)
@@ -432,6 +479,7 @@ async function onNativeMessage(msg) {
       });
       await cizState.addLog('info', `Helper ${msg.version} connected`);
       requestClaudeStatus();
+      sendNative({ type: 'accounts' });
       return;
 
     case 'clients':
@@ -445,6 +493,7 @@ async function onNativeMessage(msg) {
           loggedIn: !!msg.loggedIn,
           email: String(msg.email || msg.emailAddress || ''),
           plan: String(msg.subscriptionType || ''),
+          accountId: String(msg.accountId || ''),
           checkedAt: Date.now(),
         },
       });
@@ -471,17 +520,18 @@ async function onNativeMessage(msg) {
         : `Update: ${msg.error}`);
       return;
 
-    case 'claude_switch_started':
-      await cizState.addLog('info', 'Logged out. A sign-in window is open: pick the account in the browser and click Authorize.');
+    case 'accounts':
+      await cizState.set({
+        accounts: (Array.isArray(msg.accounts) ? msg.accounts : []).slice(0, 20).map(a => ({
+          id: String(a.id || ''), email: String(a.email || ''), plan: String(a.plan || ''), org: String(a.org || ''),
+          loggedIn: !!a.loggedIn, active: !!a.active, lastUsed: Number(a.lastUsed) || 0,
+        })),
+        accountLogin: msg.login ? { id: String(msg.login.id || ''), isNew: !!msg.login.isNew } : null,
+      });
       return;
 
-    case 'claude_switch_done':
-      await cizState.set({ switching: false });
-      if (msg.ok) await cizState.set({ chatSession: '' });   // the old conversation belongs to the old account
-      await cizState.addLog(msg.ok ? 'info' : 'error', msg.ok
-        ? `Claude Code now signed in as ${(cizState.get().claude || {}).email || 'the new account'}.`
-        : `Account switch: ${msg.error}`);
-      return;
+    case 'account_result':
+      return onAccountResult(msg);
 
     case 'chat_event':
       if (chatRuns.has(String(msg.id))) postToPanels({ type: 'chatEvent', id: String(msg.id), event: msg.event || {} });

@@ -73,15 +73,36 @@ function onAddon(msg) {
     }
 
     case 'claude_status':
-      claudeStatus().then(status => sendAddon({ type: 'claude_status', ...status }));
+      sendStatus();
       return;
 
     case 'update_addon':
       updateAddon();
       return;
 
-    case 'claude_switch':
-      switchAccount();
+    case 'accounts':
+      sendAccounts();
+      return;
+
+    case 'account_use':
+      useAccount(String(msg.id || ''));
+      return;
+
+    case 'account_add':
+    case 'claude_switch':   // the 0.4 "Log out and add another account" message: now it adds instead
+      addAccount();
+      return;
+
+    case 'account_signin':
+      signInAccount(String(msg.id || ''));
+      return;
+
+    case 'account_remove':
+      removeAccount(String(msg.id || ''));
+      return;
+
+    case 'account_cancel':
+      if (login) finishLogin(false, null, 'Cancelled.');
       return;
 
     case 'ping':
@@ -197,10 +218,10 @@ function findClaude() {
   return candidates.find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } }) || null;
 }
 
-// Environment for every Claude Code process the host starts: the add-on's own profile folder,
-// and no API-key or third-party-provider variables, so usage always runs on the user's plan.
-function claudeEnv() {
-  const env = { ...process.env, CLAUDE_CONFIG_DIR: P.CLAUDE_CONFIG_DIR };
+// Environment for every Claude Code process the host starts: the profile folder of the active account (or the
+// one given), and no API-key or third-party-provider variables, so usage always runs on the user's plan.
+function claudeEnv(dir) {
+  const env = { ...process.env, CLAUDE_CONFIG_DIR: dir || accountDir(activeId()) };
   for (const k of [
     'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_PROFILE',
     'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY',
@@ -208,11 +229,22 @@ function claudeEnv() {
   return env;
 }
 
-function claudeStatus() {
+// Sends the active account's sign-in state. Each call supersedes the ones before it, so a slow
+// "auth status" for an account the user just switched away from can never overwrite the new one.
+let statusSeq = 0;
+function sendStatus() {
+  const seq = ++statusSeq, id = activeId();
+  statusOf(accountDir(id))
+    .then(s => { if (seq === statusSeq) sendAddon({ type: 'claude_status', ...s, accountId: id }); })
+    .catch(e => log.error('status', e.message));
+}
+
+// "claude auth status" for one profile folder.
+function statusOf(dir) {
   return new Promise(resolve => {
     const exe = findClaude();
     if (!exe) return resolve({ installed: false, loggedIn: false });
-    execFile(exe, ['auth', 'status'], { env: claudeEnv(), timeout: 20000, windowsHide: true }, (err, stdout) => {
+    execFile(exe, ['auth', 'status'], { env: claudeEnv(dir), timeout: 20000, windowsHide: true }, (err, stdout) => {
       let info = {};
       try { info = JSON.parse(String(stdout || '').trim() || '{}'); } catch {}
       const pick = {};
@@ -474,41 +506,204 @@ function updateAddon() {
     });
 }
 
-// ------------------------------------------------------------------ switch account
-// Logs the add-on's Claude Code profile out, then opens "claude auth login" in its own console
-// window (detached), so the user can pick another account in the browser. When that window
-// closes, the new status goes back to the add-on.
+// ------------------------------------------------------------------ accounts
+// Every chat account is its own Claude Code profile folder: "main" is the one "Sign in Claude Code.bat" signs in,
+// added accounts live in accounts\<id>. Switching only changes which folder chat turns use, so nothing is ever
+// logged out to switch and each account keeps its own sign-in, like Google's account switcher.
 
-let switching = null;
+const LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
+let acc = loadAccounts();
+let login = null;   // the open sign-in window: { id, dir, isNew, started, timer }
 
-function switchAccount() {
-  const done = (ok, error) => sendAddon({ type: 'claude_switch_done', ok, error: error || '' });
-  if (switching) return done(false, 'A sign-in window is already open.');
-  if (chat) return done(false, 'Claude is still answering. Wait for it to finish, then switch.');
-  const exe = findClaude();
-  if (!exe) return done(false, 'Claude Code is not installed on this PC.');
-  execFile(exe, ['auth', 'logout'], { env: claudeEnv(), timeout: 20000, windowsHide: true }, err => {
-    if (err) log.warn('auth logout', err.message);
-    let child;
-    try {
-      child = spawn(exe, ['auth', 'login'], { env: claudeEnv(), cwd: P.WORKSPACE, detached: true, windowsHide: false, stdio: 'ignore' });
-    } catch (e) {
-      return done(false, `Could not open the sign-in window: ${e.message}`);
+function loadAccounts() {
+  let a = {};
+  try { a = JSON.parse(fs.readFileSync(P.ACCOUNTS_FILE, 'utf8')) || {}; } catch {}
+  return {
+    active: typeof a.active === 'string' ? a.active : 'main',
+    meta: a.meta && typeof a.meta === 'object' ? a.meta : {},
+    hidden: Array.isArray(a.hidden) ? a.hidden.filter(x => typeof x === 'string') : [],
+  };
+}
+
+function saveAccounts() {
+  try { fs.writeFileSync(P.ACCOUNTS_FILE, JSON.stringify(acc, null, 2)); } catch (e) { log.error('accounts.json', e.message); }
+}
+
+const ADDED_ID = /^a[0-9a-z]{4,24}$/;
+
+function accountIds() {
+  const ids = acc.hidden.includes('main') ? [] : ['main'];
+  try {
+    for (const d of fs.readdirSync(P.ACCOUNTS_DIR, { withFileTypes: true })) {
+      if (d.isDirectory() && ADDED_ID.test(d.name) && !acc.hidden.includes(d.name)) ids.push(d.name);
     }
-    switching = child;
-    log.info('account switch: logged out, sign-in window open');
-    sendAddon({ type: 'claude_switch_started' });
-    const finish = () => {
-      if (switching !== child) return;
-      switching = null;
-      claudeStatus().then(status => {
-        sendAddon({ type: 'claude_status', ...status });
-        done(!!status.loggedIn, status.loggedIn ? '' : 'The sign-in window closed without signing in.');
-      });
+  } catch {}
+  return ids;
+}
+
+function accountDir(id) { return id === 'main' || !ADDED_ID.test(id) ? P.CLAUDE_CONFIG_DIR : path.join(P.ACCOUNTS_DIR, id); }
+
+function activeId() {
+  const ids = accountIds();
+  return ids.includes(acc.active) ? acc.active : (ids[0] || 'main');
+}
+
+function removeAccountDir(id) {
+  if (!ADDED_ID.test(id)) return;   // never touch "main" or anything outside accounts\
+  try { fs.rmSync(path.join(P.ACCOUNTS_DIR, id), { recursive: true, force: true }); } catch (e) { log.warn('remove account dir', e.message); }
+}
+
+async function listAccounts() {
+  const ids = accountIds();
+  if (acc.hidden.includes('main')) {
+    // "Sign in Claude Code.bat" may have signed the removed main profile back in: show it again.
+    const s = await statusOf(P.CLAUDE_CONFIG_DIR);
+    if (s.loggedIn) { acc.hidden = acc.hidden.filter(x => x !== 'main'); ids.unshift('main'); }
+  }
+  const active = activeId();
+  const rows = await Promise.all(ids.map(async id => {
+    const s = await statusOf(accountDir(id));
+    const m = acc.meta[id] || {};
+    const email = String(s.email || s.emailAddress || m.email || '');
+    const plan = String(s.subscriptionType || m.plan || '');
+    if (s.loggedIn && email) acc.meta[id] = Object.assign({}, m, { email, plan });
+    return {
+      id, email, plan, loggedIn: !!s.loggedIn, active: id === active,
+      org: String(s.orgName || s.organizationName || ''), lastUsed: Number(m.lastUsed) || 0,
     };
-    child.on('error', e => { log.warn('auth login', e.message); finish(); });
-    child.on('exit', finish);
-  });
+  }));
+  saveAccounts();
+  rows.sort((a, b) => (b.active - a.active) || (b.loggedIn - a.loggedIn) || (b.lastUsed - a.lastUsed));
+  return rows;
+}
+
+let accountsSeq = 0;
+function sendAccounts() {
+  const seq = ++accountsSeq;   // same rule as sendStatus: only the newest list reaches the panel
+  listAccounts()
+    .then(rows => { if (seq === accountsSeq) sendAddon({ type: 'accounts', accounts: rows, login: login ? { id: login.id, isNew: login.isNew } : null }); })
+    .catch(e => log.error('accounts', e.message));
+}
+
+function accountDone(action, id, ok, error, extra) {
+  sendAddon(Object.assign({ type: 'account_result', action, id, ok: !!ok, error: error || '' }, extra || {}));
+}
+
+function afterAccountChange() {
+  sendStatus();
+  sendAccounts();
+}
+
+function useAccount(id) {
+  if (chat) return accountDone('use', id, false, 'Claude is still answering. Switch accounts after it finishes.');
+  if (!accountIds().includes(id)) return accountDone('use', id, false, 'That account is not on this PC any more.');
+  acc.active = id;
+  acc.meta[id] = Object.assign({}, acc.meta[id], { lastUsed: Date.now() });
+  saveAccounts();
+  log.info(`accounts: using ${id}`);
+  accountDone('use', id, true, '', { email: (acc.meta[id] || {}).email || '' });
+  afterAccountChange();
+}
+
+function addAccount() {
+  if (login) return accountDone('add', login.id, false, 'A sign-in window is already open. Finish it or press Cancel.');
+  if (chat) return accountDone('add', '', false, 'Claude is still answering. Add the account after it finishes.');
+  const id = 'a' + Date.now().toString(36);
+  startLogin(id, true);
+}
+
+function signInAccount(id) {
+  if (login) return accountDone('signin', login.id, false, 'A sign-in window is already open. Finish it or press Cancel.');
+  if (!accountIds().includes(id)) return accountDone('signin', id, false, 'That account is not on this PC any more.');
+  startLogin(id, false);
+}
+
+// "claude auth login" in a console window of its own, so the user sees what it says. On Windows a small .cmd
+// file runs it (the window stays open long enough to read the result); elsewhere (tests) it runs directly.
+function openLoginWindow(exe, dir) {
+  if (process.platform === 'win32') {
+    const q = v => String(v).replace(/%/g, '%%');
+    const script = path.join(P.BASE, 'sign-in.cmd');
+    const lines = [
+      '@echo off', 'chcp 65001 >nul', 'title Claude in Zen - add a Claude account',
+      `set "CLAUDE_CONFIG_DIR=${q(dir)}"`, 'set "ANTHROPIC_API_KEY="', 'set "ANTHROPIC_AUTH_TOKEN="', 'set "CLAUDE_CODE_OAUTH_TOKEN="',
+      'echo A browser window opens. Sign in to the Claude account you want, then click Authorize.', 'echo.',
+      `"${q(exe)}" auth login`, 'echo.', `"${q(exe)}" auth status --text`, 'echo.',
+      'echo The Claude in Zen panel picks this up on its own. You can close this window.', 'timeout /t 15 >nul',
+    ];
+    fs.writeFileSync(script, lines.join('\r\n') + '\r\n', 'utf8');
+    const child = spawn('cmd.exe', ['/d', '/s', '/c', `"start "" "${script}""`],
+      { windowsVerbatimArguments: true, detached: true, stdio: 'ignore', windowsHide: false });
+    child.on('error', e => log.warn('sign-in window', e.message));
+    child.unref();
+    return;
+  }
+  const child = spawn(exe, ['auth', 'login'], { env: claudeEnv(dir), cwd: P.WORKSPACE, detached: true, stdio: 'ignore' });
+  child.on('error', e => log.warn('auth login', e.message));
+  child.unref();
+}
+
+function startLogin(id, isNew) {
+  const action = isNew ? 'add' : 'signin';
+  const exe = findClaude();
+  if (!exe) return accountDone(action, id, false, 'Claude Code is not installed on this PC.');
+  const dir = accountDir(id);
+  try { fs.mkdirSync(dir, { recursive: true }); openLoginWindow(exe, dir); }
+  catch (e) { if (isNew) removeAccountDir(id); return accountDone(action, id, false, `Could not open the sign-in window: ${e.message}`); }
+  login = { id, dir, isNew, started: Date.now(), timer: null };
+  log.info(`accounts: sign-in window open for ${isNew ? 'a new account' : id}`);
+  accountDone('login_started', id, true, '', { isNew });
+  const poll = async () => {
+    if (!login || login.id !== id) return;
+    const s = await statusOf(dir);
+    if (!login || login.id !== id) return;
+    if (s.loggedIn) return finishLogin(true, s);
+    if (Date.now() - login.started > LOGIN_TIMEOUT_MS) return finishLogin(false, null, 'The sign-in was not finished within 10 minutes.');
+    login.timer = setTimeout(poll, 3000);
+  };
+  login.timer = setTimeout(poll, 4000);
+}
+
+function finishLogin(ok, status, error) {
+  const L = login;
+  if (!L) return;
+  login = null;
+  clearTimeout(L.timer);
+  if (!ok) {
+    if (L.isNew) removeAccountDir(L.id);
+    accountDone('login', L.id, false, error || 'Sign-in failed.');
+    return afterAccountChange();
+  }
+  const email = String(status.email || status.emailAddress || '');
+  const dupe = L.isNew && email && accountIds().find(k => k !== L.id && ((acc.meta[k] || {}).email || '').toLowerCase() === email.toLowerCase());
+  let id = L.id;
+  if (dupe) { removeAccountDir(L.id); id = dupe; }   // already on the list: just switch to it
+  acc.active = id;
+  acc.meta[id] = Object.assign({}, acc.meta[id], { email, plan: String(status.subscriptionType || ''), lastUsed: Date.now() });
+  saveAccounts();
+  log.info(`accounts: signed in, now using ${id}`);
+  accountDone('login', id, true, '', { email, already: !!dupe });
+  afterAccountChange();
+}
+
+function removeAccount(id) {
+  if (!accountIds().includes(id)) return accountDone('remove', id, false, 'That account is not on this PC any more.');
+  if (login && login.id === id) return accountDone('remove', id, false, 'Finish or cancel its sign-in window first.');
+  if (id === activeId() && accountIds().length > 1) return accountDone('remove', id, false, 'Switch to another account before removing this one.');
+  if (chat) return accountDone('remove', id, false, 'Claude is still answering. Remove the account after it finishes.');
+  const exe = findClaude();
+  const finish = () => {
+    if (id === 'main') { if (!acc.hidden.includes('main')) acc.hidden.push('main'); }
+    else removeAccountDir(id);
+    delete acc.meta[id];
+    if (acc.active === id) acc.active = accountIds()[0] || 'main';
+    saveAccounts();
+    log.info(`accounts: removed ${id}`);
+    accountDone('remove', id, true);
+    afterAccountChange();
+  };
+  if (!exe) return finish();
+  execFile(exe, ['auth', 'logout'], { env: claudeEnv(accountDir(id)), timeout: 20000, windowsHide: true }, finish);
 }
 
 // ------------------------------------------------------------------ shutdown
@@ -518,7 +713,7 @@ function shutdown(reason) {
   shuttingDown = true;
   log.info(`shutting down: ${reason}`);
   cancelChat('*', 'Stopped.');
-  if (switching) { try { switching.kill(); } catch {} switching = null; }
+  if (login) { clearTimeout(login.timer); login = null; }   // the window itself stays: finishing it still works later
   for (const c of clients.values()) { try { c.sock.destroy(); } catch {} }
   try { server.close(); } catch {}
   try { if (fs.readFileSync(P.TOKEN_FILE, 'utf8') === token) fs.unlinkSync(P.TOKEN_FILE); } catch {}
