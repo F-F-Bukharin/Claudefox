@@ -10,3 +10,4 @@
 *.svg text eol=lf
 *.png binary
 *.xpi binary
+*.txt text eol=crlf
