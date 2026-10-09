@@ -114,6 +114,7 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     check('no built-in tools when file tools are off', val('--tools') === '' && !a.includes('--add-dir') && val('--permission-mode') === 'dontAsk');
     check('API key not passed to Claude Code', rec.apiKey === null);
     check('runs on the add-on profile', rec.config === path.join(tmp, 'claude-in-zen', 'claude'));
+    check('Speed is Haiku 5.5 on high by default', val('--model') === 'claude-haiku-5-5' && val('--effort') === 'high');
     check('chat prompt has no ask-before rule', /no confirmation step/.test(val('--append-system-prompt')));
 
     toHelper({ type: 'chat', id: 'c2', text: 'again', resume: done.sessionId, files: 'read', folder });
@@ -122,9 +123,10 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     check('resume passes the session id', b[b.indexOf('--resume') + 1] === done.sessionId);
     check('read-only file tools', b[b.indexOf('--tools') + 1] === 'Read,Glob,Grep' && b[b.indexOf('--add-dir') + 1] === folder && b[b.indexOf('--permission-mode') + 1] === 'dontAsk');
 
-    toHelper({ type: 'chat', id: 'c3', text: 'edit', files: 'write', folder });
+    toHelper({ type: 'chat', id: 'c3', text: 'edit', files: 'write', folder, model: 'quality' });
     await next(m => m.type === 'chat_done' && m.id === 'c3', 15000);
     const c = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
+    check('Quality is Opus 5.5 on high', c[c.indexOf('--model') + 1] === 'claude-opus-5-5' && c[c.indexOf('--effort') + 1] === 'high');
     check('read-write file tools, never Bash', c[c.indexOf('--tools') + 1] === 'Read,Glob,Grep,Edit,Write' && c[c.indexOf('--permission-mode') + 1] === 'acceptEdits' && !c.join(' ').includes('Bash'));
 
     toHelper({ type: 'chat', id: 'c4', text: 'x', files: 'read', folder: path.join(tmp, 'missing') });

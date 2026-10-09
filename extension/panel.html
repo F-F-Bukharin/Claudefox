@@ -35,7 +35,7 @@
       <div id="emptyState" class="empty">
         <div class="empty-mark"><img src="icons/icon.svg" alt="" width="40" height="40"></div>
         <h2>What should I do in Zen?</h2>
-        <p>I can read and act on your tabs once I'm connected. Until then, try the test commands.</p>
+        <p>Ask me to read, summarize or do things in your tabs.</p>
         <div class="chips">
           <button class="chip" data-fill="/tabs">/tabs: list my tabs</button>
           <button class="chip" data-fill="/ping">/ping</button>
@@ -45,6 +45,10 @@
     </div>
 
     <div class="composer">
+      <div class="modes" role="radiogroup" aria-label="Model">
+        <button type="button" role="radio" data-model="speed" title="Haiku 5.5, high effort: fast and light on usage">Speed</button>
+        <button type="button" role="radio" data-model="quality" title="Opus 5.5, high effort: slower, best answers, uses more">Quality</button>
+      </div>
       <div class="context">
         <span class="ctx-label">Current tab</span>
         <span id="ctxTab" class="ctx-tab">…</span>

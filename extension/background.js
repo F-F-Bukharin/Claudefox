@@ -37,7 +37,14 @@ browser.runtime.onConnect.addListener(port => {
     cizState.addLog('error', `${msg && msg.type}: ${err.message || err}`);
   }));
   port.postMessage({ type: 'state', state: cizState.get(), log: cizState.log() });
+  port.postMessage({ type: 'chatRuns', ids: [...chatRuns.keys()] });
 });
+
+function postToPanels(msg) {
+  for (const p of panelPorts) {
+    try { p.postMessage(msg); } catch {}
+  }
+}
 
 function pushToPanels(state, log) {
   for (const p of panelPorts) {
@@ -51,13 +58,17 @@ async function handlePanel(msg, port) {
     case 'signOut':    return signOut();
     case 'stop':       return stopAll('Stop button');
     case 'start':      return startAgent();
-    case 'setFiles':   return setFiles(!!msg.value);
+    case 'setFiles':   return setFiles(!!msg.value, msg.mode, msg.folder);
     case 'retryNative': nativeRetries = 0; return connectNative();
     case 'checkClaude': return requestClaudeStatus(true);
     case 'clearLog':   return cizState.clearLog();
     case 'openClaude': return browser.tabs.create({ url: CIZ.CLAUDE_ORIGIN + '/' });
     case 'devCall':    return devCall(msg.tool);
     case 'call':       return panelCall(msg, port);
+    case 'chat':       return startChat(msg);
+    case 'chatCancel': return cancelChat(String(msg.id || ''));
+    case 'newChat':    return cizState.set({ chatSession: '' });
+    case 'setModel':   return cizState.set({ chatModel: msg.value === 'quality' ? 'quality' : 'speed' });
   }
 }
 
@@ -182,9 +193,10 @@ async function stopAll(source) {
     try { a.controller.abort(new Error('Stopped')); } catch {}
     pendingActions.delete(id);
   }
-  disconnectNative('stopped');
+  failChats('Stopped.');
+  disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
   await cizState.set({ agent: 'stopped', filesEnabled: false, pending: 0 });
-  await cizState.addLog('stop', `Stopped (${source}). Pending actions cancelled, helper disconnected, file tools off.`);
+  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, helper disconnected, file tools off.`);
 }
 
 async function startAgent() {
@@ -193,14 +205,68 @@ async function startAgent() {
   connectNative();
 }
 
-async function setFiles(value) {
-  // File tools arrive in a later step (served through Claude Code, not the add-on).
-  if (value) {
-    await cizState.addLog('info', 'File tools are not built yet. Toggle left off.');
-    await cizState.set({ filesEnabled: false });
+async function setFiles(value, mode, folder) {
+  const m = mode === 'write' ? 'write' : 'read';
+  const f = String(folder == null ? cizState.get().filesFolder : folder).trim().slice(0, 1000);
+  if (!value) {
+    const was = cizState.get().filesEnabled;
+    await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    if (was) await cizState.addLog('info', 'File tools off');
     return;
   }
-  await cizState.set({ filesEnabled: false });
+  if (cizState.get().agent !== 'active') return;
+  if (!/^([A-Za-z]:[\\/]|\\\\|\/)/.test(f)) {
+    await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    return cizState.addLog('error', 'File tools need a full folder path, like C:\\Users\\you\\Documents\\notes. Left off.');
+  }
+  await cizState.set({ filesEnabled: true, filesMode: m, filesFolder: f });
+  await cizState.addLog('info', `File tools on (${m === 'write' ? 'read and write' : 'read only'}) for ${f}`);
+}
+
+// ---------------------------------------------------------------- chat
+// One Claude Code turn at a time, run by the helper. The panel shows the stream.
+
+const chatRuns = new Map();   // chat id -> { startedAt }
+
+async function startChat(msg) {
+  const id = String(msg.id || '').slice(0, 64);
+  const text = String(msg.text || '');
+  const fail = error => postToPanels({ type: 'chatDone', id, ok: false, error });
+  if (!id || !text.trim()) return;
+  const s = cizState.get();
+  if (chatRuns.size) return fail('Claude is still answering. Wait, or press Cancel.');
+  if (s.agent !== 'active') return fail('Claude is stopped. Press Start first.');
+  if (!s.signedIn) return fail('Not signed in. Open the Profile page and sign in first.');
+  if (s.native !== 'connected') return fail('The helper is not connected. Run "Install helper.bat", then press retry in Settings.');
+  if (s.claude && !s.claude.installed) return fail('Claude Code is not installed on this PC.');
+  if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Run "Sign in Claude Code.bat".');
+  const files = s.filesEnabled ? s.filesMode : '';
+  chatRuns.set(id, { startedAt: Date.now() });
+  const model = s.chatModel === 'quality' ? 'quality' : 'speed';
+  const sent = sendNative({ type: 'chat', id, text, model, resume: s.chatSession || '', files, folder: files ? s.filesFolder : '' });
+  if (!sent) { chatRuns.delete(id); return fail('Could not reach the helper.'); }
+  await cizState.addLog('action', `chat → Claude Code, ${model}${files ? `, file tools: ${files}` : ''}`);
+}
+
+function cancelChat(id) {
+  if (!chatRuns.has(id)) return;
+  sendNative({ type: 'chat_cancel', id });
+}
+
+// Ends every open turn in the panel (Stop, or the helper went away).
+function failChats(error) {
+  for (const id of chatRuns.keys()) postToPanels({ type: 'chatDone', id, ok: false, error });
+  chatRuns.clear();
+}
+
+async function onChatDone(msg) {
+  const id = String(msg.id || '');
+  chatRuns.delete(id);
+  const err = String(msg.error || '');
+  if (msg.sessionId) await cizState.set({ chatSession: String(msg.sessionId) });
+  if (!msg.ok && /No conversation found/i.test(err)) await cizState.set({ chatSession: '' });
+  if (!msg.ok) await cizState.addLog(msg.limit ? 'warn' : 'error', `Chat: ${err.split('\n')[0].slice(0, 200)}`);
+  postToPanels({ type: 'chatDone', id, ok: !!msg.ok, error: err, limit: !!msg.limit });
 }
 
 // ---------------------------------------------------------------- helper (native host)
@@ -230,6 +296,7 @@ function connectNative() {
   port.onDisconnect.addListener(p => {
     const err = (p && p.error) || browser.runtime.lastError;
     nativePort = null;
+    failChats('The helper stopped, so the answer was cut off.');
     if (err && /No such native application/i.test(err.message)) {
       cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
       return;
@@ -316,6 +383,13 @@ async function onNativeMessage(msg) {
       sendNative({ type: 'result', id: msg.id, ...out });
       return;
     }
+
+    case 'chat_event':
+      if (chatRuns.has(String(msg.id))) postToPanels({ type: 'chatEvent', id: String(msg.id), event: msg.event || {} });
+      return;
+
+    case 'chat_done':
+      return onChatDone(msg);
 
     case 'host_error':
       await cizState.addLog('error', `Helper: ${msg.error}`);

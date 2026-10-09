@@ -20,6 +20,9 @@ port.onMessage.addListener(msg => {
     const done = pendingCalls.get(msg.id);
     if (done) { pendingCalls.delete(msg.id); done(msg); }
   }
+  if (msg.type === 'chatEvent') onChatEvent(msg.id, msg.event || {});
+  if (msg.type === 'chatDone') onChatDone(msg);
+  if (msg.type === 'chatRuns') onChatRuns(msg.ids || []);
 });
 
 function call(tool, args) {
@@ -59,6 +62,9 @@ $('filesToggle').addEventListener('change', e => send('setFiles', { value: e.tar
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
 $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list' }));
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
+for (const b of document.querySelectorAll('.modes button')) {
+  b.addEventListener('click', () => send('setModel', { value: b.dataset.model }));
+}
 
 // ------------------------------------------------------------ render state
 
@@ -124,6 +130,11 @@ function render(s, log) {
   $('filesToggle').disabled = s.agent === 'stopped';
   $('pendingVal').textContent = String(s.pending || 0);
 
+  // model choice
+  for (const b of document.querySelectorAll('.modes button')) {
+    b.setAttribute('aria-checked', String(b.dataset.model === (s.chatModel || 'speed')));
+  }
+
   // composer hint
   $('composerHint').textContent =
     s.agent === 'stopped' ? 'Stopped. Press Start to let Claude act again.' :
@@ -186,9 +197,15 @@ function autoGrow() {
   input.style.height = Math.min(input.scrollHeight, 180) + 'px';
 }
 
+let chatSeq = 0;
+let liveRuns = null;   // chat ids the background still runs (null until it tells us)
+
+function busyMsg() { return chat.find(m => m.role === 'assistant' && m.pending); }
+
 async function submit() {
   const text = input.value.trim();
   if (!text) return;
+  if (busyMsg()) { $('composerHint').textContent = 'Claude is still answering. Wait, or press Cancel.'; return; }
   input.value = ''; autoGrow();
   addMsg({ role: 'user', text });
 
@@ -196,21 +213,64 @@ async function submit() {
 
   if (state.agent === 'stopped') return addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' });
   if (!state.signedIn) return addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' });
-  addMsg({ role: 'assistant', text: "I'm not connected to Claude yet. The chat link comes in the next build phase.\nFor now, try /tabs, /ping or /help." });
+  const id = `p${Date.now().toString(36)}${chatSeq++}`;
+  addMsg({ role: 'assistant', id, text: '', steps: [], pending: true });
+  send('chat', { id, text });
 }
 
 async function runSlash(text) {
   const cmd = text.slice(1).split(/\s+/)[0].toLowerCase();
   if (cmd === 'help') {
-    return addMsg({ role: 'assistant', text: 'Test commands:\n/tabs: list your open tabs\n/ping: check the add-on answers\n/clear: clear this chat\n\nThey run through the same path Claude will use, so they need sign-in and Start.' });
+    return addMsg({ role: 'assistant', text: 'Type normally to talk to Claude. It can read and act on your tabs.\n\nTest commands (no Claude needed):\n/tabs: list your open tabs\n/ping: check the add-on answers\n/clear: clear this chat and start a new conversation' });
   }
-  if (cmd === 'clear') { chat = []; saveChat(); return renderChat(); }
+  if (cmd === 'clear') { chat = []; saveChat(); send('newChat'); return renderChat(); }
   const tool = { tabs: 'tabs_list', ping: 'ping' }[cmd];
   if (!tool) return addMsg({ role: 'error', text: `Unknown command /${cmd}. Try /help.` });
   const out = await call(tool);
   if (!out.ok) return addMsg({ role: 'error', text: out.error });
   if (tool === 'ping') return addMsg({ role: 'assistant', text: `Pong. Add-on v${out.result.version} is answering.` });
   addMsg({ role: 'assistant', text: `You have ${out.result.length} tab${out.result.length === 1 ? '' : 's'} open:`, tabs: out.result.slice(0, 50) });
+}
+
+// ------------------------------------------------------------ chat stream
+
+function onChatEvent(id, ev) {
+  const m = chat.find(x => x.id === id);
+  if (!m || !m.pending) return;
+  if (ev.kind === 'text') m.text += String(ev.text || '');
+  else if (ev.kind === 'tool') {
+    m.steps.push({ name: String(ev.name || 'tool'), input: String(ev.input || ''), state: 'run' });
+    if (m.steps.length > 30) m.steps.splice(0, m.steps.length - 30);
+  } else if (ev.kind === 'tool_result') {
+    const step = m.steps.find(st => st.state === 'run');
+    if (step) { step.state = ev.error ? 'bad' : 'ok'; step.result = String(ev.text || ''); }
+  }
+  scheduleRender();
+}
+
+function onChatDone(msg) {
+  const m = chat.find(x => x.id === msg.id);
+  if (!m) return;
+  m.pending = false;
+  for (const st of m.steps) if (st.state === 'run') st.state = msg.ok ? 'ok' : 'bad';
+  if (!msg.ok) {
+    m.error = msg.error || 'Something went wrong.';
+    m.limit = !!msg.limit;
+  } else if (!m.text.trim()) {
+    m.text = '(No reply text.)';
+  }
+  saveChat();
+  renderChat();
+}
+
+// Answers that were running when the panel was closed and have since ended elsewhere.
+function onChatRuns(ids) {
+  liveRuns = new Set(ids);
+  let changed = false;
+  for (const m of chat) {
+    if (m.pending && !liveRuns.has(m.id)) { m.pending = false; m.error = m.error || 'This answer was interrupted.'; changed = true; }
+  }
+  if (changed) { saveChat(); renderChat(); }
 }
 
 function addMsg(m) {
@@ -220,24 +280,78 @@ function addMsg(m) {
   renderChat();
 }
 
-function saveChat() { try { browser.storage.session.set({ chat }); } catch {} }
+let saveTimer = null;
+function saveChat() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { browser.storage.session.set({ chat }); } catch {} }, 300);
+}
+
+let renderQueued = false;
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; renderChat(); saveChat(); });
+}
 
 const WHO = { user: 'You', assistant: 'Claude', system: 'Claude in Zen', error: 'Claude in Zen' };
+const STEP_MARK = { run: '…', ok: '✓', bad: '✕' };
 
 function renderChat() {
   const box = $('messages');
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
   for (const el of box.querySelectorAll('.msg')) el.remove();
   $('emptyState').hidden = chat.length > 0;
   for (const m of chat) {
     const div = document.createElement('div');
-    div.className = 'msg ' + m.role;
+    div.className = 'msg ' + m.role + (m.pending ? ' pending' : '');
     const who = document.createElement('div');
     who.className = 'who';
     who.textContent = WHO[m.role] || '';
-    const body = document.createElement('div');
-    body.className = 'body';
-    body.textContent = m.text;
-    div.append(who, body);
+    div.appendChild(who);
+
+    if (Array.isArray(m.steps) && m.steps.length) {
+      const ul = document.createElement('ul');
+      ul.className = 'steps';
+      for (const st of m.steps) {
+        const li = document.createElement('li');
+        li.className = 'step ' + st.state;
+        const mark = document.createElement('span'); mark.className = 'mark'; mark.textContent = STEP_MARK[st.state] || '';
+        const name = document.createElement('span'); name.className = 'name'; name.textContent = st.name;
+        li.append(mark, name);
+        li.title = [st.input && `Input: ${st.input}`, st.result && `Result: ${st.result}`].filter(Boolean).join('\n');
+        ul.appendChild(li);
+      }
+      div.appendChild(ul);
+    }
+
+    if (m.text || !m.pending) {
+      const body = document.createElement('div');
+      body.className = 'body';
+      body.textContent = m.text;
+      if (m.text) div.appendChild(body);
+    }
+    if (m.pending) {
+      const row = document.createElement('div');
+      row.className = 'working';
+      const dots = document.createElement('span'); dots.className = 'dots'; dots.textContent = m.text ? '' : 'Thinking';
+      const cancel = document.createElement('button'); cancel.className = 'link'; cancel.textContent = 'Cancel';
+      cancel.addEventListener('click', () => send('chatCancel', { id: m.id }));
+      row.append(dots, cancel);
+      div.appendChild(row);
+    }
+    if (m.error) {
+      const err = document.createElement('div');
+      err.className = 'body errline';
+      err.textContent = m.error;
+      div.appendChild(err);
+      if (m.limit) {
+        const hint = document.createElement('div');
+        hint.className = 'limit';
+        hint.textContent = 'This Claude account hit its usage limit.';
+        div.appendChild(hint);
+      }
+    }
+
     if (Array.isArray(m.tabs)) {
       const ul = document.createElement('ul');
       ul.className = 'tablist';
@@ -254,7 +368,8 @@ function renderChat() {
     }
     box.appendChild(div);
   }
-  box.scrollTop = box.scrollHeight;
+  if (atBottom || busyMsg()) box.scrollTop = box.scrollHeight;
+  $('sendBtn').disabled = !!busyMsg();
 }
 
 // ------------------------------------------------------------ restore
@@ -263,6 +378,7 @@ function renderChat() {
   try {
     const got = await browser.storage.session.get(['chat', 'panelPage']);
     chat = Array.isArray(got.chat) ? got.chat : [];
+    if (liveRuns) onChatRuns([...liveRuns]);
     renderChat();
     showPage(PAGES.includes(got.panelPage) ? got.panelPage : 'chat');
   } catch { renderChat(); showPage('chat'); }

@@ -235,6 +235,11 @@ function writeMcpConfig() {
 }
 
 const CHAT_TIMEOUT_MS = 15 * 60 * 1000;
+// The panel's two choices. Effort is the same; the model differs.
+const MODELS = {
+  speed:   { model: 'claude-haiku-5-5', effort: 'high' },
+  quality: { model: 'claude-opus-5-5', effort: 'high' },
+};
 const FILE_TOOLS = { read: 'Read,Glob,Grep', write: 'Read,Glob,Grep,Edit,Write' };
 const LIMIT_RE = /usage limit|limit reached|rate.?limit|reached your|limit will reset|out of (extra )?usage/i;
 let chat = null;   // the running turn: { id, child, sessionId, finished, stderr, resultError, timer }
@@ -256,7 +261,7 @@ function chatPrompt(files) {
 
 function isDir(p) { try { return fs.statSync(p).isDirectory(); } catch { return false; } }
 
-function chatArgs(files, resume) {
+function chatArgs(files, resume, choice) {
   const args = [
     '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
     '--mcp-config', P.MCP_CONFIG, '--strict-mcp-config',
@@ -265,6 +270,7 @@ function chatArgs(files, resume) {
     // Otherwise anything not allowed below is refused, never prompted.
     '--permission-mode', files.mode === 'write' ? 'acceptEdits' : 'dontAsk',
     '--allowedTools', 'mcp__claude-in-zen',
+    '--model', choice.model, '--effort', choice.effort,
     '--tools', files.mode ? FILE_TOOLS[files.mode] : '',
   ];
   if (files.mode) args.push('--add-dir', files.folder);
@@ -348,11 +354,12 @@ function startChat(msg) {
     files.mode = msg.files;
     files.folder = path.resolve(folder);
   }
+  const choice = MODELS[msg.model] || MODELS.speed;
   const resume = typeof msg.resume === 'string' && /^[0-9a-f-]{36}$/i.test(msg.resume) ? msg.resume : '';
 
   let child;
   try {
-    child = spawn(exe, chatArgs(files, resume), {
+    child = spawn(exe, chatArgs(files, resume, choice), {
       cwd: P.WORKSPACE, env: claudeEnv(), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
     });
   } catch (e) {
@@ -361,7 +368,7 @@ function startChat(msg) {
   const run = { id, child, sessionId: resume, finished: false, stderr: '', resultError: '', started: Date.now(), timer: null };
   chat = run;
   run.timer = setTimeout(() => cancelChat(id, 'The answer took longer than 15 minutes and was stopped.'), CHAT_TIMEOUT_MS);
-  log.info(`chat ${id} started (files: ${files.mode || 'off'}, ${resume ? 'resumed' : 'new'})`);
+  log.info(`chat ${id} started (${choice.model}, files: ${files.mode || 'off'}, ${resume ? 'resumed' : 'new'})`);
 
   child.stdin.on('error', () => {});
   child.stdin.end(text, 'utf8');   // the prompt goes on stdin: no quoting or length limits on the command line
