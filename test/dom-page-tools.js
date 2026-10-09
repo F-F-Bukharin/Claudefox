@@ -42,4 +42,16 @@ ok('bad selector message', /valid CSS/.test(err('click',{selector:'##'})||''));
 // policy gate used by cizPageTab / navigate / tab_open
 for (const [u,b] of [['https://accounts.google.com/signin','y'],['https://www.google.com/ServiceLogin','y'],['https://myaccount.google.com/','y'],['about:config','y'],['file:///C:/x','y'],['https://mail.google.com/mail/u/0/','n'],['https://shop.example/','n']])
   ok('url gate '+u, ctx.cizUrlBlocked(u).blocked===(b==='y'));
+// real-click sequence, coordinates, display:contents, media
+const seen=[]; const go2=w.document.getElementById('go');
+for (const e of ['pointerdown','mousedown','mouseup','click']) go2.addEventListener(e,()=>seen.push(e));
+run('click',{selector:'#go'}); ok('click sends pointer and mouse events', ['pointerdown','mousedown','mouseup','click'].every(e=>seen.includes(e)), seen.join(','));
+w.document.elementFromPoint=()=>go2; seen.length=0;
+const at=run('click',{x:40,y:50}); ok('click by x,y', seen.includes('click') && at.at[0]===40 && at.at[1]===50);
+const wrap=w.document.createElement('yt-button'); wrap.style.display='contents'; const inner=w.document.createElement('span'); inner.textContent='Play'; wrap.appendChild(inner); w.document.body.appendChild(wrap);
+w.Element.prototype.getBoundingClientRect=function(){ return this===wrap?{width:0,height:0,left:0,top:0}:{width:10,height:10,left:0,top:0}; };
+let wc=0; wrap.addEventListener('click',()=>wc++); run('click',{selector:'yt-button'}); ok('display:contents wrapper clickable', wc===1);
+const v=w.document.createElement('video'); let played=0; v.play=()=>{played++;Object.defineProperty(v,'paused',{value:false,configurable:true});return Promise.resolve();}; v.pause=()=>{}; w.document.body.appendChild(v);
+const mr=run('media',{action:'play'}); ok('media play hits the video', played===1 && mr.paused===false && mr.players===1);
+ok('media bad action refused', /action must be/.test(err('media',{action:'explode'})||''));
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);

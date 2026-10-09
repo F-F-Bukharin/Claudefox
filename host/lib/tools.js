@@ -77,8 +77,12 @@ const TOOLS = [
   {
     name: 'click',
     title: 'Click',
-    description: 'Click an element by ref (preferred) or CSS selector. Scrolls it into view first.',
-    inputSchema: obj({ ...TAB, ...REF, ...SELECTOR }),
+    description: 'Click an element by ref (preferred) or CSS selector, or click a point by x and y read off a screenshot (CSS pixels of the visible page). Sends pointer and mouse events like a real click.',
+    inputSchema: obj({
+      ...TAB, ...REF, ...SELECTOR,
+      x: { type: 'number', description: 'Point to click, from the left of the visible page (use with y, without ref).' },
+      y: { type: 'number', description: 'Point to click, from the top of the visible page.' },
+    }),
   },
   {
     name: 'fill',
@@ -119,9 +123,19 @@ const TOOLS = [
     timeoutMs: 70000,
   },
   {
+    name: 'media',
+    title: 'Video or audio',
+    description: 'Control the video or audio on a page (the biggest visible player unless a ref is given): play, pause, toggle, mute, unmute, seek, or status. Use this for "play", "pause", "resume the video" instead of clicking player buttons.',
+    inputSchema: obj({
+      ...TAB, ...REF,
+      action: { type: 'string', enum: ['play', 'pause', 'toggle', 'mute', 'unmute', 'seek', 'status'], description: 'Default "status".' },
+      seconds: { type: 'number', description: 'Where to seek to, for action "seek".' },
+    }),
+  },
+  {
     name: 'screenshot',
     title: 'Screenshot',
-    description: 'Take a PNG screenshot of the visible part of a tab.',
+    description: 'Take a PNG screenshot of the visible part of a tab, at one image pixel per CSS pixel, so its coordinates work with click x and y.',
     inputSchema: obj({ ...TAB }),
     readOnly: true,
   },

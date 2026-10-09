@@ -28,10 +28,33 @@ function cizPageOp(op, args, sensitiveField) {
   function squash(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
   function isVisible(el) {
     if (!el || !el.isConnected) return false;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) return false;
     const cs = getComputedStyle(el);
-    return cs.visibility !== 'hidden' && cs.display !== 'none';
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 || r.height > 0) return true;
+    // display: contents and similar wrappers have no box of their own; their children do.
+    return Array.from(el.children).some(c => { const b = c.getBoundingClientRect(); return b.width > 0 || b.height > 0; });
+  }
+  function boxOf(el) {
+    let r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) {
+      const c = Array.from(el.children).find(k => { const b = k.getBoundingClientRect(); return b.width > 0 || b.height > 0; });
+      if (c) r = c.getBoundingClientRect();
+    }
+    return r;
+  }
+  // A real-looking click: pointer and mouse events first (many sites listen to those), then click().
+  function realClick(el, x, y) {
+    const o = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0 };
+    const P = typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
+    el.dispatchEvent(new P('pointerover', o));
+    el.dispatchEvent(new MouseEvent('mouseover', o));
+    el.dispatchEvent(new P('pointerdown', Object.assign({ buttons: 1, pointerType: 'mouse', isPrimary: true }, o)));
+    el.dispatchEvent(new MouseEvent('mousedown', Object.assign({ buttons: 1 }, o)));
+    if (el.focus) el.focus({ preventScroll: true });
+    el.dispatchEvent(new P('pointerup', Object.assign({ pointerType: 'mouse', isPrimary: true }, o)));
+    el.dispatchEvent(new MouseEvent('mouseup', o));
+    el.click();
   }
   function labelOf(el) {
     const aria = el.getAttribute('aria-label');
@@ -173,14 +196,44 @@ function cizPageOp(op, args, sensitiveField) {
       return page({ text: out.length ? out.join('\n') : 'No matches.', truncated: false });
     }
     case 'click': {
-      const el = target();
-      if (!isVisible(el)) throw new Error('That element is not visible on the page.');
-      if (el.disabled) throw new Error('That element is disabled.');
-      el.scrollIntoView({ block: 'center', inline: 'nearest' });
-      if (el.focus) el.focus({ preventScroll: true });
-      el.click();
-      return { clicked: `${roleOf(el)} "${labelOf(el).slice(0, 120)}"` };
+      let el, x, y;
+      if (args.x != null && args.y != null && !args.ref && !args.selector) {
+        // Coordinates from a screenshot, in CSS pixels of the visible page.
+        x = Number(args.x); y = Number(args.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error('x and y must be numbers.');
+        el = document.elementFromPoint(x, y);
+        if (!el) throw new Error(`Nothing at ${x},${y}. The page is ${window.innerWidth}x${window.innerHeight}.`);
+      } else {
+        el = target();
+        if (!isVisible(el)) throw new Error('That element is not visible on the page. Try a screenshot and click by x and y.');
+        if (el.disabled) throw new Error('That element is disabled.');
+        el.scrollIntoView({ block: 'center', inline: 'nearest' });
+        const r = boxOf(el);
+        x = Math.round((r.left || 0) + (r.width || 0) / 2); y = Math.round((r.top || 0) + (r.height || 0) / 2);
+      }
+      realClick(el, x, y);
+      return { clicked: `${roleOf(el)} "${labelOf(el).slice(0, 120)}"`, at: [x, y] };
     }
+    case 'media': {
+      const all = Array.from(document.querySelectorAll('video, audio'));
+      let m = args.ref || args.selector ? target() : null;
+      if (m && !/^(VIDEO|AUDIO)$/.test(m.tagName)) m = m.querySelector('video, audio');
+      if (!m) {
+        // The biggest visible player is almost always the one the user means.
+        m = all.filter(isVisible).sort((a, b) => { const A = boxOf(a), B = boxOf(b); return B.width * B.height - A.width * A.height; })[0] || all[0];
+      }
+      if (!m) throw new Error('No video or audio on this page.');
+      const act = String(args.action || 'status');
+      if (act === 'play' || (act === 'toggle' && m.paused)) { const p = m.play(); if (p && p.catch) p.catch(() => {}); }
+      else if (act === 'pause' || act === 'toggle') m.pause();
+      else if (act === 'mute') m.muted = true;
+      else if (act === 'unmute') m.muted = false;
+      else if (act === 'seek') { const s = Number(args.seconds); if (!Number.isFinite(s)) throw new Error('Give seconds to seek to.'); m.currentTime = Math.max(0, s); }
+      else if (act !== 'status') throw new Error('action must be play, pause, toggle, mute, unmute, seek or status.');
+      return { action: act, paused: act === 'play' ? false : m.paused, muted: m.muted, time: Math.round(m.currentTime), duration: Number.isFinite(m.duration) ? Math.round(m.duration) : null, players: all.length };
+    }
+    case 'viewport':
+      return { width: window.innerWidth, height: window.innerHeight, scroll_y: Math.round(window.scrollY) };
     case 'fill': {
       const el = target();
       refuseSensitive(el);
@@ -370,6 +423,7 @@ const CIZ_TOOLS = {
   async fill(args) { return cizInPage(await cizPageTab(args), 'fill', args); },
   async press_key(args) { return cizInPage(await cizPageTab(args), 'press', args); },
   async scroll(args) { return cizInPage(await cizPageTab(args), 'scroll', args); },
+  async media(args) { return cizInPage(await cizPageTab(args), 'media', args); },
 
   async wait_for(args, signal) {
     if (!args.text && !args.selector) throw new Error('Give text or a CSS selector to wait for.');
@@ -392,15 +446,19 @@ const CIZ_TOOLS = {
   async screenshot(args) {
     const tab = await cizPageTab(args);
     let dataUrl;
+    // scale 1: one image pixel per CSS pixel, so click x/y can be read straight off the picture.
     try {
-      dataUrl = await browser.tabs.captureTab(tab.id, { format: 'png' });
+      dataUrl = await browser.tabs.captureTab(tab.id, { format: 'png', scale: 1 });
     } catch {
       await browser.tabs.update(tab.id, { active: true });
       await cizSleep(300);
-      dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+      dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png', scale: 1 });
     }
     const m = /^data:image\/png;base64,(.+)$/.exec(dataUrl || '');
     if (!m) throw new Error('Could not capture the tab.');
-    return { data: m[1], mimeType: 'image/png', title: tab.title || '', url: tab.url || '' };
+    let vp = null;
+    try { vp = await cizInPage(tab, 'viewport', {}); } catch {}
+    const note = vp ? `Visible page is ${vp.width}x${vp.height} CSS px; use these image pixels as click x and y.` : '';
+    return { data: m[1], mimeType: 'image/png', title: tab.title || '', url: tab.url || '', note };
   },
 };

@@ -244,7 +244,12 @@ async function startChat(msg) {
   const files = s.filesEnabled ? s.filesMode : '';
   chatRuns.set(id, { startedAt: Date.now() });
   const model = s.chatModel === 'quality' ? 'quality' : 'speed';
-  const sent = sendNative({ type: 'chat', id, text, model, resume: s.chatSession || '', files, folder: files ? s.filesFolder : '' });
+  let tab = null;
+  try {
+    const [t] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+    if (t) tab = { id: t.id, title: t.title || '', url: t.url || '' };
+  } catch {}
+  const sent = sendNative({ type: 'chat', id, text, model, tab, resume: s.chatSession || '', files, folder: files ? s.filesFolder : '' });
   if (!sent) { chatRuns.delete(id); return fail('Could not reach the helper.'); }
   await cizState.addLog('action', `chat → Claude Code, ${model}${files ? `, file tools: ${files}` : ''}`);
 }
