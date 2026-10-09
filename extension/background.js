@@ -1,0 +1,327 @@
+'use strict';
+// Claude in Zen — background page (MV2, persistent).
+// P1 skeleton: session sign-in, Stop/Start, channel status, action log,
+// and the command router that later phases plug tools into.
+
+let nativePort = null;
+const pendingActions = new Map();   // id -> { cmd, controller, startedAt }
+let nextActionId = 1;
+
+// ---------------------------------------------------------------- startup
+
+(async function init() {
+  await cizState.load();
+  cizState.onChange(pushToPanels);
+  cizState.onChange(updateBadge);
+  await cizState.set({ pending: 0 });
+  await cizState.addLog('info', 'Add-on started');
+  probeDebugPort();
+  setInterval(probeDebugPort, 20000);
+  if (cizState.get().agent === 'active') connectNative();
+  updateBadge(cizState.get());
+})();
+
+browser.browserAction.onClicked.addListener(() => {
+  browser.sidebarAction.toggle().catch(() => browser.sidebarAction.open().catch(() => {}));
+});
+
+// ---------------------------------------------------------------- panel link
+
+const panelPorts = new Set();
+
+browser.runtime.onConnect.addListener(port => {
+  if (port.name !== 'panel') return;
+  panelPorts.add(port);
+  port.onDisconnect.addListener(() => panelPorts.delete(port));
+  port.onMessage.addListener(msg => handlePanel(msg, port).catch(err => {
+    cizState.addLog('error', `${msg && msg.type}: ${err.message || err}`);
+  }));
+  port.postMessage({ type: 'state', state: cizState.get(), log: cizState.log() });
+});
+
+function pushToPanels(state, log) {
+  for (const p of panelPorts) {
+    try { p.postMessage({ type: 'state', state, log }); } catch {}
+  }
+}
+
+async function handlePanel(msg, port) {
+  switch (msg.type) {
+    case 'signIn':     return signIn();
+    case 'signOut':    return signOut();
+    case 'stop':       return stopAll('Stop button');
+    case 'start':      return startAgent();
+    case 'setFiles':   return setFiles(!!msg.value);
+    case 'retryNative':return connectNative();
+    case 'clearLog':   return cizState.clearLog();
+    case 'openClaude': return browser.tabs.create({ url: CIZ.CLAUDE_ORIGIN + '/' });
+    case 'devCall':    return devCall(msg.tool);
+    case 'call':       return panelCall(msg, port);
+  }
+}
+
+// Chat test commands from the panel. Only the test tools are allowed here;
+// real tool calls arrive from Claude over the native channel.
+async function panelCall(msg, port) {
+  const allowed = ['ping', 'tabs_list'];
+  const out = allowed.includes(msg.tool)
+    ? await dispatch(msg.tool, msg.args || {}, 'panel')
+    : { ok: false, error: `Not available from the panel: ${msg.tool}` };
+  try { port.postMessage(Object.assign({ type: 'callResult', id: msg.id }, out)); } catch {}
+}
+
+// Panel "Try it" buttons: real router calls, result summarised in the log.
+async function devCall(tool) {
+  if (!['ping', 'tabs_list'].includes(tool)) return;
+  const out = await dispatch(tool, {}, 'panel');
+  if (!out.ok) return cizState.addLog('error', `${tool}: ${out.error}`);
+  if (tool === 'ping') return cizState.addLog('info', `ping → pong (v${out.result.version})`);
+  const n = out.result.length;
+  const active = out.result.find(t => t.active);
+  return cizState.addLog('info', `tabs_list → ${n} tab${n === 1 ? '' : 's'}${active ? `; active: "${(active.title || active.url || '').slice(0, 60)}"` : ''}`);
+}
+
+// ---------------------------------------------------------------- sign-in
+// Reuses the claude.ai session already open in Zen. The browser attaches the
+// session itself; the add-on never reads cookies. Only email/name/uuid are
+// kept, and only in storage.session.
+
+const ACCOUNT_ENDPOINTS = ['/api/account', '/api/bootstrap', '/api/organizations'];
+
+function pickAccount(path, j) {
+  if (!j || typeof j !== 'object') return null;
+  if (Array.isArray(j)) {               // /api/organizations: no email, org only
+    const org = j[0];
+    return org && org.uuid ? { email: '', name: org.name || 'Claude organization', uuid: org.uuid, via: path } : null;
+  }
+  const a = j.account && typeof j.account === 'object' ? j.account : j;
+  const email = a.email_address || a.email || '';
+  const uuid = a.uuid || a.id || '';
+  if (!email && !uuid) return null;
+  return { email, name: a.full_name || a.display_name || a.name || '', uuid, via: path };
+}
+
+async function fetchAccountFromBackground() {
+  const notes = [];
+  for (const path of ACCOUNT_ENDPOINTS) {
+    try {
+      const r = await fetch(CIZ.CLAUDE_ORIGIN + path, {
+        credentials: 'include', cache: 'no-store', headers: { accept: 'application/json' },
+      });
+      notes.push(`${path} ${r.status}`);
+      if (r.status === 401) return { account: null, notes, signedOut: true };
+      if (!r.ok) continue;
+      const acct = pickAccount(path, await r.json().catch(() => null));
+      if (acct) return { account: acct, notes };
+    } catch (e) {
+      notes.push(`${path} ${e.message}`);
+    }
+  }
+  return { account: null, notes };
+}
+
+// Fallback: run the same request from inside an open claude.ai tab, where it
+// is a normal same-origin call. Returns only the minimal fields.
+async function fetchAccountViaTab() {
+  const tabs = await browser.tabs.query({ url: CIZ.CLAUDE_ORIGIN + '/*' });
+  if (!tabs.length) return { account: null, notes: ['no claude.ai tab open'] };
+  const code = `(async () => {
+    const paths = ${JSON.stringify(ACCOUNT_ENDPOINTS)};
+    const notes = [];
+    for (const p of paths) {
+      try {
+        const r = await fetch(p, { credentials: 'include', cache: 'no-store', headers: { accept: 'application/json' } });
+        notes.push(p + ' ' + r.status);
+        if (r.status === 401) return { signedOut: true, notes };
+        if (!r.ok) continue;
+        const j = await r.json();
+        if (Array.isArray(j)) { const o = j[0]; if (o && o.uuid) return { path: p, acct: { email: '', name: o.name || '', uuid: o.uuid, array: true }, notes }; continue; }
+        const a = (j && j.account && typeof j.account === 'object') ? j.account : j;
+        const email = a.email_address || a.email || '', uuid = a.uuid || a.id || '';
+        if (email || uuid) return { path: p, acct: { email, name: a.full_name || a.display_name || a.name || '', uuid }, notes };
+      } catch (e) { notes.push(p + ' ' + e.message); }
+    }
+    return { notes };
+  })()`;
+  const [res] = await browser.tabs.executeScript(tabs[0].id, { code });
+  if (!res) return { account: null, notes: ['tab check returned nothing'] };
+  if (res.acct) return { account: Object.assign(res.acct, { via: res.path + ' (tab)' }), notes: res.notes };
+  return { account: null, notes: res.notes || [], signedOut: !!res.signedOut };
+}
+
+async function signIn() {
+  await cizState.addLog('info', 'Checking claude.ai session…');
+  let res = await fetchAccountFromBackground();
+  if (!res.account && !res.signedOut) {
+    await cizState.addLog('info', `Direct check failed (${res.notes.join(', ')}); trying an open claude.ai tab`);
+    try { res = await fetchAccountViaTab(); } catch (e) { res = { account: null, notes: [e.message] }; }
+  }
+  if (!res.account) {
+    await cizState.set({ signedIn: false, account: null, signedInAt: null });
+    const why = res.signedOut ? 'not signed in to claude.ai' : res.notes.join(', ');
+    await cizState.addLog('error', `Sign-in failed: ${why}. Open claude.ai, sign in there, then try again.`);
+    return;
+  }
+  await cizState.set({ signedIn: true, account: res.account, signedInAt: Date.now() });
+  await cizState.addLog('info', `Signed in as ${res.account.email || res.account.name || res.account.uuid} (via ${res.account.via})`);
+}
+
+async function signOut() {
+  await stopAll('Sign-out');
+  await cizState.set({ signedIn: false, account: null, signedInAt: null });
+  await cizState.addLog('info', 'Signed out of the add-on (claude.ai itself is untouched)');
+}
+
+// ---------------------------------------------------------------- Stop
+// Rule 1: Stop cancels pending actions, disconnects the native host and
+// disables file tools. Nothing else.
+
+async function stopAll(source) {
+  for (const [id, a] of pendingActions) {
+    try { a.controller.abort(new Error('Stopped')); } catch {}
+    pendingActions.delete(id);
+  }
+  disconnectNative('stopped');
+  await cizState.set({ agent: 'stopped', filesEnabled: false, pending: 0 });
+  await cizState.addLog('stop', `Stopped (${source}). Pending actions cancelled, native host disconnected, file tools off.`);
+}
+
+async function startAgent() {
+  await cizState.set({ agent: 'active' });
+  await cizState.addLog('info', 'Agent resumed');
+  connectNative();
+}
+
+async function setFiles(value) {
+  // File tools arrive in P4 (served by the local MCP server, not the add-on).
+  if (value) {
+    await cizState.addLog('info', 'File tools are not built yet (phase P4). Toggle left off.');
+    await cizState.set({ filesEnabled: false });
+    return;
+  }
+  await cizState.set({ filesEnabled: false });
+}
+
+// ---------------------------------------------------------------- native host
+
+function connectNative() {
+  if (nativePort) return;
+  if (cizState.get().agent !== 'active') return;
+  let port;
+  try {
+    port = browser.runtime.connectNative(CIZ.NATIVE_HOST);
+  } catch (e) {
+    cizState.set({ native: 'error', nativeDetail: e.message });
+    return;
+  }
+  nativePort = port;
+  cizState.set({ native: 'unknown', nativeDetail: 'connecting…' });
+
+  port.onMessage.addListener(msg => onNativeMessage(msg));
+  port.onDisconnect.addListener(p => {
+    const err = (p && p.error) || browser.runtime.lastError;
+    nativePort = null;
+    if (err && /No such native application/i.test(err.message)) {
+      cizState.set({ native: 'missing', nativeDetail: 'host not installed yet (phase P3)' });
+    } else if (cizState.get().native !== 'missing') {
+      cizState.set({ native: 'error', nativeDetail: err ? err.message : 'disconnected' });
+    }
+  });
+  try { port.postMessage({ type: 'hello', version: browser.runtime.getManifest().version }); } catch {}
+}
+
+function disconnectNative(reason) {
+  if (nativePort) {
+    try { nativePort.disconnect(); } catch {}
+    nativePort = null;
+  }
+  cizState.set({ native: 'unknown', nativeDetail: reason || 'disconnected' });
+}
+
+async function onNativeMessage(msg) {
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.type === 'hello') {
+    await cizState.set({ native: 'connected', nativeDetail: msg.server || 'connected' });
+    return;
+  }
+  if (msg.type === 'call') {
+    const out = await dispatch(msg.tool, msg.args || {}, 'native');
+    try { nativePort && nativePort.postMessage({ type: 'result', id: msg.id, ...out }); } catch {}
+  }
+}
+
+// ---------------------------------------------------------------- debug port
+// Rule 7: warn when the debug port is on. The add-on never opens it.
+
+async function probeDebugPort() {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 1500);
+  let on = false;
+  try {
+    await fetch(CIZ.DEBUG_PORT_URL, { signal: ctl.signal, cache: 'no-store' });
+    on = true;
+  } catch { on = false; }
+  clearTimeout(timer);
+  const next = on ? 'on' : 'off';
+  if (cizState.get().debugPort !== next) {
+    await cizState.set({ debugPort: next });
+    if (on) await cizState.addLog('warn', 'Debug port 9222 is open: any local program can drive this browser while it is.');
+  }
+}
+
+// ---------------------------------------------------------------- router
+// Every tool call, from any channel, goes through here. P2 adds the page
+// tools; P3 feeds calls in from the native host.
+
+const TOOLS = {
+  async ping() { return { pong: true, version: browser.runtime.getManifest().version }; },
+
+  async tabs_list() {
+    const tabs = await browser.tabs.query({});
+    return tabs.map(t => ({ id: t.id, windowId: t.windowId, active: t.active, title: t.title, url: t.url }));
+  },
+};
+
+async function dispatch(tool, args, source) {
+  const s = cizState.get();
+  if (s.agent !== 'active') return { ok: false, error: 'Agent is stopped. Press Start in the Claude in Zen panel.' };
+  if (!s.signedIn) return { ok: false, error: 'Not signed in. Press "Sign in with Claude" in the panel.' };
+  const fn = TOOLS[tool];
+  if (!fn) return { ok: false, error: `Unknown tool: ${tool}` };
+
+  const id = nextActionId++;
+  const controller = new AbortController();
+  pendingActions.set(id, { cmd: tool, controller, startedAt: Date.now() });
+  await cizState.set({ pending: pendingActions.size });
+  await cizState.addLog('action', `${source}: ${tool}`);
+
+  const aborted = new Promise((_, reject) =>
+    controller.signal.addEventListener('abort', () => reject(new Error('Stopped')), { once: true }));
+  try {
+    const result = await Promise.race([fn(args, controller.signal), aborted]);
+    return { ok: true, result };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  } finally {
+    pendingActions.delete(id);
+    if (cizState.get().agent === 'active') await cizState.set({ pending: pendingActions.size });
+  }
+}
+
+// ---------------------------------------------------------------- badge
+
+function updateBadge(s) {
+  let text = '', color = '#666';
+  if (s.agent === 'stopped') { text = 'OFF'; color = '#b3261e'; }
+  else if (s.debugPort === 'on') { text = '!'; color = '#c77700'; }
+  else if (s.signedIn) { text = ''; }
+  browser.browserAction.setBadgeText({ text });
+  browser.browserAction.setBadgeBackgroundColor({ color });
+}
+
+// Exposed for manual testing from about:debugging → Inspect → console:
+//   await cizDebug.call('tabs_list')
+window.cizDebug = {
+  call: (tool, args) => dispatch(tool, args || {}, 'console'),
+  state: () => cizState.get(),
+};

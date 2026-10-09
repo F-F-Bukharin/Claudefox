@@ -1,0 +1,59 @@
+{
+  "manifest_version": 2,
+  "name": "Claude in Zen",
+  "version": "0.2.2",
+  "description": "Personal-use agent bridge that lets a Claude session read and act on pages in Zen. Not affiliated with or endorsed by Anthropic or Zen.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "claude-in-zen@f.local",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "nativeMessaging",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "lib/policy.js",
+      "lib/state.js",
+      "background.js"
+    ],
+    "persistent": true
+  },
+  "sidebar_action": {
+    "default_title": "Claude in Zen",
+    "default_panel": "panel.html",
+    "default_icon": {
+      "16": "icons/icon.svg",
+      "32": "icons/icon.svg",
+      "64": "icons/icon.svg"
+    },
+    "open_at_install": true
+  },
+  "browser_action": {
+    "default_title": "Claude in Zen",
+    "default_area": "navbar",
+    "default_icon": {
+      "16": "icons/icon.svg",
+      "32": "icons/icon.svg",
+      "64": "icons/icon.svg"
+    }
+  },
+  "commands": {
+    "_execute_sidebar_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+C"
+      },
+      "description": "Toggle the Claude in Zen panel"
+    }
+  }
+}

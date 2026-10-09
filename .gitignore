@@ -1,0 +1,10 @@
+# Build output
+claude-in-zen*.xpi
+signed/
+web-ext-artifacts/
+
+# Local scratch
+.diag/
+_restore.tgz
+node_modules/
+*.log

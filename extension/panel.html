@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude in Zen</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="20" height="20">
+      <h1>Claude</h1>
+      <span id="agentPill" class="pill">…</span>
+    </div>
+    <button id="stopBtn" class="stopchip" title="Stop: cancel actions, cut the connection, turn file tools off">Stop</button>
+    <button id="startBtn" class="startchip" hidden>Start</button>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-page="chat" aria-selected="true" title="Claude in Zen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4h0A1.5 1.5 0 0 1 4 14.5z"/></svg>
+      <span>Claude</span></button>
+    <button role="tab" data-page="profile" title="Profile">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+      <span>Profile</span></button>
+    <button role="tab" data-page="settings" title="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>
+      <span>Settings</span></button>
+  </nav>
+
+  <!-- ============================== CHAT ============================== -->
+  <main id="page-chat" class="page chat" role="tabpanel">
+    <div id="messages" class="messages" aria-live="polite">
+      <div id="emptyState" class="empty">
+        <div class="empty-mark"><img src="icons/icon.svg" alt="" width="40" height="40"></div>
+        <h2>What should I do in Zen?</h2>
+        <p>I can read and act on your tabs once I'm connected. Until then, try the test commands.</p>
+        <div class="chips">
+          <button class="chip" data-fill="/tabs">/tabs: list my tabs</button>
+          <button class="chip" data-fill="/ping">/ping</button>
+          <button class="chip" data-fill="/help">/help</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="context">
+        <span class="ctx-label">Current tab</span>
+        <span id="ctxTab" class="ctx-tab">…</span>
+      </div>
+      <form id="composer" class="inputbox">
+        <textarea id="input" rows="1" placeholder="Message Claude…" autocomplete="off"></textarea>
+        <button id="sendBtn" type="submit" class="send" aria-label="Send">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </form>
+      <p id="composerHint" class="composer-hint"></p>
+    </div>
+  </main>
+
+  <!-- ============================== PROFILE ============================== -->
+  <main id="page-profile" class="page scroll" role="tabpanel" hidden>
+    <section class="card" id="signedOut" hidden>
+      <h3>Not signed in</h3>
+      <p class="muted">Uses the claude.ai session already open in Zen. Sign in to claude.ai in a normal tab first, then click below. It lasts until Zen quits.</p>
+      <button id="signInBtn" class="primary wide">Sign in with Claude</button>
+      <button id="openClaude" class="ghost wide">Open claude.ai</button>
+    </section>
+
+    <section class="card" id="signedIn" hidden>
+      <div class="acct">
+        <div class="avatar" id="avatar">?</div>
+        <div class="who">
+          <div id="acctName" class="name"></div>
+          <div id="acctEmail" class="muted"></div>
+        </div>
+      </div>
+      <dl class="facts">
+        <dt>Signed in</dt><dd id="acctSince">—</dd>
+        <dt>Checked via</dt><dd id="acctVia">—</dd>
+        <dt>Account ID</dt><dd id="acctId" class="mono">—</dd>
+        <dt>Session ends</dt><dd>when Zen quits</dd>
+      </dl>
+      <button id="signOutBtn" class="ghost wide">Sign out of the add-on</button>
+      <p class="muted small">Signing out here leaves claude.ai itself signed in.</p>
+    </section>
+  </main>
+
+  <!-- ============================== SETTINGS ============================== -->
+  <main id="page-settings" class="page scroll" role="tabpanel" hidden>
+    <section class="card rows">
+      <h3>Connections</h3>
+      <div class="row">
+        <span>Native host</span>
+        <span class="val"><span id="nativeDot" class="dot"></span><span id="nativeVal">…</span>
+          <button id="retryNative" class="link" hidden>retry</button></span>
+      </div>
+      <div class="row">
+        <span>Debug port 9222</span>
+        <span class="val"><span id="debugDot" class="dot"></span><span id="debugVal">…</span></span>
+      </div>
+      <div class="row">
+        <span>Pending actions</span>
+        <span class="val" id="pendingVal">0</span>
+      </div>
+    </section>
+
+    <section class="card rows">
+      <h3>Permissions</h3>
+      <div class="row">
+        <label for="filesToggle">File tools <span class="muted small">(arrives in P4)</span></label>
+        <span class="val"><input type="checkbox" id="filesToggle" class="switch"></span>
+      </div>
+      <div class="row">
+        <span>Google sign-in pages</span>
+        <span class="val">always hands-off</span>
+      </div>
+      <div class="row">
+        <span>Passwords, 2FA, payment</span>
+        <span class="val">never typed</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Panel</h3>
+      <p class="muted small">To dock it on the right: click <b>Claude in Zen ⌄</b> at the top of the sidebar → <b>Move Sidebar to Right</b>. Drag the sidebar's inner edge to make it wider. Zen remembers both. Toggle with the toolbar button or <b>Alt+Shift+C</b>.</p>
+    </section>
+
+    <section class="card">
+      <h3>Developer</h3>
+      <div class="devbtns">
+        <button id="devPing">Ping</button>
+        <button id="devTabs">List my tabs</button>
+      </div>
+    </section>
+
+    <section class="card logcard">
+      <div class="loghead">
+        <h3>Action log</h3>
+        <button id="clearLog" class="link">clear</button>
+      </div>
+      <ol id="log"></ol>
+    </section>
+
+    <p class="muted small center" id="version"></p>
+  </main>
+
+  <script src="panel.js"></script>
+</body>
+</html>
