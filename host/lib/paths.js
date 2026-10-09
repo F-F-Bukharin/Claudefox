@@ -13,6 +13,7 @@ module.exports = {
   TOKEN_FILE: path.join(BASE, 'pipe-token'),
   CLAUDE_CONFIG_DIR: path.join(BASE, 'claude'),
   WORKSPACE: path.join(BASE, 'workspace'),
+  MCP_CONFIG: path.join(BASE, 'mcp.json'),
   PIPE: process.env.CLAUDE_IN_ZEN_PIPE || (process.platform === 'win32'
     ? `\\\\.\\pipe\\claude-in-zen-${USER}`
     : path.join(os.tmpdir(), `claude-in-zen-${USER}.sock`)),
