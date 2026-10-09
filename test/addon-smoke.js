@@ -13,6 +13,7 @@ const ev = () => { const fns = []; return { addListener: f => fns.push(f), fns, 
 
 // ---- mocked browser
 const store = {};
+const local = {};
 const tabs = [
   { id: 1, windowId: 1, active: true, title: 'Shop', url: 'https://shop.example/', status: 'complete' },
   { id: 2, windowId: 1, active: false, title: 'Sign in', url: 'https://accounts.google.com/signin/v2', status: 'complete' },
@@ -22,7 +23,11 @@ const injected = [];
 let native = null;   // the fake helper port
 const connectEv = ev();
 const browser = {
-  storage: { session: {
+  storage: { local: {
+    get: async k => (k in local ? { [k]: JSON.parse(JSON.stringify(local[k])) } : {}),
+    set: async o => { for (const k in o) local[k] = JSON.parse(JSON.stringify(o[k])); },
+    remove: async k => { delete local[k]; },
+  }, session: {
     get: async keys => Object.fromEntries((Array.isArray(keys) ? keys : [keys]).filter(k => k in store).map(k => [k, JSON.parse(JSON.stringify(store[k]))])),
     set: async o => { for (const k in o) store[k] = JSON.parse(JSON.stringify(o[k])); },
   } },
@@ -81,6 +86,19 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     check('tools refused before sign-in', !r.ok && /Not signed in/.test(r.error));
     await fromPanel({ type: 'signIn' });
     check('sign-in from the claude.ai session', g('cizState').get().signedIn && g('cizState').get().account.email === 'personalworksacc@gmail.com');
+    check('sign-in is remembered, without cookies', local.rememberedAccount && local.rememberedAccount.email === 'personalworksacc@gmail.com' && Object.keys(local.rememberedAccount).sort().join() === 'at,email,name,uuid');
+
+    // a fresh start (new session storage) signs back in on its own
+    const ctx2 = vm.createContext({ browser: Object.assign({}, browser, { storage: { local: browser.storage.local, session: (() => { const s2 = {}; return {
+      get: async keys => Object.fromEntries((Array.isArray(keys) ? keys : [keys]).filter(k => k in s2).map(k => [k, s2[k]])),
+      set: async o => Object.assign(s2, JSON.parse(JSON.stringify(o))) }; })() } }),
+      fetch, console, URL, AbortController, setTimeout, clearTimeout, setInterval: () => 0, Promise });
+    ctx2.window = ctx2;
+    const nativeBefore = native;
+    for (const f of ['lib/policy.js', 'lib/state.js', 'lib/tools.js', 'background.js']) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx2, { filename: f });
+    await tick(80);
+    check('restart signs back in from the remembered account', vm.runInContext('cizState', ctx2).get().signedIn === true);
+    native = nativeBefore;
 
     await helperSays({ type: 'hello', version: '0.4.0', clients: [] });
     check('helper connected, Claude Code status asked', g('cizState').get().native === 'connected' && native.sent.some(m => m.type === 'claude_status'));
@@ -130,7 +148,7 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     await helperSays({ type: 'claude_switch_done', ok: true });
     check('switch done: logged, flag cleared', !g('cizState').get().switching && g('cizState').log().some(e => /now signed in as other@example.com/.test(e.text)));
 
-    // file tools setting
+    // file tools setting (sign-out check is at the end)
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'notes' });
     check('relative folder refused', g('cizState').get().filesEnabled === false);
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'C:\\Users\\F\\notes' });
@@ -158,6 +176,8 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     check('file tools cannot be turned on while stopped', g('cizState').get().filesEnabled === false);
     await fromPanel({ type: 'start' });
     check('Start reconnects the helper', g('cizState').get().agent === 'active' && native !== port);
+    await fromPanel({ type: 'signOut' });
+    check('signing out forgets the remembered account', !local.rememberedAccount && !g('cizState').get().signedIn);
   } catch (e) {
     check('no unexpected errors', false, e.stack);
   } finally {

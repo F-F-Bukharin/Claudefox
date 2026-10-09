@@ -21,6 +21,9 @@ Friends: see `START HERE.txt` (it ships in the friends zip).
 - **Accounts**: the chat spends the Claude Code account of the add-on's own profile, shown in Settings, with a warning
   when it differs from the claude.ai account in Zen. On a usage limit the panel offers "Log out and add another account"
   (also the **switch** link in Settings).
+- **Sign-in is remembered**: after the first Sign in, Zen signs the panel back in on its own at startup by checking
+  the claude.ai session again (only email, name and account id are kept, never cookies). It ends when you sign out
+  in the panel or on claude.ai.
 - **First-run guide** on the empty chat page until the helper, Claude Code and both sign-ins are ready.
 - Test commands that need no Claude: `/tabs`, `/ping`, `/help`.
 
@@ -53,7 +56,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | :- | :- |
 | `extension/` | The add-on (Manifest V2, persistent background page). |
 | `extension/lib/policy.js` | Fixed rules: blocked pages, sensitive fields. |
-| `extension/lib/state.js` | Session state and action log in `storage.session` (cleared when Zen quits). |
+| `extension/lib/state.js` | Session state and action log in `storage.session` (cleared when Zen quits; the sign-in marker lives in `storage.local`). |
 | `extension/lib/tools.js` | The tools Claude uses on Zen; page code runs in the add-on's isolated content-script world. |
 | `extension/background.js` | Sign-in, Stop/Start, helper link, chat relay, account switch, tool router. |
 | `extension/panel.*` | Sidebar UI. |

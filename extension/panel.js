@@ -186,7 +186,7 @@ function renderSetup(s) {
       hint: 'Double-click "Sign in Claude Code.bat" and click Authorize. The chat uses this account.',
       action: c.installed ? ['Open sign-in', () => send('switchAccount')] : null },
     { done: !!s.signedIn, title: 'Sign in to claude.ai in the panel',
-      hint: 'Sign in to claude.ai in a normal tab, then press Sign in. This repeats each time Zen starts.',
+      hint: 'Sign in to claude.ai in a normal tab, then press Sign in. Zen remembers it after that.',
       action: ['Sign in', () => send('signIn')] },
   ];
   const ready = steps.every(st => st.done);

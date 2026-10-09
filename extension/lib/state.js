@@ -1,6 +1,6 @@
 'use strict';
-// Session state. Lives in storage.session only, so quitting Zen wipes it:
-// sign-in is required again on every launch (plan section 4).
+// Session state. Lives in storage.session, so quitting Zen wipes it. Sign-in comes back on its own at
+// startup from a remembered marker in storage.local (see background.js, "Remembered sign-in").
 
 const CIZ_DEFAULT_STATE = Object.freeze({
   agent: 'active',            // 'active' | 'stopped'

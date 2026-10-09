@@ -15,6 +15,7 @@ let nextActionId = 1;
   cizState.onChange(updateBadge);
   await cizState.set({ pending: 0 });
   await cizState.addLog('info', 'Add-on started');
+  resumeSignIn('startup');
   probeDebugPort();
   setInterval(probeDebugPort, 20000);
   if (cizState.get().agent === 'active') connectNative();
@@ -54,7 +55,7 @@ function pushToPanels(state, log) {
 
 async function handlePanel(msg, port) {
   switch (msg.type) {
-    case 'signIn':     return signIn();
+    case 'signIn':     return signIn();   // a click: never "auto"
     case 'signOut':    return signOut();
     case 'stop':       return stopAll('Stop button');
     case 'start':      return startAgent();
@@ -162,8 +163,32 @@ async function fetchAccountViaTab() {
   return { account: null, notes: res.notes || [], signedOut: !!res.signedOut };
 }
 
-async function signIn() {
-  await cizState.addLog('info', 'Checking claude.ai session…');
+// Remembered sign-in: after a manual sign-in the add-on keeps a marker (email, name, account id; never
+// cookies) in storage.local. When Zen starts, it checks the claude.ai session again on its own, so you stay
+// signed in until you sign out here or on claude.ai. Signing out here forgets the marker.
+const REMEMBER_KEY = 'rememberedAccount';
+
+async function remembered() {
+  try { return (await browser.storage.local.get(REMEMBER_KEY))[REMEMBER_KEY] || null; } catch { return null; }
+}
+
+let resumeBusy = false;
+async function resumeSignIn(why) {
+  if (resumeBusy || cizState.get().signedIn) return;
+  const r = await remembered();
+  if (!r) return;
+  resumeBusy = true;
+  try { await signIn({ auto: why }); } finally { resumeBusy = false; }
+}
+
+// A claude.ai tab finishing its load is a good moment to retry (e.g. Zen started offline).
+browser.tabs.onUpdated.addListener((id, info, tab) => {
+  if (info.status === 'complete' && tab && String(tab.url || '').startsWith(CIZ.CLAUDE_ORIGIN + '/')) resumeSignIn('claude.ai tab');
+});
+
+async function signIn(opts) {
+  const auto = opts && opts.auto;
+  await cizState.addLog('info', auto ? 'Signing back in from the claude.ai session…' : 'Checking claude.ai session…');
   let res = await fetchAccountFromBackground();
   if (!res.account && !res.signedOut) {
     await cizState.addLog('info', `Direct check failed (${res.notes.join(', ')}); trying an open claude.ai tab`);
@@ -172,14 +197,32 @@ async function signIn() {
   if (!res.account) {
     await cizState.set({ signedIn: false, account: null, signedInAt: null });
     const why = res.signedOut ? 'not signed in to claude.ai' : res.notes.join(', ');
-    await cizState.addLog('error', `Sign-in failed: ${why}. Open claude.ai, sign in there, then try again.`);
+    if (auto && res.signedOut) {
+      // claude.ai itself was signed out: the remembered sign-in no longer holds.
+      try { await browser.storage.local.remove(REMEMBER_KEY); } catch {}
+      await cizState.addLog('warn', 'claude.ai is signed out, so the add-on is too. Sign in to claude.ai, then press Sign in.');
+      return;
+    }
+    await cizState.addLog(auto ? 'warn' : 'error', auto
+      ? `Could not sign back in yet (${why}). It retries when a claude.ai tab loads, or press Sign in.`
+      : `Sign-in failed: ${why}. Open claude.ai, sign in there, then try again.`);
     return;
   }
+  const before = await remembered();
   await cizState.set({ signedIn: true, account: res.account, signedInAt: Date.now() });
-  await cizState.addLog('info', `Signed in as ${res.account.email || res.account.name || res.account.uuid} (via ${res.account.via})`);
+  try {
+    const a = res.account;
+    await browser.storage.local.set({ [REMEMBER_KEY]: { email: a.email || '', name: a.name || '', uuid: a.uuid || '', at: Date.now() } });
+  } catch {}
+  const who = res.account.email || res.account.name || res.account.uuid;
+  await cizState.addLog('info', `Signed in as ${who} (via ${res.account.via})${auto ? ', remembered from last time' : ''}`);
+  if (before && before.uuid && res.account.uuid && before.uuid !== res.account.uuid) {
+    await cizState.addLog('warn', `claude.ai is now a different account than last time (${before.email || before.uuid}).`);
+  }
 }
 
 async function signOut() {
+  try { await browser.storage.local.remove(REMEMBER_KEY); } catch {}
   await stopAll('Sign-out');
   await cizState.set({ signedIn: false, account: null, signedInAt: null });
   await cizState.addLog('info', 'Signed out of the add-on (claude.ai itself is untouched)');
