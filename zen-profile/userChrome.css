@@ -1,7 +1,13 @@
-/* Claude in Zen: open the add-on's sidebar wide enough to read (about 660 px; set for a 1440p screen).
+/* Claude in Zen: open the add-on's sidebar wide enough to read (about 660 px; set for a 1440p screen)
+   and round all four corners of the panel (Zen rounds only the bottom ones).
    Only applies while the Claude in Zen panel is the one shown; other sidebars are untouched.
-   You can still drag it wider. Change both numbers to taste. */
+   You can still drag it wider. Change the numbers to taste. */
 #sidebar-box[sidebarcommand="claude-in-zen_f_local-sidebar-action"] {
   min-width: 620px !important;
   width: 660px;
+}
+#sidebar-box[sidebarcommand="claude-in-zen_f_local-sidebar-action"] #sidebar {
+  border-radius: var(--zen-native-inner-radius, var(--zen-border-radius, 8px)) !important;
+  overflow: hidden !important;
+  clip-path: inset(0 round var(--zen-native-inner-radius, var(--zen-border-radius, 8px)));
 }
