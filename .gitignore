@@ -8,3 +8,4 @@ web-ext-artifacts/
 _restore.tgz
 node_modules/
 *.log
+dist/

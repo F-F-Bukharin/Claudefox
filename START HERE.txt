@@ -1,0 +1,52 @@
+Claude in Zen - setup for friends
+=================================
+
+A Claude panel in Zen's sidebar that can read and act on your tabs, using YOUR Claude
+subscription through Claude Code. Personal project, not made or endorsed by Anthropic or Zen.
+
+Put this folder somewhere it can stay (for example Documents\Claude in Zen). If you move it
+later, run "Install helper.bat" again.
+
+You need
+  - Windows, with Zen Browser installed.
+  - Node.js (LTS): https://nodejs.org
+  - Claude Code: https://code.claude.com/docs/en/setup
+  - A Claude Pro or Max plan. Usage counts against your plan like any Claude Code use.
+
+1. Install the helper
+   Double-click "Install helper.bat". No admin needed. It links the add-on to Claude Code.
+
+2. Sign Claude Code in
+   Double-click "Sign in Claude Code.bat". A browser opens: check it is signed in to the
+   claude.ai account you want the panel to use, then click Authorize. This is a separate
+   profile, so it does not change Claude Code anywhere else on your PC.
+
+3. Install the add-on in Zen
+   If claude-in-zen.xpi is signed (ask whoever sent this), just do step 3b.
+   3a. Unsigned build only: type about:config in the address bar, search
+       xpinstall.signatures.required and set it to false. (Zen then stops checking signatures
+       on add-ons you install from a file; add-ons from the store are unaffected.)
+   3b. about:addons -> gear icon -> Install Add-on From File -> pick claude-in-zen.xpi.
+
+4. Open the panel
+   Toolbar button or Alt+Shift+C. Sign in to claude.ai in a normal tab, then in the panel:
+   Profile -> Sign in with Claude. The panel's checklist shows anything still missing.
+
+Using it
+  - Type normally to talk to Claude. Speed (Haiku) is quick and light on usage, Quality
+    (Opus) is slower and better. Click the button under the message box to switch.
+  - Stop (top right) cuts everything off at once. Start brings it back.
+  - File tools (Settings) are off by default. Turn them on for one folder, read only or read
+    and write. Read and write can change and delete files there with no undo.
+  - If your plan runs out, the panel offers "Log out and add another account".
+  - Always on: Google sign-in pages are hands-off, and Claude never types passwords, 2FA codes
+    or payment details.
+
+Optional: sidebar on the right at a good width
+  Close Zen, then copy zen-profile\user.js and zen-profile\userChrome.css into your Zen
+  profile folder (%APPDATA%\zen\Profiles\<profile>\user.js and ...\chrome\userChrome.css).
+  Delete them again to undo.
+
+Remove it
+  about:addons -> remove Claude in Zen, then in PowerShell from this folder:
+  powershell -ExecutionPolicy Bypass -File host\install.ps1 -Uninstall
