@@ -1,8 +1,7 @@
-/* Claude in Zen: give the add-on's sidebar a usable default width.
-   Same approach Firefox uses for its own AI chat sidebar (min-width: 400px).
+/* Claude in Zen: open the add-on's sidebar wide enough to read (about 660 px; set for a 1440p screen).
    Only applies while the Claude in Zen panel is the one shown; other sidebars are untouched.
-   You can still drag it wider. */
+   You can still drag it wider. Change both numbers to taste. */
 #sidebar-box[sidebarcommand="claude-in-zen_f_local-sidebar-action"] {
-  min-width: 400px !important;
-  width: 420px;
+  min-width: 620px !important;
+  width: 660px;
 }

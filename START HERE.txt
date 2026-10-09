@@ -42,10 +42,9 @@ Using it
   - Always on: Google sign-in pages are hands-off, and Claude never types passwords, 2FA codes
     or payment details.
 
-Optional: sidebar on the right at a good width
-  Close Zen, then copy zen-profile\user.js and zen-profile\userChrome.css into your Zen
-  profile folder (%APPDATA%\zen\Profiles\<profile>\user.js and ...\chrome\userChrome.css).
-  Delete them again to undo.
+Optional: sidebar on the right, about 660 px wide
+  Close Zen, then double-click "Apply Zen settings.bat". It adds its lines to your Zen
+  profile without touching your own settings. Undo: run zen-profile\apply.ps1 -Remove.
 
 Remove it
   about:addons -> remove Claude in Zen, then in PowerShell from this folder:

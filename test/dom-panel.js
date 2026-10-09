@@ -52,5 +52,15 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  const btn=[...$('messages').querySelectorAll('button')].find(b=>/another account/.test(b.textContent));
  ok('limit shows switch button', !!btn && $('sendBtn').disabled===false);
  btn.click(); ok('switch button sends switchAccount', sent.some(m=>m.type==='switchAccount'));
+ // formatting, copy, selection-safe rendering
+ $('input').value='fmt'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
+ const f2=sent.filter(m=>m.type==='chat').pop();
+ onMsg({type:'chatEvent',id:f2.id,event:{kind:'text',text:'**Bold** and `code`\n- item'}});
+ onMsg({type:'chatDone',id:f2.id,ok:true});
+ const last=[...$('messages').querySelectorAll('.msg.assistant')].pop();
+ ok('bold and code rendered, no raw markers', last.querySelector('strong')?.textContent==='Bold' && last.querySelector('code')?.textContent==='code' && !/\*\*/.test(last.textContent) && /• item/.test(last.textContent));
+ ok('copy button on finished reply', !!last.querySelector('button.copy'));
+ const before=last; onMsg({type:'state',state:{...ready,chatModel:'quality'},log:[]});
+ ok('state updates do not rebuild the chat (keeps selection)', before.isConnected);
  console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
 })().catch(e=>{console.log('ERROR',e.stack);process.exit(1)});

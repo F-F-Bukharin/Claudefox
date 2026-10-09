@@ -20,7 +20,7 @@ if ($signed) {
 foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1') { Copy-Item (Join-Path $root "host\$f") (Join-Path $stage "host\$f") }
 Copy-Item (Join-Path $root 'host\lib\*.js') (Join-Path $stage 'host\lib')
 Copy-Item (Join-Path $root 'zen-profile\*') (Join-Path $stage 'zen-profile')
-foreach ($f in 'Install helper.bat', 'Sign in Claude Code.bat', 'START HERE.txt') { Copy-Item (Join-Path $root $f) (Join-Path $stage $f) }
+foreach ($f in 'Install helper.bat', 'Sign in Claude Code.bat', 'Apply Zen settings.bat', 'START HERE.txt') { Copy-Item (Join-Path $root $f) (Join-Path $stage $f) }
 
 $zip = Join-Path $dist "claude-in-zen-friends-v$v.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }

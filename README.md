@@ -12,7 +12,10 @@ Friends: see `START HERE.txt` (it ships in the friends zip).
   Follow-ups continue the conversation; `/clear` starts a new one.
 - **Speed / Quality** button under the message box: Speed is Haiku 5.5, Quality is Opus 5.5, both on high effort.
 - **Page tools**: list, open, switch and close tabs; navigate; read the page outline (with element refs) or its text;
-  find, click, fill, press keys, scroll, wait for something, screenshot.
+  find, click (by ref, selector, or x and y from a screenshot, with real pointer events), fill, press keys, scroll,
+  wait for something, play/pause/seek video and audio, screenshot.
+- Claude works on the **current tab** (it is told which one with every message) and leaves your other tabs out of it
+  unless you ask about them.
 - **File tools** (Settings, off by default): one folder, Read only (Read, Glob, Grep) or Read and write (adds Edit, Write).
   Never a shell.
 - **Accounts**: the chat spends the Claude Code account of the add-on's own profile, shown in Settings, with a warning
@@ -57,7 +60,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `host/claude-in-zen-host.js` | The helper: native messaging, pipe server, Claude Code chat turns, account switch. |
 | `host/zen-mcp.js`, `host/lib/tools.js` | The Zen tool server (MCP over stdio) and its tool catalog. |
 | `host/install.ps1` | Registers the helper with Zen for this Windows user (no admin). |
-| `zen-profile/` | `user.js` and `userChrome.css`: sidebar on the right, Claude panel 420 px wide. |
+| `zen-profile/` | `user.js` and `userChrome.css` (sidebar on the right, Claude panel about 660 px wide) and `apply.ps1`, which merges them into the Zen profile. |
 | `test/`, `host/test/` | Tests; `Run tests.bat` or `node test/run-all.js` runs them all. |
 
 | Script | What it does |
@@ -68,6 +71,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `Load in Zen.bat` | Builds the `.xpi` and opens `about:debugging` with its path copied (temporary install). |
 | `Sign add-on.bat` | Signs the add-on with Mozilla (needs API keys, see below). |
 | `Build friends zip.bat` | Builds `dist\claude-in-zen-friends-v<version>.zip`, using a signed `.xpi` from `signed\` if there is one. |
+| `Apply Zen settings.bat` | Close Zen first. Merges the `zen-profile` settings into your Zen profile between marker lines; `apply.ps1 -Remove` undoes it. |
 | `Run tests.bat` | Runs all tests. |
 
 ## Try it (temporary install)
