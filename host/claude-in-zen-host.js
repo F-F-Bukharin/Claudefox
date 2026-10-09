@@ -447,6 +447,7 @@ function shutdown(reason) {
   shuttingDown = true;
   log.info(`shutting down: ${reason}`);
   cancelChat('*', 'Stopped.');
+  if (switching) { try { switching.kill(); } catch {} switching = null; }
   for (const c of clients.values()) { try { c.sock.destroy(); } catch {} }
   try { server.close(); } catch {}
   try { if (fs.readFileSync(P.TOKEN_FILE, 'utf8') === token) fs.unlinkSync(P.TOKEN_FILE); } catch {}

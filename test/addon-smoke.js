@@ -45,7 +45,7 @@ const browser = {
     create: async o => { const t = { id: 9, windowId: 1, url: o.url, title: '', status: 'complete' }; tabs.push(t); return t; },
     update: async (id, o) => Object.assign(tabs.find(t => t.id === id), o),
     remove: async () => {},
-    executeScript: async (id, o) => { injected.push(id); return [{ ok: true, from: id }]; },
+    executeScript: async (id, o) => { injected.push(id); return [o.code.includes('"exists"') ? false : { ok: true, from: id }]; },
     onActivated: ev(), onUpdated: ev(),
   },
   windows: { update: async () => {} },
@@ -142,10 +142,16 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
 
     // Stop
     const port = native;
+    const waiting = call('wait_for', { tab_id: 1, text: 'never shows', timeout_ms: 60000 });
+    await tick(100);
+    check('a long page action shows as pending', g('cizState').get().pending === 1);
+    const tStop = Date.now();
     await fromPanel({ type: 'stop' });
     const s = g('cizState').get();
     check('Stop ends the open answer in the panel', panelIn.some(m => m.type === 'chatDone' && m.id === 'p4' && m.error === 'Stopped.'));
     check('Stop disconnects the helper and turns file tools off', port.disconnected && s.agent === 'stopped' && s.filesEnabled === false);
+    const w = await waiting;
+    check('Stop aborts the running page action at once', !w.ok && w.error === 'Stopped' && Date.now() - tStop < 500 && s.pending === 0, `${Date.now() - tStop} ms`);
     r = await call('tabs_list');
     check('tools refused while stopped', !r.ok && /stopped/.test(r.error));
     await fromPanel({ type: 'setFiles', value: true, mode: 'read', folder: 'C:\\x' });

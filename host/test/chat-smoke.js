@@ -25,6 +25,7 @@ if (argv[0] === 'auth') {
   if (argv[1] === 'status') process.stdout.write(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'new@example.com' }));
   process.exit(0);
 }
+fs.writeFileSync(${JSON.stringify(record)} + '.pid', String(process.pid));
 let prompt = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', d => prompt += d);
@@ -166,6 +167,10 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     helper.stdin.end();   // what Stop does
     await Promise.race([exited, sleep(3000)]);
     check('Stop ends the helper while a turn runs', Date.now() - t1 < 2000, `${Date.now() - t1} ms`);
+    await sleep(300);
+    const pid = Number(fs.readFileSync(record + '.pid', 'utf8'));
+    let alive = true; try { process.kill(pid, 0); } catch { alive = false; }
+    check('Stop kills the running Claude Code process', !alive, `pid ${pid}`);
   } catch (e) {
     check('no unexpected errors', false, e.message);
   } finally {
