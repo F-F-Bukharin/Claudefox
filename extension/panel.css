@@ -12,6 +12,7 @@
   --go: #2e7d4f;
   --warn: #c77700;
   --off: #9a968e;
+  --plus: #7b4fd6;
   --radius: 12px;
 }
 @media (prefers-color-scheme: dark) {
@@ -27,6 +28,7 @@
     --go: #4caf7a;
     --warn: #f0a33a;
     --off: #6f6b64;
+    --plus: #a07cf0;
   }
 }
 
@@ -209,6 +211,20 @@ textarea:focus-visible { outline: none; }
   background: color-mix(in srgb, var(--accent) 78%, #000); border-color: transparent; color: #fff;
 }
 .modelchip.quality:hover { background: color-mix(in srgb, var(--accent) 68%, #000); }
+.modelbox { display: flex; align-items: center; gap: 8px; flex: none; }
+.modelchip.plus {                                                     /* Speed Plus: purple */
+  background: color-mix(in srgb, var(--plus) 18%, var(--card)); border-color: color-mix(in srgb, var(--plus) 55%, transparent);
+  color: color-mix(in srgb, var(--plus) 80%, var(--ink));
+}
+.modelchip.plus:hover { background: color-mix(in srgb, var(--plus) 28%, var(--card)); }
+.pluschip {
+  flex: none; align-self: center; border-radius: 999px; height: 28px; padding: 0 11px;
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .2px;
+  border: 1.5px solid color-mix(in srgb, var(--plus) 40%, transparent); background: var(--card); color: var(--muted);
+}
+.pluschip:hover { color: var(--plus); }
+.pluschip.on { background: var(--plus); border-color: transparent; color: #fff; }
 
 /* file tools */
 .files { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 8px; }

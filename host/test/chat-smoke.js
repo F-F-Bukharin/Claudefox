@@ -135,6 +135,11 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     check('Quality is Opus 5.5 on high', c[c.indexOf('--model') + 1] === 'claude-opus-5-5' && c[c.indexOf('--effort') + 1] === 'high');
     check('read-write file tools, never Bash', c[c.indexOf('--tools') + 1] === 'Read,Glob,Grep,Edit,Write' && c[c.indexOf('--permission-mode') + 1] === 'acceptEdits' && !c.join(' ').includes('Bash'));
 
+    toHelper({ type: 'chat', id: 'c3b', text: 'plus', model: 'speedplus' });
+    await next(m => m.type === 'chat_done' && m.id === 'c3b', 15000);
+    const sp = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
+    check('Speed Plus is Haiku 5.5 on max', sp[sp.indexOf('--model') + 1] === 'claude-haiku-5-5' && sp[sp.indexOf('--effort') + 1] === 'max');
+
     toHelper({ type: 'chat', id: 'c4', text: 'x', files: 'read', folder: path.join(tmp, 'missing') });
     const bad = await next(m => m.type === 'chat_done' && m.id === 'c4');
     check('missing folder refused before starting', !bad.ok && /not found/.test(bad.error));

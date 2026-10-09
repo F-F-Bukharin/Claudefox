@@ -71,6 +71,7 @@ async function handlePanel(msg, port) {
     case 'chatCancel': return cancelChat(String(msg.id || ''));
     case 'newChat':    return cizState.set({ chatSession: '' });
     case 'setModel':   return cizState.set({ chatModel: msg.value === 'quality' ? 'quality' : 'speed' });
+    case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
   }
 }
 
@@ -286,7 +287,7 @@ async function startChat(msg) {
   if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Run "Sign in Claude Code.bat".');
   const files = s.filesEnabled ? s.filesMode : '';
   chatRuns.set(id, { startedAt: Date.now() });
-  const model = s.chatModel === 'quality' ? 'quality' : 'speed';
+  const model = s.chatModel === 'quality' ? 'quality' : s.chatPlus ? 'speedplus' : 'speed';
   let tab = null;
   try {
     const [t] = await browser.tabs.query({ active: true, lastFocusedWindow: true });

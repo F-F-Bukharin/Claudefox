@@ -70,6 +70,7 @@ $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
 $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list' }));
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
 $('modelBtn').addEventListener('click', () => send('setModel', { value: state.chatModel === 'quality' ? 'speed' : 'quality' }));
+$('plusBtn').addEventListener('click', () => send('setPlus', { value: !state.chatPlus }));
 
 // ------------------------------------------------------------ render state
 
@@ -156,10 +157,15 @@ function render(s, log) {
 
   // model choice
   const quality = s.chatModel === 'quality';
+  const plus = !quality && !!s.chatPlus;
   $('modelBtn').textContent = quality ? 'Quality' : 'Speed';
   $('modelBtn').classList.toggle('quality', quality);
+  $('modelBtn').classList.toggle('plus', plus);
   $('modelBtn').title = (quality ? 'Quality: Opus 5.5, high effort. Slower, best answers, uses more.'
-    : 'Speed: Haiku 5.5, high effort. Fast and light on usage.') + ' Click to switch.';
+    : plus ? 'Speed Plus: Haiku 5.5, max effort.' : 'Speed: Haiku 5.5, high effort. Fast and light on usage.') + ' Click to switch to ' + (quality ? 'Speed.' : 'Quality.');
+  $('plusBtn').hidden = quality;
+  $('plusBtn').classList.toggle('on', plus);
+  $('plusBtn').setAttribute('aria-pressed', String(plus));
 
   // composer hint
   $('composerHint').textContent =

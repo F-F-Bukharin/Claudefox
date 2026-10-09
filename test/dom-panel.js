@@ -52,6 +52,13 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  const btn=[...$('messages').querySelectorAll('button')].find(b=>/another account/.test(b.textContent));
  ok('limit shows switch button', !!btn && $('sendBtn').disabled===false);
  btn.click(); ok('switch button sends switchAccount', sent.some(m=>m.type==='switchAccount'));
+ onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:false},log:[]});
+ ok('Speed Plus button shows in Speed', !$('plusBtn').hidden && !$('modelBtn').classList.contains('plus'));
+ $('plusBtn').click(); ok('Speed Plus click toggles', sent.some(m=>m.type==='setPlus'&&m.value===true));
+ onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:true},log:[]});
+ ok('Speed bar turns purple in Plus', $('modelBtn').classList.contains('plus') && $('plusBtn').classList.contains('on'));
+ onMsg({type:'state',state:{...ready,chatModel:'quality',chatPlus:true},log:[]});
+ ok('Speed Plus hidden in Quality', $('plusBtn').hidden && !$('modelBtn').classList.contains('plus'));
  // formatting, copy, selection-safe rendering
  $('input').value='fmt'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
  const f2=sent.filter(m=>m.type==='chat').pop();

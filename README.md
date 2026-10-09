@@ -11,6 +11,7 @@ Friends: see `START HERE.txt` (it ships in the friends zip).
 - **Chat** with Claude in the panel, streamed, with a chip for each tool it uses and a Cancel link.
   Follow-ups continue the conversation; `/clear` starts a new one.
 - **Speed / Quality** button under the message box: Speed is Haiku 5.5, Quality is Opus 5.5, both on high effort.
+  In Speed, the small **Speed Plus** button switches Haiku 5.5 to max effort and turns the Speed button purple.
 - **Page tools**: list, open, switch and close tabs; navigate; read the page outline (with element refs) or its text;
   find, click (by ref, selector, or x and y from a screenshot, with real pointer events), fill, press keys, scroll,
   wait for something, play/pause/seek video and audio, screenshot.

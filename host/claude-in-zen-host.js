@@ -239,9 +239,10 @@ function writeMcpConfig() {
 }
 
 const CHAT_TIMEOUT_MS = 15 * 60 * 1000;
-// The panel's two choices. Effort is the same; the model differs.
+// The panel's choices: Speed (Haiku, high), Speed Plus (Haiku, max), Quality (Opus, high).
 const MODELS = {
   speed:   { model: 'claude-haiku-5-5', effort: 'high' },
+  speedplus: { model: 'claude-haiku-5-5', effort: 'max' },
   quality: { model: 'claude-opus-5-5', effort: 'high' },
 };
 const FILE_TOOLS = { read: 'Read,Glob,Grep', write: 'Read,Glob,Grep,Edit,Write' };
