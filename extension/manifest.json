@@ -20,6 +20,7 @@
     "tabs",
     "activeTab",
     "nativeMessaging",
+    "downloads",
     "clipboardWrite",
     "<all_urls>"
   ],
@@ -27,6 +28,7 @@
     "scripts": [
       "lib/policy.js",
       "lib/state.js",
+      "lib/files.js",
       "lib/tools.js",
       "background.js"
     ],

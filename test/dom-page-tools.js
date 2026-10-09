@@ -36,7 +36,13 @@ run('press',{selector:'#t',key:'h'}); run('press',{selector:'#t',key:'i'}); ok('
 let submitted=0; w.document.getElementById('f').addEventListener('submit',e=>{submitted++;e.preventDefault()});
 run('press',{selector:'#q',key:'Enter'}); ok('Enter submits form', submitted===1);
 ok('stale ref error', /gone or the page changed/.test(err('click',{ref:'ref_9999'})||''));
-const t=run('text',{max_chars:1000}); ok('page text uses main and truncates', t.truncated===true && t.text.length===1000 && /^Body text/.test(t.text));
+const t=run('text',{max_chars:1000}); ok('page text: markdown of main, word count, continues', t.truncated===true && t.next_start>0 && /About [\d,]+ words/.test(t.text) && /Body text/.test(t.text), t.text.slice(0,120));
+const t2=run('text',{max_chars:1000,start_at:t.next_start}); ok('page text: next part has no header', !/About/.test(t2.text) && /Body text/.test(t2.text));
+const an=run('analyze',{}); ok('analyze reports outline, forms, notices', /## Outline/.test(an.text) && /## Forms/.test(an.text) && /password field is visible/.test(an.text), an.text.slice(0,200));
+ok('selection empty message', /Nothing is selected/.test(run('selection',{}).text));
+const tq=w.document.getElementById('q'); tq.value=''; run('type',{selector:'#q',text:'abc'}); ok('type_text types key by key', tq.value==='abc');
+ok('type_text refuses password', /password field/.test(err('type',{selector:'#pw',text:'x'})||''));
+let hov=0; w.document.getElementById('go').addEventListener('mouseover',()=>hov++); run('hover',{selector:'#go'}); ok('hover sends mouseover', hov===1);
 ok('exists by text', run('exists',{text:'add to cart'})===true && run('exists',{text:'nope'})===false);
 ok('bad selector message', /valid CSS/.test(err('click',{selector:'##'})||''));
 // policy gate used by cizPageTab / navigate / tab_open
