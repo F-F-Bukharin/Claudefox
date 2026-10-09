@@ -54,6 +54,11 @@ for (const e of ['pointerdown','mousedown','mouseup','click']) go2.addEventListe
 run('click',{selector:'#go'}); ok('click sends pointer and mouse events', ['pointerdown','mousedown','mouseup','click'].every(e=>seen.includes(e)), seen.join(','));
 w.document.elementFromPoint=()=>go2; seen.length=0;
 const at=run('click',{x:40,y:50}); ok('click by x,y', seen.includes('click') && at.at[0]===40 && at.at[1]===50);
+const cover=w.document.createElement('div'); cover.textContent='Player'; w.document.body.appendChild(cover); w.document.elementFromPoint=()=>cover;
+ok('click refused when something covers the target', /Covered/.test(err('click',{selector:'#go'})||''));
+delete w.document.elementFromPoint;
+w.document.body.focus(); if (w.document.activeElement && w.document.activeElement !== w.document.body) w.document.activeElement.blur();
+ok('keys need a focused target', /No element has focus/.test(err('press',{key:'a'})||''), String(w.document.activeElement && w.document.activeElement.tagName));
 const wrap=w.document.createElement('yt-button'); wrap.style.display='contents'; const inner=w.document.createElement('span'); inner.textContent='Play'; wrap.appendChild(inner); w.document.body.appendChild(wrap);
 w.Element.prototype.getBoundingClientRect=function(){ return this===wrap?{width:0,height:0,left:0,top:0}:{width:10,height:10,left:0,top:0}; };
 let wc=0; wrap.addEventListener('click',()=>wc++); run('click',{selector:'yt-button'}); ok('display:contents wrapper clickable', wc===1);

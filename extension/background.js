@@ -81,6 +81,10 @@ async function handlePanel(msg, port) {
       await cizState.set({ updating: true });
       return cizState.addLog('info', 'Building the add-on from your project folder…');
     case 'clearLog':   return cizState.clearLog();
+    case 'openLink':   return openLink(String(msg.url || ''));
+    case 'openTab':    return openTab(Number(msg.id));
+    case 'openFile':   return openFile(String(msg.id || ''));
+    case 'downloadFile': return downloadFile(String(msg.id || ''), !!msg.saveAs);
     case 'openClaude': return browser.tabs.create({ url: CIZ.CLAUDE_ORIGIN + '/' });
     case 'devCall':    return devCall(msg.tool);
     case 'call':       return panelCall(msg, port);
@@ -112,6 +116,52 @@ async function devCall(tool) {
   const active = out.result.find(t => t.active);
   return cizState.addLog('info', `tabs_list → ${n} tab${n === 1 ? '' : 's'}${active ? `; active: "${(active.title || active.url || '').slice(0, 60)}"` : ''}`);
 }
+
+// ---------------------------------------------------------------- links and files from the chat
+// Replies can link to web pages, to open tabs (zen://tab/<id>) and to files Claude made (zen://file/<id>).
+
+async function openLink(url) {
+  if (!/^https?:\/\//i.test(url) && !/^mailto:/i.test(url)) return;
+  await browser.tabs.create({ url, active: true });
+}
+
+async function openTab(id) {
+  try {
+    const t = await browser.tabs.get(id);
+    await browser.tabs.update(id, { active: true });
+    try { await browser.windows.update(t.windowId, { focused: true }); } catch {}
+  } catch { await cizState.addLog('error', `Tab ${id} is not open any more.`); }
+}
+
+async function openFile(id) {
+  if (!/^f[0-9a-z]+$/.test(id)) return;
+  await browser.tabs.create({ url: browser.runtime.getURL('viewer.html#' + id), active: true });
+}
+
+async function downloadFile(id, saveAs) {
+  const f = await cizFiles.get(id);
+  if (!f) return cizState.addLog('error', 'That file is gone (deleted, or pushed out by newer files).');
+  const url = URL.createObjectURL(new Blob([f.content], { type: `${f.mime};charset=utf-8` }));
+  try {
+    const dl = await browser.downloads.download({ url, filename: `Claude in Zen/${f.name}`, conflictAction: 'uniquify', saveAs });
+    await cizState.addLog('info', `Saved ${f.name} to Downloads\\Claude in Zen`);
+    postToPanels({ type: 'downloaded', id, downloadId: dl });
+  } catch (e) {
+    if (!/cancel/i.test(e.message)) await cizState.addLog('error', `Download failed: ${e.message}`);
+  } finally { setTimeout(() => URL.revokeObjectURL(url), 60000); }
+}
+
+// create_file (lib/tools.js) asks which chat turn a new file belongs to, then tells the panels about it.
+function cizFileContext() { const [id] = chatRuns.keys(); return { msg: id || '' }; }
+function cizOnFileCreated(file) {
+  cizState.addLog('action', `Claude made ${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`);
+  postToPanels({ type: 'fileCreated', file });
+}
+
+// The file viewer page asks for downloads this way.
+browser.runtime.onMessage.addListener(msg => {
+  if (msg && msg.type === 'downloadFile') return downloadFile(String(msg.id || ''), !!msg.saveAs);
+});
 
 // ---------------------------------------------------------------- sign-in
 // Reuses the claude.ai session already open in Zen. The browser attaches the
@@ -587,6 +637,10 @@ async function dispatch(tool, args, source) {
     controller.signal.addEventListener('abort', () => reject(new Error('Stopped')), { once: true }));
   try {
     const result = await Promise.race([fn(args, controller.signal), aborted]);
+    if (result && (result.clicked || result.filled || result.typed)) {
+      const what = result.clicked || `${result.filled || result.typed} into the field`;
+      await cizState.addLog('action', `${tool}: ${String(what).slice(0, 140)}${result.navigated ? ` → ${String(result.url || '').slice(0, 80)}` : ''}`);
+    }
     return { ok: true, result };
   } catch (e) {
     return { ok: false, error: e.message || String(e) };

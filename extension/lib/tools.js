@@ -147,7 +147,18 @@ function cizPageOp(op, args, sensitiveField) {
     if (!isVisible(el)) throw new Error('That element is not visible on the page. Try a screenshot and use x and y.');
     el.scrollIntoView({ block: 'center', inline: 'nearest' });
     const [x, y] = centerOf(el);
+    // Something else on top (a player, a popup, a banner) would get the click instead: refuse.
+    const rn = el.getRootNode ? el.getRootNode() : document;
+    const root = typeof rn.elementFromPoint === 'function' ? rn : document;
+    const hit = typeof root.elementFromPoint === 'function' ? root.elementFromPoint(x, y) : null;
+    if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) {
+      throw new Error(`Covered: ${roleOf(hit)} "${labelOf(hit).slice(0, 60)}" is on top of it at ${x},${y}. Close or move what covers it, or click by x and y on purpose.`);
+    }
     return { el, x, y };
+  }
+  function focusDesc() {
+    const a = document.activeElement;
+    return a && a !== document.body && a !== document.documentElement ? `${roleOf(a)} "${labelOf(a).slice(0, 80)}"` : 'nothing';
   }
   function fieldDesc(el) {
     return {
@@ -558,7 +569,8 @@ function cizPageOp(op, args, sensitiveField) {
       const t = targetOrPoint();
       if (t.el.disabled) throw new Error('That element is disabled.');
       realClick(t.el, t.x, t.y);
-      return { clicked: `${roleOf(t.el)} "${labelOf(t.el).slice(0, 120)}"`, at: [t.x, t.y] };
+      const after = t.el.isConnected ? squash(t.el.innerText || t.el.value || labelOf(t.el)).slice(0, 120) : '(gone from the page)';
+      return { clicked: `${roleOf(t.el)} "${labelOf(t.el).slice(0, 120)}"`, at: [t.x, t.y], now_shows: after, focused: focusDesc() };
     }
     case 'hover': {
       const t = targetOrPoint();
@@ -574,6 +586,7 @@ function cizPageOp(op, args, sensitiveField) {
       const text = String(args.text == null ? '' : args.text);
       if (text.length > 5000) throw new Error('Type at most 5000 characters at once (use fill for long text).');
       if (el.focus) el.focus();
+      if (document.activeElement !== el && !el.contains(document.activeElement)) throw new Error('Could not focus that field. Click it first, then type.');
       if (args.clear) {
         if (el.isContentEditable) { document.execCommand('selectAll', false, null); document.execCommand('delete', false, null); }
         else setValue(el, '');
@@ -601,7 +614,8 @@ function cizPageOp(op, args, sensitiveField) {
         if (go && el.form) { if (el.form.requestSubmit) el.form.requestSubmit(); else el.form.submit(); }
         el.dispatchEvent(new KeyboardEvent('keyup', o));
       }
-      return { typed: `${[...text].length} characters`, submitted: !!args.submit };
+      const now = el.isContentEditable ? squash(el.innerText) : String(el.value || '');
+      return { typed: `${[...text].length} characters`, submitted: !!args.submit, field_now: now.slice(0, 200) };
     }
     case 'media': {
       const all = Array.from(document.querySelectorAll('video, audio'));
@@ -647,7 +661,7 @@ function cizPageOp(op, args, sensitiveField) {
       if (el.isContentEditable) {
         document.execCommand('selectAll', false, null);
         document.execCommand('insertText', false, value);
-        return { filled: `${value.length} characters` };
+        return { filled: `${value.length} characters`, field_now: squash(el.innerText).slice(0, 200) };
       }
       if (el.tagName === 'INPUT' && /^(checkbox|radio|file|button|submit|reset|image|range|color|hidden)$/i.test(el.type)) {
         throw new Error(`A ${el.type} input takes no text. Use click instead.`);
@@ -655,7 +669,7 @@ function cizPageOp(op, args, sensitiveField) {
       if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') throw new Error('That element does not take text.');
       setValue(el, value);
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      return { filled: `${value.length} characters` };
+      return { filled: `${value.length} characters`, field_now: String(el.value).slice(0, 200) };
     }
     case 'press': {
       const key = String(args.key || '');
@@ -665,6 +679,10 @@ function cizPageOp(op, args, sensitiveField) {
       };
       if (!(key in KEYS) && key.length !== 1) throw new Error(`Unknown key "${key.slice(0, 20)}".`);
       const el = (args.ref || args.selector) ? target() : (document.activeElement || document.body);
+      const bare = el === document.body || el === document.documentElement;
+      if (bare && (key.length === 1 || /^(Enter|Backspace|Delete|Space)$/.test(key))) {
+        throw new Error('No element has focus, so the key would go nowhere useful. Give the ref of the field or button.');
+      }
       if (/^(INPUT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable) refuseSensitive(el);
       const k = key === 'Space' ? ' ' : key;
       const code = KEYS[key] || k.toUpperCase().charCodeAt(0);
@@ -697,7 +715,7 @@ function cizPageOp(op, args, sensitiveField) {
         }
       }
       el.dispatchEvent(new KeyboardEvent('keyup', opts));
-      return { pressed: key };
+      return { pressed: key, focused: focusDesc() };
     }
     case 'scroll': {
       if (args.ref || args.selector) {

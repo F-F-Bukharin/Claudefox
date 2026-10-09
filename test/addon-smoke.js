@@ -36,6 +36,7 @@ const browser = {
   } },
   runtime: {
     onConnect: connectEv,
+    onMessage: ev(),
     getManifest: () => JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')),
     connectNative: () => {
       const onMsg = ev(), onDisc = ev();
@@ -54,7 +55,7 @@ const browser = {
     update: async (id, o) => Object.assign(tabs.find(t => t.id === id), o),
     remove: async ids => { removed.push(...[].concat(ids)); },
     executeScript: async (id, o) => { injected.push(id); return [o.code.includes('"exists"') ? false : { ok: true, from: id }]; },
-    onActivated: ev(), onUpdated: ev(),
+    onActivated: ev(), onUpdated: ev(), onCreated: ev(),
   },
   windows: { update: async () => {} },
 };

@@ -11,7 +11,7 @@ const w=dom.window; const sent=[]; let onMsg;
 w.browser={runtime:{connect:()=>({postMessage:m=>sent.push(m),onMessage:{addListener:f=>onMsg=f}}),getManifest:()=>({version:'0.4.0'})},
  storage:{session:{get:async()=>({}),set:async()=>{}}},
  tabs:{query:async()=>[{title:'T',url:'https://x'}],onActivated:{addListener(){}},onUpdated:{addListener(){}}}};
-w.eval(fs.readFileSync(dir+'panel.js','utf8'));
+w.eval(fs.readFileSync(dir+'lib/markdown.js','utf8')+'\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir+'panel.js','utf8'));
 const $=id=>w.document.getElementById(id);
 let pass=0,fail=0;const ok=(n,c,x)=>{c?pass++:fail++;console.log((c?'PASS ':'FAIL ')+n+(x?'  '+x:''))};
 const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort:'off',pending:0,chatModel:'speed',filesMode:'read',filesFolder:''};
@@ -46,7 +46,7 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  onMsg({type:'chatEvent',id:chatMsg.id,event:{kind:'tool_result',error:false,text:'ok'}});
  onMsg({type:'chatEvent',id:chatMsg.id,event:{kind:'text',text:'You have 3 tabs.'}});
  await new Promise(r=>setTimeout(r,60));
- ok('stream renders text and tool chip', /You have 3 tabs/.test($('messages').textContent) && $('messages').querySelector('.step.ok'));
+ ok('stream renders text and a progress bar, no tool chips', /You have 3 tabs/.test($('messages').textContent) && $('messages').querySelector('.progress .pfill') && !$('messages').querySelector('.step'));
  ok('send disabled while answering', $('sendBtn').disabled===true);
  onMsg({type:'chatDone',id:chatMsg.id,ok:false,error:'Claude AI usage limit reached',limit:true});
  const btn=[...$('messages').querySelectorAll('button')].find(b=>/another account/.test(b.textContent));
@@ -67,10 +67,28 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  onMsg({type:'chatEvent',id:f2.id,event:{kind:'text',text:'**Bold** and `code`\n- item'}});
  onMsg({type:'chatDone',id:f2.id,ok:true});
  const last=[...$('messages').querySelectorAll('.msg.assistant')].pop();
- ok('bold and code rendered, no raw markers', last.querySelector('strong')?.textContent==='Bold' && last.querySelector('code')?.textContent==='code' && !/\*\*/.test(last.textContent) && /• item/.test(last.textContent));
+ ok('bold and code rendered, no raw markers', last.querySelector('strong')?.textContent==='Bold' && last.querySelector('code')?.textContent==='code' && !/\*\*/.test(last.textContent) && last.querySelector('li')?.textContent==='item');
  ok('copy button on finished reply', !!last.querySelector('button.copy'));
  ok('reply shows model and effort it ran with', last.querySelector('.ran')?.textContent==='Haiku 5.5 · max effort' && last.querySelector('.ran.plus'));
- const before=last; onMsg({type:'state',state:{...ready,chatModel:'quality'},log:[]});
+ // progress plan, links, files
+ $('input').value='plan'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
+ const f3=sent.filter(m=>m.type==='chat').pop();
+ onMsg({type:'chatEvent',id:f3.id,event:{kind:'progress',steps:['Search','Pick','Post'],done:1,note:'Picking a video'}});
+ await new Promise(r=>setTimeout(r,60));
+ ok('plan shows step label', /Step 2 of 3 · Picking a video/.test($('messages').textContent));
+ onMsg({type:'chatEvent',id:f3.id,event:{kind:'text',text:'See [the video](https://youtube.com/watch?v=1) and [your tab](zen://tab/7) and [Notes.md](zen://file/fabc1)'}});
+ onMsg({type:'fileCreated',file:{id:'fabc1',name:'Notes.md',size:2048,msg:f3.id}});
+ onMsg({type:'chatEvent',id:f3.id,event:{kind:'stats',ms:4200,turns:3}});
+ onMsg({type:'chatDone',id:f3.id,ok:true});
+ const m3=[...$('messages').querySelectorAll('.msg.assistant')].pop();
+ const links=[...m3.querySelectorAll('a')];
+ links[0].click(); links[1].click(); links[2].click();
+ ok('links open url, switch tab, open file', sent.some(m=>m.type==='openLink'&&/youtube/.test(m.url)) && sent.some(m=>m.type==='openTab'&&m.id===7) && sent.some(m=>m.type==='openFile'&&m.id==='fabc1'));
+ const card=m3.querySelector('.filecard'); ok('file card with Download', card && /Notes\.md/.test(card.textContent));
+ [...card.querySelectorAll('button')].find(b=>b.textContent==='Download').click();
+ ok('download asks the add-on', sent.some(m=>m.type==='downloadFile'&&m.id==='fabc1'));
+ ok('finished answer shows done line with time', /Done in 4\.2 s/.test([...$('messages').querySelectorAll('.msg.assistant')].pop().querySelector('.donebar')?.textContent||''));
+ const before=[...$('messages').querySelectorAll('.msg.assistant')].pop(); onMsg({type:'state',state:{...ready,chatModel:'quality'},log:[]});
  ok('state updates do not rebuild the chat (keeps selection)', before.isConnected);
  console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
 })().catch(e=>{console.log('ERROR',e.stack);process.exit(1)});

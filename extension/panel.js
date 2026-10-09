@@ -23,7 +23,23 @@ port.onMessage.addListener(msg => {
   if (msg.type === 'chatEvent') onChatEvent(msg.id, msg.event || {});
   if (msg.type === 'chatDone') onChatDone(msg);
   if (msg.type === 'chatRuns') onChatRuns(msg.ids || []);
+  if (msg.type === 'fileCreated') onFileCreated(msg.file || {});
 });
+
+// Links in replies: web pages open in a new tab, zen://tab/<id> switches tab, zen://file/<id> opens a file.
+function onLink(kind, value) {
+  if (kind === 'tab') send('openTab', { id: Number(value) });
+  else if (kind === 'file') send('openFile', { id: value });
+  else send('openLink', { url: value });
+}
+
+function onFileCreated(f) {
+  const m = chat.find(x => x.id === f.msg) || [...chat].reverse().find(x => x.role === 'assistant' && x.pending);
+  if (!m) return;
+  m.files = (m.files || []).filter(x => x.id !== f.id).concat([{ id: f.id, name: f.name, size: f.size, title: f.title || '' }]);
+  saveChat();
+  renderChat();
+}
 
 function call(tool, args) {
   return new Promise(resolve => {
@@ -321,7 +337,7 @@ async function submit() {
   if (state.agent === 'stopped') return addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' });
   if (!state.signedIn) return addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' });
   const id = `p${Date.now().toString(36)}${chatSeq++}`;
-  addMsg({ role: 'assistant', id, text: '', steps: [], pending: true });
+  addMsg({ role: 'assistant', id, text: '', steps: [], pending: true, startedAt: Date.now() });
   send('chat', { id, text });
 }
 
@@ -346,6 +362,12 @@ function onChatEvent(id, ev) {
   if (!m || !m.pending) return;
   if (ev.kind === 'text') m.text += String(ev.text || '');
   else if (ev.kind === 'meta') m.meta = { model: String(ev.model || ''), effort: String(ev.effort || '') };
+  else if (ev.kind === 'status') m.status = String(ev.status || '');
+  else if (ev.kind === 'stats') m.stats = { ms: Number(ev.ms) || 0, turns: Number(ev.turns) || 0 };
+  else if (ev.kind === 'progress') {
+    const steps = Array.isArray(ev.steps) && ev.steps.length ? ev.steps : (m.plan && m.plan.steps) || [];
+    m.plan = { steps, done: Number(ev.done) || 0, note: String(ev.note || ''), at: m.steps.length };
+  }
   else if (ev.kind === 'tool') {
     m.steps.push({ name: String(ev.name || 'tool'), input: String(ev.input || ''), state: 'run' });
     if (m.steps.length > 30) m.steps.splice(0, m.steps.length - 30);
@@ -360,6 +382,7 @@ function onChatDone(msg) {
   const m = chat.find(x => x.id === msg.id);
   if (!m) return;
   m.pending = false;
+  m.endedAt = Date.now();
   for (const st of m.steps) if (st.state === 'run') st.state = msg.ok ? 'ok' : 'bad';
   if (!msg.ok) {
     m.error = msg.error || 'Something went wrong.';
@@ -403,6 +426,124 @@ function scheduleRender() {
 
 const WHO = { user: 'You', assistant: 'Claude', system: 'Claude in Zen', error: 'Claude in Zen' };
 const STEP_MARK = { run: '…', ok: '✓', bad: '✕' };
+const VERB = {
+  get_page_text: 'Reading the page', analyze_page: 'Analyzing the page', get_selection: 'Reading your selection',
+  read_page: 'Looking over the page', find: 'Finding', click: 'Clicking', hover: 'Pointing at', fill: 'Filling in',
+  type_text: 'Typing', press_key: 'Pressing a key', scroll: 'Scrolling', wait_for: 'Waiting for the page',
+  media: 'Controlling the player', screenshot: 'Looking at the page', navigate: 'Opening a page', tab_open: 'Opening a tab',
+  tab_activate: 'Switching tabs', tab_close: 'Closing a tab', tabs_list: 'Checking your tabs', create_file: 'Writing a file',
+  WebSearch: 'Searching the web', WebFetch: 'Reading a web page', Read: 'Reading a file', Glob: 'Looking for files',
+  Grep: 'Searching files', Edit: 'Editing a file', Write: 'Saving a file',
+};
+
+// What the current step is doing, in words: "Searching the web: niche tamagotchi repair".
+function stepLabel(st) {
+  const verb = VERB[st.name] || `Using ${st.name}`;
+  let inp = {};
+  try { inp = JSON.parse(st.input || '{}'); } catch {}
+  let what = inp.query || inp.name || inp.text || inp.key || '';
+  if (!what && inp.url) { try { what = new URL(inp.url).hostname.replace(/^www\./, ''); } catch { what = inp.url; } }
+  if (!what && inp.file_path) what = String(inp.file_path).split(/[\\/]/).pop();
+  if (!what && st.result) { const r = /"(?:clicked|hovered)":\s*"[^"]*?\\?"([^"\\]{1,60})/.exec(st.result); if (r) what = r[1]; }
+  return what ? `${verb}: ${String(what).slice(0, 60)}` : verb;
+}
+
+// How far along a running answer is. With a plan from the progress tool: finished steps plus a share of the
+// current one. Without: an estimate that grows with each action and slows down, never reaching the end.
+function progressOf(m) {
+  const acts = m.steps.length;
+  const secs = (Date.now() - (m.startedAt || m.t || Date.now())) / 1000;
+  if (m.plan && m.plan.steps.length) {
+    const total = m.plan.steps.length, done = Math.min(m.plan.done, total);
+    const inStep = done >= total ? 0.6 : 0.85 * (1 - Math.exp(-((acts - m.plan.at) + secs / 25) / 3));
+    return Math.min(0.97, (done + inStep) / total);
+  }
+  return Math.min(0.92, 0.04 + 0.88 * (1 - Math.exp(-(acts + secs / 15) / 6)));
+}
+
+function progressLabel(m) {
+  const run = [...m.steps].reverse().find(st => st.state === 'run');
+  const last = run || m.steps[m.steps.length - 1];
+  if (m.plan && m.plan.steps.length) {
+    const total = m.plan.steps.length, at = Math.min(m.plan.done + 1, total);
+    return `Step ${at} of ${total} · ${m.plan.note || m.plan.steps[at - 1] || (last ? stepLabel(last) : 'Working')}`;
+  }
+  if (run) return stepLabel(run);
+  if (m.text && !run) return 'Writing';
+  if (last) return stepLabel(last);
+  return m.status === 'thinking' ? 'Thinking' : 'Starting';
+}
+
+const expandedSteps = new Set();   // finished answers whose action list is open
+
+function progressBlock(m) {
+  const box = document.createElement('div');
+  if (m.pending) {
+    box.className = 'progress';
+    box.dataset.id = m.id;
+    const track = document.createElement('div'); track.className = 'ptrack';
+    const fill = document.createElement('div'); fill.className = 'pfill';
+    fill.style.width = Math.round(progressOf(m) * 100) + '%';
+    track.appendChild(fill);
+    const label = document.createElement('div'); label.className = 'plabel'; label.textContent = progressLabel(m);
+    box.append(track, label);
+    return box;
+  }
+  if (!m.steps.length && !m.stats) return null;
+  box.className = 'donebar';
+  const secs = m.stats && m.stats.ms ? m.stats.ms / 1000 : m.endedAt && m.startedAt ? (m.endedAt - m.startedAt) / 1000 : 0;
+  const n = m.steps.length;
+  const mark = document.createElement('span'); mark.className = 'dmark' + (m.error ? ' bad' : ''); mark.textContent = m.error ? '✕' : '✓';
+  const text = document.createElement('span');
+  text.textContent = `${m.error ? 'Stopped' : 'Done'}${secs ? ` in ${secs < 10 ? secs.toFixed(1) : Math.round(secs)} s` : ''}`;
+  box.append(mark, text);
+  if (n) {
+    const t = document.createElement('button'); t.className = 'link dsteps';
+    const open = expandedSteps.has(m.id);
+    t.textContent = `${n} action${n === 1 ? '' : 's'} ${open ? '▴' : '▾'}`;
+    t.addEventListener('click', () => { if (open) expandedSteps.delete(m.id); else expandedSteps.add(m.id); lastChatSig = ''; renderChat(); });
+    box.appendChild(t);
+    if (open) {
+      const ul = document.createElement('ol'); ul.className = 'actlist';
+      for (const st of m.steps) {
+        const li = document.createElement('li'); li.className = st.state;
+        li.textContent = `${STEP_MARK[st.state] || ''} ${stepLabel(st)}`;
+        li.title = [st.input && `Input: ${st.input}`, st.result && `Result: ${st.result}`].filter(Boolean).join('\n');
+        ul.appendChild(li);
+      }
+      box.appendChild(ul);
+    }
+  }
+  return box;
+}
+
+const FILE_ICON = { md: 'MD', html: 'HTML', htm: 'HTML', csv: 'CSV', json: 'JSON', svg: 'SVG', txt: 'TXT', doc: 'DOC' };
+function fileCard(f) {
+  const card = document.createElement('div'); card.className = 'filecard';
+  const ext = ((/\.([a-z0-9]+)$/i.exec(f.name) || [])[1] || 'file').toLowerCase();
+  const ic = document.createElement('div'); ic.className = 'ficon'; ic.textContent = FILE_ICON[ext] || ext.slice(0, 4).toUpperCase();
+  const info = document.createElement('div'); info.className = 'finfo';
+  const nm = document.createElement('div'); nm.className = 'fname'; nm.textContent = f.name;
+  const meta = document.createElement('div'); meta.className = 'fmeta';
+  meta.textContent = [f.title, f.size >= 1024 ? `${Math.round(f.size / 1024)} KB` : `${f.size} bytes`].filter(Boolean).join(' · ');
+  info.append(nm, meta);
+  const open = document.createElement('button'); open.className = 'ghost fbtn'; open.textContent = 'Open';
+  open.addEventListener('click', () => send('openFile', { id: f.id }));
+  const dl = document.createElement('button'); dl.className = 'primary fbtn'; dl.textContent = 'Download';
+  dl.addEventListener('click', () => send('downloadFile', { id: f.id }));
+  card.append(ic, info, open, dl);
+  return card;
+}
+
+// Pending answers: move the bar along (time counts too) without rebuilding the chat.
+setInterval(() => {
+  for (const el of document.querySelectorAll('.progress[data-id]')) {
+    const m = chat.find(x => x.id === el.dataset.id);
+    if (!m || !m.pending) continue;
+    el.querySelector('.pfill').style.width = Math.round(progressOf(m) * 100) + '%';
+    el.querySelector('.plabel').textContent = progressLabel(m);
+  }
+}, 1000);
 
 // Light formatting for replies: **bold**, `code`, "- " bullets. Built as DOM nodes, never HTML.
 function fillRich(el, text) {
@@ -446,25 +587,15 @@ function renderChat() {
     who.textContent = WHO[m.role] || '';
     div.appendChild(who);
 
-    if (Array.isArray(m.steps) && m.steps.length) {
-      const ul = document.createElement('ul');
-      ul.className = 'steps';
-      for (const st of m.steps) {
-        const li = document.createElement('li');
-        li.className = 'step ' + st.state;
-        const mark = document.createElement('span'); mark.className = 'mark'; mark.textContent = STEP_MARK[st.state] || '';
-        const name = document.createElement('span'); name.className = 'name'; name.textContent = st.name;
-        li.append(mark, name);
-        li.title = [st.input && `Input: ${st.input}`, st.result && `Result: ${st.result}`].filter(Boolean).join('\n');
-        ul.appendChild(li);
-      }
-      div.appendChild(ul);
+    if (m.role === 'assistant' && Array.isArray(m.steps)) {
+      const pb = progressBlock(m);
+      if (pb) div.appendChild(pb);
     }
 
     if (m.text || !m.pending) {
       const body = document.createElement('div');
       body.className = 'body';
-      if (m.role === 'assistant') fillRich(body, m.text); else body.textContent = m.text;
+      if (m.role === 'assistant') { body.classList.add('md'); cizMarkdown(body, m.text, onLink); } else body.textContent = m.text;
       if (m.text) div.appendChild(body);
       if (m.text && m.role === 'assistant' && !m.pending) {
         const foot = document.createElement('div');
@@ -485,10 +616,15 @@ function renderChat() {
         foot.appendChild(cp);
       }
     }
+    if (Array.isArray(m.files) && m.files.length) {
+      const files = document.createElement('div'); files.className = 'files-out';
+      for (const f of m.files) files.appendChild(fileCard(f));
+      div.appendChild(files);
+    }
     if (m.pending) {
       const row = document.createElement('div');
       row.className = 'working';
-      const dots = document.createElement('span'); dots.className = 'dots'; dots.textContent = m.text ? '' : 'Thinking';
+      const dots = document.createElement('span'); dots.className = 'dots'; dots.textContent = '';
       const cancel = document.createElement('button'); cancel.className = 'link'; cancel.textContent = 'Cancel';
       cancel.addEventListener('click', () => send('chatCancel', { id: m.id }));
       row.append(dots, cancel);
