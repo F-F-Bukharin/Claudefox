@@ -62,9 +62,7 @@ $('filesToggle').addEventListener('change', e => send('setFiles', { value: e.tar
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
 $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list' }));
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
-for (const b of document.querySelectorAll('.modes button')) {
-  b.addEventListener('click', () => send('setModel', { value: b.dataset.model }));
-}
+$('modelBtn').addEventListener('click', () => send('setModel', { value: state.chatModel === 'quality' ? 'speed' : 'quality' }));
 
 // ------------------------------------------------------------ render state
 
@@ -131,9 +129,11 @@ function render(s, log) {
   $('pendingVal').textContent = String(s.pending || 0);
 
   // model choice
-  for (const b of document.querySelectorAll('.modes button')) {
-    b.setAttribute('aria-checked', String(b.dataset.model === (s.chatModel || 'speed')));
-  }
+  const quality = s.chatModel === 'quality';
+  $('modelBtn').textContent = quality ? 'Quality' : 'Speed';
+  $('modelBtn').classList.toggle('quality', quality);
+  $('modelBtn').title = (quality ? 'Quality: Opus 5.5, high effort. Slower, best answers, uses more.'
+    : 'Speed: Haiku 5.5, high effort. Fast and light on usage.') + ' Click to switch.';
 
   // composer hint
   $('composerHint').textContent =

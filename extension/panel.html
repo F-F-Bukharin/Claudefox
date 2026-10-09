@@ -45,10 +45,6 @@
     </div>
 
     <div class="composer">
-      <div class="modes" role="radiogroup" aria-label="Model">
-        <button type="button" role="radio" data-model="speed" title="Haiku 5.5, high effort: fast and light on usage">Speed</button>
-        <button type="button" role="radio" data-model="quality" title="Opus 5.5, high effort: slower, best answers, uses more">Quality</button>
-      </div>
       <div class="context">
         <span class="ctx-label">Current tab</span>
         <span id="ctxTab" class="ctx-tab">…</span>
@@ -59,7 +55,10 @@
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </form>
-      <p id="composerHint" class="composer-hint"></p>
+      <div class="composer-foot">
+        <p id="composerHint" class="composer-hint"></p>
+        <button type="button" id="modelBtn" class="modelchip">Speed</button>
+      </div>
     </div>
   </main>
 
