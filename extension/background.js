@@ -16,6 +16,7 @@ let nextActionId = 1;
   await cizState.set({ pending: 0 });
   await cizState.addLog('info', 'Add-on started');
   resumeSignIn('startup');
+  closeInstallerTabs();
   probeDebugPort();
   setInterval(probeDebugPort, 20000);
   if (cizState.get().agent === 'active') connectNative();
@@ -63,6 +64,10 @@ async function handlePanel(msg, port) {
     case 'retryNative': nativeRetries = 0; return connectNative();
     case 'checkClaude': return requestClaudeStatus(true);
     case 'switchAccount': return switchAccount();
+    case 'updateAddon':
+      if (!sendNative({ type: 'update_addon' })) return cizState.addLog('error', 'Update failed: the helper is not connected.');
+      await cizState.set({ updating: true });
+      return cizState.addLog('info', 'Building the add-on from your project folder…');
     case 'clearLog':   return cizState.clearLog();
     case 'openClaude': return browser.tabs.create({ url: CIZ.CLAUDE_ORIGIN + '/' });
     case 'devCall':    return devCall(msg.tool);
@@ -162,6 +167,15 @@ async function fetchAccountViaTab() {
   if (!res) return { account: null, notes: ['tab check returned nothing'] };
   if (res.acct) return { account: Object.assign(res.acct, { via: res.path + ' (tab)' }), notes: res.notes };
   return { account: null, notes: res.notes || [], signedOut: !!res.signedOut };
+}
+
+// Opening the .xpi to install it leaves a tab on the file behind. Close those when the add-on starts.
+async function closeInstallerTabs() {
+  try {
+    const tabs = await browser.tabs.query({});
+    const ids = tabs.filter(t => /^file:\/\/.*\/(signed\/)?claude[-_]in[-_]zen[^/]*\.xpi$/i.test(t.url || '')).map(t => t.id);
+    if (ids.length) await browser.tabs.remove(ids);
+  } catch {}
 }
 
 // Remembered sign-in: after a manual sign-in the add-on keeps a marker (email, name, account id; never
@@ -407,6 +421,7 @@ async function onNativeMessage(msg) {
       nativeRetries = 0;
       await cizState.set({
         native: 'connected', nativeDetail: `helper ${msg.version}`, hostVersion: String(msg.version || ''),
+        sourceVersion: String(msg.sourceVersion || ''), canUpdate: !!msg.canUpdate,
         clients: Array.isArray(msg.clients) ? msg.clients.slice(0, 10) : [],
       });
       await cizState.addLog('info', `Helper ${msg.version} connected`);
@@ -442,6 +457,13 @@ async function onNativeMessage(msg) {
       sendNative({ type: 'result', id: msg.id, ...out });
       return;
     }
+
+    case 'update_result':
+      await cizState.set({ updating: false });
+      await cizState.addLog(msg.ok ? 'info' : 'error', msg.ok
+        ? `Built v${msg.version}. Zen is showing the install prompt: click Add, then Okay. The panel reloads after.`
+        : `Update: ${msg.error}`);
+      return;
 
     case 'claude_switch_started':
       await cizState.addLog('info', 'Logged out. A sign-in window is open: pick the account in the browser and click Authorize.');

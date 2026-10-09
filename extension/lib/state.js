@@ -17,6 +17,9 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   native: 'unknown',          // 'unknown' | 'connected' | 'missing' | 'error'
   nativeDetail: '',
   hostVersion: '',
+  sourceVersion: '',          // add-on version in the project folder the helper runs from
+  canUpdate: false,           // the helper can rebuild and reinstall the add-on (source present)
+  updating: false,
   clients: [],                // names of local clients connected through the helper
   claude: null,               // { installed, loggedIn, email, plan, checkedAt } from the helper
   debugPort: 'unknown',       // 'unknown' | 'off' | 'on'

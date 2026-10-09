@@ -138,6 +138,7 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     toHelper({ type: 'chat', id: 'c3b', text: 'plus', model: 'speedplus' });
     await next(m => m.type === 'chat_done' && m.id === 'c3b', 15000);
     const sp = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
+    check('reply says which model and effort ran', eventsFor('c3b').some(e => e.kind === 'meta' && e.model === 'claude-haiku-5-5' && e.effort === 'max'));
     check('Speed Plus is Haiku 5.5 on max', sp[sp.indexOf('--model') + 1] === 'claude-haiku-5-5' && sp[sp.indexOf('--effort') + 1] === 'max');
 
     toHelper({ type: 'chat', id: 'c4', text: 'x', files: 'read', folder: path.join(tmp, 'missing') });

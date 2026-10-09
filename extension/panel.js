@@ -58,6 +58,7 @@ $('startBtn').addEventListener('click', () => send('start'));
 $('retryNative').addEventListener('click', () => send('retryNative'));
 $('checkClaude').addEventListener('click', () => send('checkClaude'));
 $('switchClaude').addEventListener('click', () => send('switchAccount'));
+$('updateBtn').addEventListener('click', () => send('updateAddon'));
 $('clearLog').addEventListener('click', () => send('clearLog'));
 const filesMode = () => (state.filesMode === 'write' ? 'write' : 'read');
 $('filesToggle').addEventListener('change', e => send('setFiles', { value: e.target.checked, mode: filesMode(), folder: $('filesFolder').value }));
@@ -125,6 +126,15 @@ function render(s, log) {
   $('nativeDot').className = 'dot ' + cls;
   $('nativeVal').textContent = s.native === 'connected' && s.hostVersion ? `${text} · v${s.hostVersion}` : text;
   $('nativeVal').title = s.nativeDetail || '';
+  const installed = browser.runtime.getManifest().version;
+  const src = s.native === 'connected' ? s.sourceVersion : '';
+  const newer = src && cmpVersion(src, installed) > 0;
+  $('addonVal').textContent = `v${installed}` + (src ? (newer ? ` · v${src} ready` : ' · up to date') : '');
+  $('addonVal').parentElement.classList.toggle('warn', !!newer);
+  $('updateBtn').hidden = !(s.native === 'connected' && s.canUpdate);
+  $('updateBtn').disabled = !!s.updating;
+  $('updateBtn').textContent = s.updating ? 'building…' : newer ? `update to v${src}` : 'reinstall';
+  $('updateBtn').title = 'Rebuild the add-on from your project folder and install it in Zen';
   $('retryNative').hidden = s.agent === 'stopped' || s.native === 'connected';
 
   const [ccls, ctext, ctitle] = claudeLabel(s);
@@ -167,11 +177,12 @@ function render(s, log) {
   $('plusBtn').classList.toggle('on', plus);
   $('plusBtn').setAttribute('aria-pressed', String(plus));
 
-  // composer hint
+  // composer hint: what the next message runs on
   $('composerHint').textContent =
     s.agent === 'stopped' ? 'Stopped. Press Start to let Claude act again.' :
     !s.signedIn ? 'Not signed in. Open the Profile page to sign in.' :
-    'Enter to send · Shift+Enter for a new line';
+    quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort';
+  $('composerHint').title = 'Enter to send · Shift+Enter for a new line';
 
   renderLog(log || []);
   renderSetup(s);
@@ -282,6 +293,18 @@ function autoGrow() {
 let chatSeq = 0;
 let liveRuns = null;   // chat ids the background still runs (null until it tells us)
 
+function cmpVersion(a, b) {
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0 ? 1 : -1; }
+  return 0;
+}
+
+// "claude-haiku-5-5" -> "Haiku 5.5"
+function modelName(id) {
+  const m = /claude-([a-z]+)-(\d+)(?:-(\d+))?/.exec(String(id || ''));
+  return m ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? '.' + m[3] : ''}` : String(id || '');
+}
+
 function busyMsg() { return chat.find(m => m.role === 'assistant' && m.pending); }
 
 async function submit() {
@@ -320,6 +343,7 @@ function onChatEvent(id, ev) {
   const m = chat.find(x => x.id === id);
   if (!m || !m.pending) return;
   if (ev.kind === 'text') m.text += String(ev.text || '');
+  else if (ev.kind === 'meta') m.meta = { model: String(ev.model || ''), effort: String(ev.effort || '') };
   else if (ev.kind === 'tool') {
     m.steps.push({ name: String(ev.name || 'tool'), input: String(ev.input || ''), state: 'run' });
     if (m.steps.length > 30) m.steps.splice(0, m.steps.length - 30);
@@ -441,12 +465,22 @@ function renderChat() {
       if (m.role === 'assistant') fillRich(body, m.text); else body.textContent = m.text;
       if (m.text) div.appendChild(body);
       if (m.text && m.role === 'assistant' && !m.pending) {
+        const foot = document.createElement('div');
+        foot.className = 'msgfoot';
+        if (m.meta && m.meta.model) {
+          const tag = document.createElement('span');
+          tag.className = 'ran' + (m.meta.effort === 'max' && /haiku/.test(m.meta.model) ? ' plus' : '');
+          tag.textContent = `${modelName(m.meta.model)} · ${m.meta.effort} effort`;
+          tag.title = `Ran on ${m.meta.model}, ${m.meta.effort} effort`;
+          foot.appendChild(tag);
+        }
+        div.appendChild(foot);
         const cp = document.createElement('button');
         cp.className = 'link copy';
         cp.textContent = 'Copy';
         cp.title = 'Copy this reply';
         cp.addEventListener('click', () => copyText(m.text, cp));
-        div.appendChild(cp);
+        foot.appendChild(cp);
       }
     }
     if (m.pending) {

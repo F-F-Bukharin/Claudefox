@@ -131,6 +131,9 @@ button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; 
 .messages, .msg, .msg .body, .tablist, #log { user-select: text; -moz-user-select: text; cursor: auto; }
 .msg .body strong { font-weight: 700; }
 .msg .body code { background: var(--line); border-radius: 4px; padding: 0 4px; }
+.msgfoot { display: flex; align-items: center; gap: 10px; }
+.msgfoot .ran { font-size: 11px; color: var(--muted); }
+.msgfoot .ran.plus { color: var(--plus); font-weight: 600; }
 .msg .copy { align-self: flex-start; font-size: 11.5px; color: var(--muted); opacity: .7; }
 .msg:hover .copy { opacity: 1; color: var(--accent); }
 .msg.user { align-self: flex-end; max-width: 88%; }

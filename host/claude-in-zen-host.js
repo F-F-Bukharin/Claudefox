@@ -9,7 +9,7 @@
 // Local clients (the Zen tool server that Claude Code starts) connect over a named pipe and must
 // present the per-session token stored in %LOCALAPPDATA%\claude-in-zen\pipe-token.
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 const fs = require('fs');
 const os = require('os');
@@ -58,7 +58,7 @@ function onAddon(msg) {
     case 'hello':
       addonVersion = String(msg.version || '?');
       log.info(`add-on ${addonVersion} connected`);
-      sendAddon({ type: 'hello', version: VERSION, server: `host ${VERSION}`, clients: clientNames() });
+      sendAddon({ type: 'hello', version: VERSION, server: `host ${VERSION}`, clients: clientNames(), ...sourceInfo() });
       return;
 
     case 'result': {
@@ -74,6 +74,10 @@ function onAddon(msg) {
 
     case 'claude_status':
       claudeStatus().then(status => sendAddon({ type: 'claude_status', ...status }));
+      return;
+
+    case 'update_addon':
+      updateAddon();
       return;
 
     case 'claude_switch':
@@ -306,6 +310,9 @@ function onChatLine(run, line) {
   let ev;
   try { ev = JSON.parse(line); } catch { return; }
   if (ev && typeof ev.session_id === 'string' && !run.sessionId) run.sessionId = ev.session_id;
+  if (ev && ev.type === 'system' && ev.subtype === 'init' && ev.model) {
+    emitChat(run, { kind: 'meta', model: String(ev.model), effort: run.effort });   // the model Claude Code reports
+  }
   switch (ev && ev.type) {
     case 'stream_event': {
       const e = ev.event || {};
@@ -373,8 +380,9 @@ function startChat(msg) {
   } catch (e) {
     return refuse(`Could not start Claude Code: ${e.message}`);
   }
-  const run = { id, child, sessionId: resume, finished: false, stderr: '', resultError: '', started: Date.now(), timer: null };
+  const run = { id, child, effort: choice.effort, sessionId: resume, finished: false, stderr: '', resultError: '', started: Date.now(), timer: null };
   chat = run;
+  emitChat(run, { kind: 'meta', model: choice.model, effort: choice.effort });   // what the helper asked for
   run.timer = setTimeout(() => cancelChat(id, 'The answer took longer than 15 minutes and was stopped.'), CHAT_TIMEOUT_MS);
   log.info(`chat ${id} started (${choice.model}, files: ${files.mode || 'off'}, ${resume ? 'resumed' : 'new'})`);
 
@@ -408,6 +416,53 @@ function cancelChat(id, reason) {
   if (!run || (id !== '*' && id !== run.id)) return;
   try { run.child.kill(); } catch {}
   finishChat(run, false, reason || 'Stopped.');
+}
+
+// ------------------------------------------------------------------ update the add-on
+// The project folder this helper runs from (host\..). With the source there, the helper can rebuild the
+// .xpi (build-xpi.ps1) and hand it to Zen, which shows its install prompt. Friends' copies have no source.
+
+const ROOT = path.join(__dirname, '..');
+
+function sourceInfo() {
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension', 'manifest.json'), 'utf8'));
+    return { sourceVersion: String(m.version || ''), canUpdate: process.platform === 'win32' && fs.existsSync(path.join(ROOT, 'build-xpi.ps1')) };
+  } catch { return { sourceVersion: '', canUpdate: false }; }
+}
+
+function findZen() {
+  const c = [
+    process.env.CLAUDE_IN_ZEN_ZEN,
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Zen Browser', 'zen.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Zen Browser', 'zen.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || '', 'Zen Browser', 'zen.exe'),
+  ].filter(Boolean);
+  return c.find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } }) || null;
+}
+
+let updating = false;
+function updateAddon() {
+  const done = (ok, error, version) => { updating = false; sendAddon({ type: 'update_result', ok, error: error || '', version: version || '' }); };
+  if (updating) return;
+  const info = sourceInfo();
+  if (!info.canUpdate) return done(false, 'This copy has no add-on source to build from. Install the newer .xpi you were sent instead.');
+  const zen = findZen();
+  if (!zen) return done(false, 'Could not find zen.exe. Run "Install in Zen.bat" instead.');
+  updating = true;
+  log.info(`update: building v${info.sourceVersion}`);
+  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'build-xpi.ps1')],
+    { cwd: ROOT, timeout: 60000, windowsHide: true }, (err, stdout, stderr) => {
+      const xpi = path.join(ROOT, 'claude-in-zen.xpi');
+      if (err || !fs.existsSync(xpi)) return done(false, `Build failed: ${String(stderr || (err && err.message) || '').trim().split('\n').pop()}`);
+      try {
+        const child = spawn(zen, [xpi], { detached: true, stdio: 'ignore', windowsHide: false });
+        child.on('error', e => log.warn('open zen', e.message));
+        child.unref();
+      } catch (e) { return done(false, `Could not open Zen: ${e.message}`); }
+      log.info('update: handed the .xpi to Zen');
+      done(true, '', info.sourceVersion);
+    });
 }
 
 // ------------------------------------------------------------------ switch account

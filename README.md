@@ -7,11 +7,15 @@ Not affiliated with or endorsed by Anthropic or Zen.
 Plan, decisions and TODO: `claude/zen-addon-plan.md` in the Mod Making project.
 Friends: see `START HERE.txt` (it ships in the friends zip).
 
-## Status (v0.4.0)
+## Status (v0.5.0)
 - **Chat** with Claude in the panel, streamed, with a chip for each tool it uses and a Cancel link.
   Follow-ups continue the conversation; `/clear` starts a new one.
 - **Speed / Quality** button under the message box: Speed is Haiku 5.5, Quality is Opus 5.5, both on high effort.
   In Speed, the small **Speed Plus** button switches Haiku 5.5 to max effort and turns the Speed button purple.
+  The line under the message box says what the next message runs on, and each reply shows the model and effort it
+  actually ran with.
+- **Update from Settings**: the Add-on row shows the installed version and the one in your project folder; **update**
+  has the helper rebuild the add-on and hand it to Zen's install prompt. The leftover `.xpi` tab closes on its own.
 - **Page tools**: list, open, switch and close tabs; navigate; read the page outline (with element refs) or its text;
   find, click (by ref, selector, or x and y from a screenshot, with real pointer events), fill, press keys, scroll,
   wait for something, play/pause/seek video and audio, screenshot.
@@ -83,7 +87,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 2. Click **Load Temporary Add-on…**, press **Ctrl+V** in the file name box, then **Enter**.
 3. Open the panel with the toolbar button or **Alt+Shift+C**, and follow the checklist on the chat page.
 
-A temporary install is removed when Zen restarts. After a code change, click **Reload** in `about:debugging`.
+A temporary install is removed when Zen restarts. After a code change, click **Reload** in `about:debugging` (temporary install) or **update** in Settings (permanent install).
 Helper changes apply the next time Zen starts it: press Stop, then Start.
 
 ## Keep it installed

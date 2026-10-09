@@ -18,7 +18,10 @@ const tabs = [
   { id: 1, windowId: 1, active: true, title: 'Shop', url: 'https://shop.example/', status: 'complete' },
   { id: 2, windowId: 1, active: false, title: 'Sign in', url: 'https://accounts.google.com/signin/v2', status: 'complete' },
   { id: 3, windowId: 1, active: false, title: 'Config', url: 'about:config', status: 'complete' },
+  { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/H/Mods/claude-in-zen/claude-in-zen.xpi', status: 'complete' },
+  { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/H/notes/claude-in-zen-notes.txt', status: 'complete' },
 ];
+const removed = [];
 const injected = [];
 let native = null;   // the fake helper port
 const connectEv = ev();
@@ -49,7 +52,7 @@ const browser = {
     get: async id => { const t = tabs.find(x => x.id === id); if (!t) throw new Error('no tab'); return t; },
     create: async o => { const t = { id: 9, windowId: 1, url: o.url, title: '', status: 'complete' }; tabs.push(t); return t; },
     update: async (id, o) => Object.assign(tabs.find(t => t.id === id), o),
-    remove: async () => {},
+    remove: async ids => { removed.push(...[].concat(ids)); },
     executeScript: async (id, o) => { injected.push(id); return [o.code.includes('"exists"') ? false : { ok: true, from: id }]; },
     onActivated: ev(), onUpdated: ev(),
   },
@@ -80,6 +83,7 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     await tick(50);
     connectEv.fire(panel);
     await tick();
+    check('startup closes the leftover .xpi tab only', removed.includes(4) && !removed.includes(5) && !removed.includes(1), removed.join(','));
     check('panel gets state and chat runs on connect', panelIn.some(m => m.type === 'state') && panelIn.some(m => m.type === 'chatRuns'));
 
     let r = await call('tabs_list');
@@ -107,7 +111,7 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     check('check link logs what it found', g('cizState').log().some(e => /signed in as personalworksacc@gmail.com \(profile: C:\\x\\claude\)/.test(e.text)));
 
     r = await call('tabs_list');
-    check('tabs_list works', r.ok && r.result.length === 3);
+    check('tabs_list works', r.ok && r.result.length === 5);
     r = await call('read_page', { tab_id: 2 });
     check('Google sign-in tab refused', !r.ok && /Google sign-in/.test(r.error) && !injected.includes(2));
     r = await call('get_page_text', { tab_id: 3 });

@@ -56,17 +56,20 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  ok('Speed Plus button shows in Speed', !$('plusBtn').hidden && !$('modelBtn').classList.contains('plus'));
  $('plusBtn').click(); ok('Speed Plus click toggles', sent.some(m=>m.type==='setPlus'&&m.value===true));
  onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:true},log:[]});
+ ok('hint shows Haiku max effort', $('composerHint').textContent==='Haiku 5.5 · max effort');
  ok('Speed bar turns purple in Plus', $('modelBtn').classList.contains('plus') && $('plusBtn').classList.contains('on'));
  onMsg({type:'state',state:{...ready,chatModel:'quality',chatPlus:true},log:[]});
  ok('Speed Plus hidden in Quality', $('plusBtn').hidden && !$('modelBtn').classList.contains('plus'));
  // formatting, copy, selection-safe rendering
  $('input').value='fmt'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
  const f2=sent.filter(m=>m.type==='chat').pop();
+ onMsg({type:'chatEvent',id:f2.id,event:{kind:'meta',model:'claude-haiku-5-5',effort:'max'}});
  onMsg({type:'chatEvent',id:f2.id,event:{kind:'text',text:'**Bold** and `code`\n- item'}});
  onMsg({type:'chatDone',id:f2.id,ok:true});
  const last=[...$('messages').querySelectorAll('.msg.assistant')].pop();
  ok('bold and code rendered, no raw markers', last.querySelector('strong')?.textContent==='Bold' && last.querySelector('code')?.textContent==='code' && !/\*\*/.test(last.textContent) && /• item/.test(last.textContent));
  ok('copy button on finished reply', !!last.querySelector('button.copy'));
+ ok('reply shows model and effort it ran with', last.querySelector('.ran')?.textContent==='Haiku 5.5 · max effort' && last.querySelector('.ran.plus'));
  const before=last; onMsg({type:'state',state:{...ready,chatModel:'quality'},log:[]});
  ok('state updates do not rebuild the chat (keeps selection)', before.isConnected);
  console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
