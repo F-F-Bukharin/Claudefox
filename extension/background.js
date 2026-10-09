@@ -53,7 +53,7 @@ async function handlePanel(msg, port) {
     case 'start':      return startAgent();
     case 'setFiles':   return setFiles(!!msg.value);
     case 'retryNative': nativeRetries = 0; return connectNative();
-    case 'checkClaude': return requestClaudeStatus();
+    case 'checkClaude': return requestClaudeStatus(true);
     case 'clearLog':   return cizState.clearLog();
     case 'openClaude': return browser.tabs.create({ url: CIZ.CLAUDE_ORIGIN + '/' });
     case 'devCall':    return devCall(msg.tool);
@@ -261,8 +261,17 @@ function sendNative(msg) {
   }
 }
 
-function requestClaudeStatus() {
-  sendNative({ type: 'claude_status' });
+let claudeCheckAsked = false;   // log the next status answer (set by the panel's "check" link)
+
+function requestClaudeStatus(fromPanel) {
+  if (fromPanel) {
+    claudeCheckAsked = true;
+    cizState.addLog('info', 'Checking Claude Code sign-in…');
+  }
+  if (!sendNative({ type: 'claude_status' }) && fromPanel) {
+    claudeCheckAsked = false;
+    cizState.addLog('error', 'Claude Code check failed: the helper is not connected.');
+  }
 }
 
 async function onNativeMessage(msg) {
@@ -292,6 +301,14 @@ async function onNativeMessage(msg) {
           checkedAt: Date.now(),
         },
       });
+      if (claudeCheckAsked) {
+        claudeCheckAsked = false;
+        const who = msg.email || msg.emailAddress;
+        const dir = msg.configDirectory ? ` (profile: ${msg.configDirectory})` : '';
+        await cizState.addLog('info', !msg.installed ? 'Claude Code: not installed on this PC.'
+          : !msg.loggedIn ? `Claude Code: not signed in${dir}.`
+          : `Claude Code: signed in as ${who || 'unknown account'}${dir}.`);
+      }
       return;
 
     case 'call': {

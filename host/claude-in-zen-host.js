@@ -9,7 +9,7 @@
 // Local clients (the Zen tool server that Claude Code starts) connect over a named pipe and must
 // present the per-session token stored in %LOCALAPPDATA%\claude-in-zen\pipe-token.
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 
 const fs = require('fs');
 const os = require('os');
@@ -198,7 +198,7 @@ function claudeStatus() {
       let info = {};
       try { info = JSON.parse(String(stdout || '').trim() || '{}'); } catch {}
       const pick = {};
-      for (const k of ['authMethod', 'email', 'emailAddress', 'organizationName', 'orgName', 'subscriptionType']) {
+      for (const k of ['authMethod', 'email', 'emailAddress', 'organizationName', 'orgName', 'subscriptionType', 'configDirectory']) {
         if (typeof info[k] === 'string') pick[k] = info[k];
       }
       const loggedIn = typeof info.loggedIn === 'boolean' ? info.loggedIn : (!err && pick.authMethod !== 'none');
