@@ -131,8 +131,9 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     const a = rec.argv;
     const val = f => a[a.indexOf(f) + 1];
     check('print mode with streaming', a.includes('-p') && val('--output-format') === 'stream-json' && a.includes('--include-partial-messages'));
-    check('only the Zen tool server', a.includes('--strict-mcp-config') && val('--allowedTools') === 'mcp__claude-in-zen');
-    check('no built-in tools when file tools are off', val('--tools') === '' && !a.includes('--add-dir') && val('--permission-mode') === 'dontAsk');
+    check('only the Zen tool server, web tools allowed', a.includes('--strict-mcp-config') && val('--allowedTools') === 'mcp__claude-in-zen,WebSearch,WebFetch');
+    check('file tools off: just Read and the web tools', val('--tools') === 'Read,WebSearch,WebFetch' && !a.includes('--add-dir') && val('--permission-mode') === 'dontAsk');
+    check('prompt keeps who-is-who and posting rules', /# Who is who/.test(val('--append-system-prompt')) && /song lyrics/.test(val('--append-system-prompt')));
     check('API key not passed to Claude Code', rec.apiKey === null);
     check('runs on the add-on profile', rec.config === path.join(tmp, 'claude-in-zen', 'claude'));
     check('Speed is Haiku 5.5 on high by default', val('--model') === 'claude-haiku-5-5' && val('--effort') === 'high');
@@ -142,13 +143,13 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     await next(m => m.type === 'chat_done' && m.id === 'c2', 15000);
     const b = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
     check('resume passes the session id', b[b.indexOf('--resume') + 1] === done.sessionId);
-    check('read-only file tools', b[b.indexOf('--tools') + 1] === 'Read,Glob,Grep' && b[b.indexOf('--add-dir') + 1] === folder && b[b.indexOf('--permission-mode') + 1] === 'dontAsk');
+    check('read-only file tools', b[b.indexOf('--tools') + 1] === 'Read,Glob,Grep,WebSearch,WebFetch' && b[b.indexOf('--add-dir') + 1] === folder && b[b.indexOf('--permission-mode') + 1] === 'dontAsk');
 
     toHelper({ type: 'chat', id: 'c3', text: 'edit', files: 'write', folder, model: 'quality' });
     await next(m => m.type === 'chat_done' && m.id === 'c3', 15000);
     const c = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
     check('Quality is Opus 5.5 on high', c[c.indexOf('--model') + 1] === 'claude-opus-5-5' && c[c.indexOf('--effort') + 1] === 'high');
-    check('read-write file tools, never Bash', c[c.indexOf('--tools') + 1] === 'Read,Glob,Grep,Edit,Write' && c[c.indexOf('--permission-mode') + 1] === 'acceptEdits' && !c.join(' ').includes('Bash'));
+    check('read-write file tools, never Bash', c[c.indexOf('--tools') + 1] === 'Read,Glob,Grep,Edit,Write,WebSearch,WebFetch' && c[c.indexOf('--permission-mode') + 1] === 'acceptEdits' && !c.join(' ').includes('Bash'));
 
     toHelper({ type: 'chat', id: 'c3b', text: 'plus', model: 'speedplus' });
     await next(m => m.type === 'chat_done' && m.id === 'c3b', 15000);
