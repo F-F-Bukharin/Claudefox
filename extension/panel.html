@@ -92,9 +92,18 @@
     <section class="card rows">
       <h3>Connections</h3>
       <div class="row">
-        <span>Native host</span>
+        <span>Helper</span>
         <span class="val"><span id="nativeDot" class="dot"></span><span id="nativeVal">…</span>
           <button id="retryNative" class="link" hidden>retry</button></span>
+      </div>
+      <div class="row">
+        <span>Claude Code</span>
+        <span class="val"><span id="claudeDot" class="dot"></span><span id="claudeVal">…</span>
+          <button id="checkClaude" class="link" hidden>check</button></span>
+      </div>
+      <div class="row">
+        <span>Using Zen now</span>
+        <span class="val" id="clientsVal">nobody</span>
       </div>
       <div class="row">
         <span>Debug port 9222</span>
@@ -109,7 +118,7 @@
     <section class="card rows">
       <h3>Permissions</h3>
       <div class="row">
-        <label for="filesToggle">File tools <span class="muted small">(arrives in P4)</span></label>
+        <label for="filesToggle">File tools <span class="muted small">(coming soon)</span></label>
         <span class="val"><input type="checkbox" id="filesToggle" class="switch"></span>
       </div>
       <div class="row">

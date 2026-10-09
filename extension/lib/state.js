@@ -10,6 +10,9 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   filesEnabled: false,        // wired up in P4; Stop always forces it off
   native: 'unknown',          // 'unknown' | 'connected' | 'missing' | 'error'
   nativeDetail: '',
+  hostVersion: '',
+  clients: [],                // names of local clients connected through the helper
+  claude: null,               // { installed, loggedIn, email, plan, checkedAt } from the helper
   debugPort: 'unknown',       // 'unknown' | 'off' | 'on'
   pending: 0,
 });

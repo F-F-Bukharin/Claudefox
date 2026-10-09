@@ -1,7 +1,7 @@
 'use strict';
-// Claude in Zen — background page (MV2, persistent).
-// P1 skeleton: session sign-in, Stop/Start, channel status, action log,
-// and the command router that later phases plug tools into.
+// Claude in Zen: background page (MV2, persistent).
+// Session sign-in, Stop/Start, the helper link to Claude Code, debug-port warning,
+// action log, and the tool router every call goes through.
 
 let nativePort = null;
 const pendingActions = new Map();   // id -> { cmd, controller, startedAt }
@@ -52,7 +52,8 @@ async function handlePanel(msg, port) {
     case 'stop':       return stopAll('Stop button');
     case 'start':      return startAgent();
     case 'setFiles':   return setFiles(!!msg.value);
-    case 'retryNative':return connectNative();
+    case 'retryNative': nativeRetries = 0; return connectNative();
+    case 'checkClaude': return requestClaudeStatus();
     case 'clearLog':   return cizState.clearLog();
     case 'openClaude': return browser.tabs.create({ url: CIZ.CLAUDE_ORIGIN + '/' });
     case 'devCall':    return devCall(msg.tool);
@@ -183,7 +184,7 @@ async function stopAll(source) {
   }
   disconnectNative('stopped');
   await cizState.set({ agent: 'stopped', filesEnabled: false, pending: 0 });
-  await cizState.addLog('stop', `Stopped (${source}). Pending actions cancelled, native host disconnected, file tools off.`);
+  await cizState.addLog('stop', `Stopped (${source}). Pending actions cancelled, helper disconnected, file tools off.`);
 }
 
 async function startAgent() {
@@ -193,20 +194,26 @@ async function startAgent() {
 }
 
 async function setFiles(value) {
-  // File tools arrive in P4 (served by the local MCP server, not the add-on).
+  // File tools arrive in a later step (served through Claude Code, not the add-on).
   if (value) {
-    await cizState.addLog('info', 'File tools are not built yet (phase P4). Toggle left off.');
+    await cizState.addLog('info', 'File tools are not built yet. Toggle left off.');
     await cizState.set({ filesEnabled: false });
     return;
   }
   await cizState.set({ filesEnabled: false });
 }
 
-// ---------------------------------------------------------------- native host
+// ---------------------------------------------------------------- helper (native host)
+// The helper links the add-on to Claude Code on this PC. Zen starts it on connectNative and
+// ends it when the port closes, so Stop (which disconnects) also ends everything it serves.
+
+let nativeRetries = 0;
+let nativeRetryTimer = null;
 
 function connectNative() {
   if (nativePort) return;
   if (cizState.get().agent !== 'active') return;
+  clearTimeout(nativeRetryTimer);
   let port;
   try {
     port = browser.runtime.connectNative(CIZ.NATIVE_HOST);
@@ -217,36 +224,85 @@ function connectNative() {
   nativePort = port;
   cizState.set({ native: 'unknown', nativeDetail: 'connecting…' });
 
-  port.onMessage.addListener(msg => onNativeMessage(msg));
+  port.onMessage.addListener(msg => {
+    onNativeMessage(msg).catch(e => cizState.addLog('error', `Helper message failed: ${e.message}`));
+  });
   port.onDisconnect.addListener(p => {
     const err = (p && p.error) || browser.runtime.lastError;
     nativePort = null;
     if (err && /No such native application/i.test(err.message)) {
-      cizState.set({ native: 'missing', nativeDetail: 'host not installed yet (phase P3)' });
-    } else if (cizState.get().native !== 'missing') {
-      cizState.set({ native: 'error', nativeDetail: err ? err.message : 'disconnected' });
+      cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
+      return;
+    }
+    cizState.set({ native: 'error', nativeDetail: err ? err.message : 'helper stopped', clients: [] });
+    // The helper dropped on its own (not via Stop): try again a few times.
+    if (cizState.get().agent === 'active' && nativeRetries < 3) {
+      nativeRetries++;
+      nativeRetryTimer = setTimeout(connectNative, 1500 * nativeRetries);
     }
   });
-  try { port.postMessage({ type: 'hello', version: browser.runtime.getManifest().version }); } catch {}
+  sendNative({ type: 'hello', version: browser.runtime.getManifest().version });
 }
 
 function disconnectNative(reason) {
+  clearTimeout(nativeRetryTimer);
   if (nativePort) {
     try { nativePort.disconnect(); } catch {}
     nativePort = null;
   }
-  cizState.set({ native: 'unknown', nativeDetail: reason || 'disconnected' });
+  cizState.set({ native: 'unknown', nativeDetail: reason || 'disconnected', clients: [] });
+}
+
+function sendNative(msg) {
+  if (!nativePort) return false;
+  try { nativePort.postMessage(msg); return true; } catch (e) {
+    cizState.addLog('error', `Could not reach the helper: ${e.message}`);
+    return false;
+  }
+}
+
+function requestClaudeStatus() {
+  sendNative({ type: 'claude_status' });
 }
 
 async function onNativeMessage(msg) {
   if (!msg || typeof msg !== 'object') return;
-  if (msg.type === 'hello') {
-    await cizState.set({ native: 'connected', nativeDetail: msg.server || 'connected' });
-    return;
-  }
-  if (msg.type === 'call') {
-    const out = await dispatch(msg.tool, msg.args || {}, 'native');
-    try { nativePort && nativePort.postMessage({ type: 'result', id: msg.id, ...out }); } catch {}
+  switch (msg.type) {
+    case 'hello':
+      nativeRetries = 0;
+      await cizState.set({
+        native: 'connected', nativeDetail: `helper ${msg.version}`, hostVersion: String(msg.version || ''),
+        clients: Array.isArray(msg.clients) ? msg.clients.slice(0, 10) : [],
+      });
+      await cizState.addLog('info', `Helper ${msg.version} connected`);
+      requestClaudeStatus();
+      return;
+
+    case 'clients':
+      await cizState.set({ clients: Array.isArray(msg.clients) ? msg.clients.slice(0, 10) : [] });
+      return;
+
+    case 'claude_status':
+      await cizState.set({
+        claude: {
+          installed: !!msg.installed,
+          loggedIn: !!msg.loggedIn,
+          email: String(msg.email || msg.emailAddress || ''),
+          plan: String(msg.subscriptionType || ''),
+          checkedAt: Date.now(),
+        },
+      });
+      return;
+
+    case 'call': {
+      const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'));
+      sendNative({ type: 'result', id: msg.id, ...out });
+      return;
+    }
+
+    case 'host_error':
+      await cizState.addLog('error', `Helper: ${msg.error}`);
+      return;
   }
 }
 
@@ -270,8 +326,7 @@ async function probeDebugPort() {
 }
 
 // ---------------------------------------------------------------- router
-// Every tool call, from any channel, goes through here. P2 adds the page
-// tools; P3 feeds calls in from the native host.
+// Every tool call, from any channel (panel, console, helper), goes through here.
 
 const TOOLS = {
   async ping() { return { pong: true, version: browser.runtime.getManifest().version }; },

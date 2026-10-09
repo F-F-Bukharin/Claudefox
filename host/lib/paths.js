@@ -1,0 +1,19 @@
+'use strict';
+// Shared locations for the host, the tool server and the installer.
+const os = require('os');
+const path = require('path');
+
+const LOCAL = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+const BASE = path.join(LOCAL, 'claude-in-zen');
+const USER = (os.userInfo().username || 'user').replace(/[^A-Za-z0-9_.-]/g, '_');
+
+module.exports = {
+  BASE,
+  LOG_DIR: path.join(BASE, 'logs'),
+  TOKEN_FILE: path.join(BASE, 'pipe-token'),
+  CLAUDE_CONFIG_DIR: path.join(BASE, 'claude'),
+  WORKSPACE: path.join(BASE, 'workspace'),
+  PIPE: process.env.CLAUDE_IN_ZEN_PIPE || (process.platform === 'win32'
+    ? `\\\\.\\pipe\\claude-in-zen-${USER}`
+    : path.join(os.tmpdir(), `claude-in-zen-${USER}.sock`)),
+};

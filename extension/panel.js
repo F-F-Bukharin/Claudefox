@@ -53,6 +53,7 @@ $('openClaude').addEventListener('click', () => send('openClaude'));
 $('stopBtn').addEventListener('click', () => send('stop'));
 $('startBtn').addEventListener('click', () => send('start'));
 $('retryNative').addEventListener('click', () => send('retryNative'));
+$('checkClaude').addEventListener('click', () => send('checkClaude'));
 $('clearLog').addEventListener('click', () => send('clearLog'));
 $('filesToggle').addEventListener('change', e => send('setFiles', { value: e.target.checked }));
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
@@ -67,6 +68,15 @@ const NATIVE_LABEL = {
   error:     ['bad', 'error'],
   unknown:   ['', 'not connected'],
 };
+
+function claudeLabel(s) {
+  if (s.native !== 'connected') return ['', '—', 'Needs the helper'];
+  const c = s.claude;
+  if (!c) return ['', 'checking…', ''];
+  if (!c.installed) return ['bad', 'not installed', 'Install Claude Code on this PC'];
+  if (!c.loggedIn) return ['warn', 'not signed in', 'Run "Sign in Claude Code"'];
+  return ['ok', c.email ? `signed in · ${c.email}` : 'signed in', c.plan ? `Plan: ${c.plan}` : ''];
+}
 
 function render(s, log) {
   const pill = $('agentPill');
@@ -95,9 +105,17 @@ function render(s, log) {
   // settings
   const [cls, text] = NATIVE_LABEL[s.native] || NATIVE_LABEL.unknown;
   $('nativeDot').className = 'dot ' + cls;
-  $('nativeVal').textContent = text;
+  $('nativeVal').textContent = s.native === 'connected' && s.hostVersion ? `${text} · v${s.hostVersion}` : text;
   $('nativeVal').title = s.nativeDetail || '';
   $('retryNative').hidden = s.agent === 'stopped' || s.native === 'connected';
+
+  const [ccls, ctext, ctitle] = claudeLabel(s);
+  $('claudeDot').className = 'dot ' + ccls;
+  $('claudeVal').textContent = ctext;
+  $('claudeVal').title = ctitle;
+  $('checkClaude').hidden = s.native !== 'connected';
+  const clients = Array.isArray(s.clients) ? s.clients : [];
+  $('clientsVal').textContent = clients.length ? clients.join(', ') : 'nobody';
   const on = s.debugPort === 'on';
   $('debugDot').className = 'dot ' + (on ? 'warn' : '');
   $('debugVal').textContent = on ? 'OPEN' : s.debugPort === 'off' ? 'closed' : '…';
