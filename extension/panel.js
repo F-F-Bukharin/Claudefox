@@ -59,7 +59,13 @@ $('retryNative').addEventListener('click', () => send('retryNative'));
 $('checkClaude').addEventListener('click', () => send('checkClaude'));
 $('switchClaude').addEventListener('click', () => send('switchAccount'));
 $('clearLog').addEventListener('click', () => send('clearLog'));
-$('filesToggle').addEventListener('change', e => send('setFiles', { value: e.target.checked }));
+const filesMode = () => (state.filesMode === 'write' ? 'write' : 'read');
+$('filesToggle').addEventListener('change', e => send('setFiles', { value: e.target.checked, mode: filesMode(), folder: $('filesFolder').value }));
+$('filesFolder').addEventListener('change', e => send('setFiles', { value: !!state.filesEnabled, mode: filesMode(), folder: e.target.value }));
+$('filesFolder').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+for (const b of document.querySelectorAll('.seg button')) {
+  b.addEventListener('click', () => send('setFiles', { value: !!state.filesEnabled, mode: b.dataset.mode, folder: $('filesFolder').value }));
+}
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
 $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list' }));
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
@@ -133,6 +139,18 @@ function render(s, log) {
   $('debugVal').textContent = on ? 'OPEN' : s.debugPort === 'off' ? 'closed' : '…';
   $('debugVal').parentElement.classList.toggle('warn', on);
   $('filesToggle').checked = !!s.filesEnabled;
+  if (document.activeElement !== $('filesFolder')) $('filesFolder').value = s.filesFolder || '';
+  $('filesFolder').disabled = s.agent === 'stopped';
+  for (const b of document.querySelectorAll('.seg button')) {
+    b.setAttribute('aria-checked', String(b.dataset.mode === (s.filesMode === 'write' ? 'write' : 'read')));
+    b.disabled = s.agent === 'stopped';
+  }
+  $('filesNote').textContent = !s.filesEnabled
+    ? 'Off. Claude has no file access. Type a full folder path, then turn it on.'
+    : s.filesMode === 'write'
+      ? 'On: Claude can read, create and change files in this folder only. There is no undo, so use a folder you can afford to lose. No shell.'
+      : 'On: Claude can read and search files in this folder only. No changes, no shell.';
+  $('filesNote').classList.toggle('warnnote', !!s.filesEnabled && s.filesMode === 'write');
   $('filesToggle').disabled = s.agent === 'stopped';
   $('pendingVal').textContent = String(s.pending || 0);
 

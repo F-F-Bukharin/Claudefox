@@ -122,8 +122,17 @@
     <section class="card rows">
       <h3>Permissions</h3>
       <div class="row">
-        <label for="filesToggle">File tools <span class="muted small">(coming soon)</span></label>
+        <label for="filesToggle">File tools</label>
         <span class="val"><input type="checkbox" id="filesToggle" class="switch"></span>
+      </div>
+      <div class="files">
+        <input id="filesFolder" class="textin mono" type="text" spellcheck="false" autocomplete="off"
+          placeholder="Folder, e.g. C:\Users\you\Documents\notes" aria-label="Folder Claude may use">
+        <div class="seg" role="radiogroup" aria-label="File access">
+          <button type="button" role="radio" data-mode="read">Read only</button>
+          <button type="button" role="radio" data-mode="write">Read and write</button>
+        </div>
+        <p id="filesNote" class="muted small"></p>
       </div>
       <div class="row">
         <span>Google sign-in pages</span>

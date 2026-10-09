@@ -205,6 +205,18 @@ textarea:focus-visible { outline: none; }
 }
 .modelchip.quality:hover { background: color-mix(in srgb, var(--accent) 68%, #000); }
 
+/* file tools */
+.files { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 8px; }
+.textin {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink);
+  padding: 7px 9px; font-size: 12px;
+}
+.textin:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg { display: flex; gap: 2px; padding: 2px; background: var(--line); border-radius: 9px; }
+.seg button { flex: 1; border: 0; border-radius: 7px; padding: 5px 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.seg button[aria-checked="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.warnnote { color: var(--warn); }
+
 /* ---------- profile ---------- */
 .acct { display: flex; align-items: center; gap: 12px; }
 .avatar {
