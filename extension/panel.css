@@ -217,6 +217,18 @@ textarea:focus-visible { outline: none; }
 .seg button[aria-checked="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
 .warnnote { color: var(--warn); }
 
+/* first-run guide */
+.setup { list-style: none; margin: 4px 0 0; padding: 0; width: 100%; max-width: 330px; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.step-row { display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: start; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.step-row .tick { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; background: var(--line); color: var(--muted); }
+.step-row.done { opacity: .7; }
+.step-row.done .tick { background: color-mix(in srgb, var(--go) 22%, transparent); color: var(--go); }
+.step-row.current { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.step-row.current .tick { background: var(--accent); color: var(--accent-ink); }
+.step-title { font-weight: 650; font-size: 13px; padding-top: 1px; }
+.step-hint { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.step-btn { margin-top: 7px; padding: 4px 12px; font-size: 12px; }
+
 /* ---------- profile ---------- */
 .acct { display: flex; align-items: center; gap: 12px; }
 .avatar {

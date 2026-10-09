@@ -168,7 +168,56 @@ function render(s, log) {
     'Enter to send · Shift+Enter for a new line';
 
   renderLog(log || []);
+  renderSetup(s);
   if (chat.some(m => m.limit)) renderChat();   // the switch button follows state.switching
+}
+
+// First-run guide: the real setup state, in order, with the next action for each open step.
+function renderSetup(s) {
+  const c = s.claude || {};
+  const steps = [
+    { done: s.native === 'connected', title: 'Install the helper',
+      hint: 'Install Node.js if you don\u2019t have it, then double-click "Install helper.bat" in the Claude in Zen folder.',
+      action: s.agent === 'active' && s.native !== 'connected' ? ['Retry', () => send('retryNative')] : null },
+    { done: !!c.installed, title: 'Install Claude Code',
+      hint: 'Install it from code.claude.com/docs/en/setup, then press Retry.',
+      action: s.native === 'connected' ? ['Retry', () => send('checkClaude')] : null },
+    { done: !!c.loggedIn, title: 'Sign Claude Code in',
+      hint: 'Double-click "Sign in Claude Code.bat" and click Authorize. The chat uses this account.',
+      action: c.installed ? ['Open sign-in', () => send('switchAccount')] : null },
+    { done: !!s.signedIn, title: 'Sign in to claude.ai in the panel',
+      hint: 'Sign in to claude.ai in a normal tab, then press Sign in. This repeats each time Zen starts.',
+      action: ['Sign in', () => send('signIn')] },
+  ];
+  const ready = steps.every(st => st.done);
+  const ol = $('setup');
+  ol.hidden = ready;
+  $('emptyTitle').textContent = ready ? 'What should I do in Zen?' : 'Almost ready';
+  $('emptyText').textContent = ready ? 'Ask me to read, summarize or do things in your tabs.'
+    : `${steps.filter(st => st.done).length} of ${steps.length} setup steps done. /tabs and /ping work without Claude.`;
+  if (s.agent === 'stopped') $('emptyText').textContent = 'Stopped. Press Start (top right) to let Claude act again.';
+  ol.textContent = '';
+  if (ready) return;
+  const current = steps.findIndex(st => !st.done);
+  steps.forEach((st, i) => {
+    const li = document.createElement('li');
+    li.className = 'step-row' + (st.done ? ' done' : i === current ? ' current' : '');
+    const mark = document.createElement('span'); mark.className = 'tick'; mark.textContent = st.done ? '✓' : String(i + 1);
+    const box = document.createElement('div'); box.className = 'step-text';
+    const t = document.createElement('div'); t.className = 'step-title'; t.textContent = st.title;
+    box.appendChild(t);
+    if (!st.done && i === current) {
+      const h = document.createElement('div'); h.className = 'step-hint'; h.textContent = st.hint;
+      box.appendChild(h);
+      if (st.action) {
+        const b = document.createElement('button'); b.className = 'ghost step-btn'; b.textContent = st.action[0];
+        b.addEventListener('click', st.action[1]);
+        box.appendChild(b);
+      }
+    }
+    li.append(mark, box);
+    ol.appendChild(li);
+  });
 }
 
 function renderLog(log) {
