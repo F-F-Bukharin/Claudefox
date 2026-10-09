@@ -1,6 +1,6 @@
 # Build output
 claude-in-zen*.xpi
-signed/
+signed/*.xpi
 web-ext-artifacts/
 
 # Local scratch

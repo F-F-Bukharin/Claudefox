@@ -1,21 +1,22 @@
 # Claude in Zen: builds dist\claude-in-zen-friends-v<version>.zip for friends.
-# Uses the newest signed .xpi in signed\ if there is one, otherwise a fresh unsigned build.
+# Uses the signed .xpi from signed\ for this exact version if there is one, otherwise a fresh unsigned build.
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$v = (Get-Content (Join-Path $root 'extension\manifest.json') -Raw | ConvertFrom-Json).version
+. (Join-Path $root 'xpi-tools.ps1')
+$v = Get-SourceVersion $root
 $dist = Join-Path $root 'dist'
 $stage = Join-Path $dist 'Claude in Zen'
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force (Join-Path $stage 'host\lib'), (Join-Path $stage 'zen-profile') | Out-Null
 
-$signed = Get-ChildItem (Join-Path $root 'signed') -Filter *.xpi -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$signed = Find-SignedXpi $root $v
 if ($signed) {
-  Copy-Item $signed.FullName (Join-Path $stage 'claude-in-zen.xpi')
-  Write-Host "Using signed add-on: $($signed.Name)"
+  Copy-Item $signed (Join-Path $stage 'claude-in-zen.xpi')
+  Write-Host "Using the signed add-on: $(Split-Path $signed -Leaf)"
 } else {
-  & (Join-Path $root 'build-xpi.ps1')
+  & (Join-Path $root 'build-xpi.ps1') | Out-Host
   Copy-Item (Join-Path $root 'claude-in-zen.xpi') (Join-Path $stage 'claude-in-zen.xpi')
-  Write-Host 'Using an UNSIGNED add-on: friends need xpinstall.signatures.required = false (see START HERE.txt).'
+  Write-Host "No signed build for v$v in signed\: the zip has an UNSIGNED add-on, so friends need xpinstall.signatures.required = false (see START HERE.txt)." -ForegroundColor Yellow
 }
 foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1') { Copy-Item (Join-Path $root "host\$f") (Join-Path $stage "host\$f") }
 Copy-Item (Join-Path $root 'host\lib\*.js') (Join-Path $stage 'host\lib')

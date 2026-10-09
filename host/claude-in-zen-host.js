@@ -419,15 +419,16 @@ function cancelChat(id, reason) {
 }
 
 // ------------------------------------------------------------------ update the add-on
-// The project folder this helper runs from (host\..). With the source there, the helper can rebuild the
-// .xpi (build-xpi.ps1) and hand it to Zen, which shows its install prompt. Friends' copies have no source.
+// The project folder this helper runs from (host\..). With the source there, the helper runs install-xpi.ps1:
+// it rebuilds the .xpi (or picks the signed one for this version) and hands it to Zen, which shows its install
+// prompt. When Zen is linked to the folder the add-on just reloads instead. Friends' copies have no source.
 
 const ROOT = path.join(__dirname, '..');
 
 function sourceInfo() {
   try {
     const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension', 'manifest.json'), 'utf8'));
-    return { sourceVersion: String(m.version || ''), canUpdate: process.platform === 'win32' && fs.existsSync(path.join(ROOT, 'build-xpi.ps1')), linked: isLinked() };
+    return { sourceVersion: String(m.version || ''), canUpdate: process.platform === 'win32' && fs.existsSync(path.join(ROOT, 'install-xpi.ps1')), linked: isLinked() };
   } catch { return { sourceVersion: '', canUpdate: false, linked: false }; }
 }
 
@@ -449,37 +450,27 @@ function isLinked() {
   return false;
 }
 
-function findZen() {
-  const c = [
-    process.env.CLAUDE_IN_ZEN_ZEN,
-    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Zen Browser', 'zen.exe'),
-    path.join(process.env.LOCALAPPDATA || '', 'Zen Browser', 'zen.exe'),
-    path.join(process.env['ProgramFiles(x86)'] || '', 'Zen Browser', 'zen.exe'),
-  ].filter(Boolean);
-  return c.find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } }) || null;
-}
-
 let updating = false;
 function updateAddon() {
-  const done = (ok, error, version) => { updating = false; sendAddon({ type: 'update_result', ok, error: error || '', version: version || '' }); };
+  const done = (ok, error, version, note) => {
+    updating = false;
+    sendAddon({ type: 'update_result', ok, error: error || '', version: version || '', note: note || '' });
+  };
   if (updating) return;
   const info = sourceInfo();
   if (!info.canUpdate) return done(false, 'This copy has no add-on source to build from. Install the newer .xpi you were sent instead.');
-  const zen = findZen();
-  if (!zen) return done(false, 'Could not find zen.exe. Run "Install in Zen.bat" instead.');
   updating = true;
-  log.info(`update: building v${info.sourceVersion}`);
-  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'build-xpi.ps1')],
-    { cwd: ROOT, timeout: 60000, windowsHide: true }, (err, stdout, stderr) => {
-      const xpi = path.join(ROOT, 'claude-in-zen.xpi');
-      if (err || !fs.existsSync(xpi)) return done(false, `Build failed: ${String(stderr || (err && err.message) || '').trim().split('\n').pop()}`);
-      try {
-        const child = spawn(zen, [xpi], { detached: true, stdio: 'ignore', windowsHide: false });
-        child.on('error', e => log.warn('open zen', e.message));
-        child.unref();
-      } catch (e) { return done(false, `Could not open Zen: ${e.message}`); }
-      log.info('update: handed the .xpi to Zen');
-      done(true, '', info.sourceVersion);
+  log.info(`update: installing v${info.sourceVersion}`);
+  // Zen gives its child processes (this helper included) variables that change how a new zen.exe starts.
+  // install-xpi.ps1 drops them too; dropping them here keeps PowerShell itself clean.
+  const env = { ...process.env };
+  for (const k of Object.keys(env)) if (/^(MOZ_|XRE_|XUL_|MOZILLA_)/i.test(k)) delete env[k];
+  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'install-xpi.ps1'), '-Quiet'],
+    { cwd: ROOT, env, timeout: 120000, windowsHide: true }, (err, stdout) => {
+      const lines = String(stdout || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (err && err.code === 2) return done(false, 'Zen is linked to the project folder, so the add-on reloads instead of reinstalling.');
+      if (err) return done(false, (lines.find(l => /failed/i.test(l)) || lines.pop() || err.message).slice(0, 300));
+      done(true, '', info.sourceVersion, lines.find(l => /signed build|unsigned/i.test(l)) || '');
     });
 }
 

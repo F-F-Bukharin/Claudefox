@@ -28,6 +28,7 @@ function Merge($file, $block, $comment) {
   $pattern = '(?s)\r?\n?' + [regex]::Escape($begin) + '.*?' + [regex]::Escape($end) + '\r?\n?'
   $text = [regex]::Replace($text, $pattern, "`r`n").TrimEnd()
   if (-not $Remove) { $text = ($text + "`r`n`r`n$begin`r`n" + $block.Trim() + "`r`n$end`r`n").TrimStart() }
+  elseif ($text) { $text += "`r`n" }
   New-Item -ItemType Directory -Force (Split-Path $file) | Out-Null
   [IO.File]::WriteAllText($file, $text, $utf8)
 }

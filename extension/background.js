@@ -467,7 +467,7 @@ async function onNativeMessage(msg) {
     case 'update_result':
       await cizState.set({ updating: false });
       await cizState.addLog(msg.ok ? 'info' : 'error', msg.ok
-        ? `Built v${msg.version}. Zen is showing the install prompt: click Add, then Okay. The panel reloads after.`
+        ? `v${msg.version} handed to Zen${msg.note ? ` (${msg.note.replace(/\.$/, '')})` : ''}. Click Add, then Okay, in Zen's prompt. The panel reloads after.`
         : `Update: ${msg.error}`);
       return;
 
