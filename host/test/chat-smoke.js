@@ -20,6 +20,11 @@ fs.writeFileSync(fake, `#!${process.execPath}
 'use strict';
 const fs = require('fs'); const { spawn } = require('child_process');
 const argv = process.argv.slice(2);
+if (argv[0] === 'auth') {
+  fs.appendFileSync(${JSON.stringify(record)} + '.auth', argv[1] + '\\n');
+  if (argv[1] === 'status') process.stdout.write(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'new@example.com' }));
+  process.exit(0);
+}
 let prompt = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', d => prompt += d);
@@ -146,6 +151,13 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     toHelper({ type: 'chat_cancel', id: 'c6' });
     const cancelled = await next(m => m.type === 'chat_done' && m.id === 'c6', 4000);
     check('cancel ends the turn', !cancelled.ok && /Cancelled/.test(cancelled.error), `${Date.now() - t0} ms`);
+
+    toHelper({ type: 'claude_switch' });
+    await next(m => m.type === 'claude_switch_started');
+    const st = await next(m => m.type === 'claude_status', 8000);
+    const sw = await next(m => m.type === 'claude_switch_done', 8000);
+    const authLog = fs.readFileSync(record + '.auth', 'utf8').trim().split('\n');
+    check('switch: logout, then sign-in, then fresh status', authLog.join(',') === 'logout,login,status' && sw.ok && st.email === 'new@example.com', authLog.join(','));
 
     toHelper({ type: 'chat', id: 'c8', text: 'SLEEP' });
     await sleep(800);

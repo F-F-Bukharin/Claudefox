@@ -57,6 +57,7 @@ $('stopBtn').addEventListener('click', () => send('stop'));
 $('startBtn').addEventListener('click', () => send('start'));
 $('retryNative').addEventListener('click', () => send('retryNative'));
 $('checkClaude').addEventListener('click', () => send('checkClaude'));
+$('switchClaude').addEventListener('click', () => send('switchAccount'));
 $('clearLog').addEventListener('click', () => send('clearLog'));
 $('filesToggle').addEventListener('change', e => send('setFiles', { value: e.target.checked }));
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
@@ -79,7 +80,13 @@ function claudeLabel(s) {
   if (!c) return ['', 'checking…', ''];
   if (!c.installed) return ['bad', 'not installed', 'Install Claude Code on this PC'];
   if (!c.loggedIn) return ['warn', 'not signed in', 'Run "Sign in Claude Code"'];
-  return ['ok', c.email ? `signed in · ${c.email}` : 'signed in', c.plan ? `Plan: ${c.plan}` : ''];
+  if (s.switching) return ['warn', 'switching… finish in the sign-in window', ''];
+  const plan = c.plan ? `Plan: ${c.plan}. ` : '';
+  const zen = s.account && s.account.email;
+  if (zen && c.email && zen.toLowerCase() !== c.email.toLowerCase()) {
+    return ['warn', `signed in · ${c.email} (not ${zen})`, `${plan}The chat spends this Claude Code account, which differs from the claude.ai account signed in to Zen.`];
+  }
+  return ['ok', c.email ? `signed in · ${c.email}` : 'signed in', `${plan}The chat spends this account.`];
 }
 
 function render(s, log) {
@@ -118,6 +125,7 @@ function render(s, log) {
   $('claudeVal').textContent = ctext;
   $('claudeVal').title = ctitle;
   $('checkClaude').hidden = s.native !== 'connected';
+  $('switchClaude').hidden = s.native !== 'connected' || s.agent === 'stopped' || !!s.switching || !(s.claude && s.claude.installed);
   const clients = Array.isArray(s.clients) ? s.clients : [];
   $('clientsVal').textContent = clients.length ? clients.join(', ') : 'nobody';
   const on = s.debugPort === 'on';
@@ -142,6 +150,7 @@ function render(s, log) {
     'Enter to send · Shift+Enter for a new line';
 
   renderLog(log || []);
+  if (chat.some(m => m.limit)) renderChat();   // the switch button follows state.switching
 }
 
 function renderLog(log) {
@@ -348,7 +357,12 @@ function renderChat() {
         const hint = document.createElement('div');
         hint.className = 'limit';
         hint.textContent = 'This Claude account hit its usage limit.';
-        div.appendChild(hint);
+        const sw = document.createElement('button');
+        sw.className = 'primary limitbtn';
+        sw.textContent = 'Log out and add another account';
+        sw.disabled = !!state.switching;
+        sw.addEventListener('click', () => send('switchAccount'));
+        div.append(hint, sw);
       }
     }
 

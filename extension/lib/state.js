@@ -10,6 +10,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   filesEnabled: false,        // Stop always forces it off
   filesMode: 'read',          // 'read' | 'write' when file tools are on
   filesFolder: '',            // the one folder file tools may use
+  switching: false,           // account switch in progress (sign-in window open)
   chatModel: 'speed',         // 'speed' (Haiku 5.5, high effort) | 'quality' (Opus 5.5, high effort)
   chatSession: '',            // Claude Code session id, so follow-ups keep the conversation
   native: 'unknown',          // 'unknown' | 'connected' | 'missing' | 'error'

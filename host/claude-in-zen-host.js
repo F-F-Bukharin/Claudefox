@@ -76,6 +76,10 @@ function onAddon(msg) {
       claudeStatus().then(status => sendAddon({ type: 'claude_status', ...status }));
       return;
 
+    case 'claude_switch':
+      switchAccount();
+      return;
+
     case 'ping':
       sendAddon({ type: 'pong', t: msg.t });
       return;
@@ -397,6 +401,43 @@ function cancelChat(id, reason) {
   if (!run || (id !== '*' && id !== run.id)) return;
   try { run.child.kill(); } catch {}
   finishChat(run, false, reason || 'Stopped.');
+}
+
+// ------------------------------------------------------------------ switch account
+// Logs the add-on's Claude Code profile out, then opens "claude auth login" in its own console
+// window (detached), so the user can pick another account in the browser. When that window
+// closes, the new status goes back to the add-on.
+
+let switching = null;
+
+function switchAccount() {
+  const done = (ok, error) => sendAddon({ type: 'claude_switch_done', ok, error: error || '' });
+  if (switching) return done(false, 'A sign-in window is already open.');
+  if (chat) return done(false, 'Claude is still answering. Wait for it to finish, then switch.');
+  const exe = findClaude();
+  if (!exe) return done(false, 'Claude Code is not installed on this PC.');
+  execFile(exe, ['auth', 'logout'], { env: claudeEnv(), timeout: 20000, windowsHide: true }, err => {
+    if (err) log.warn('auth logout', err.message);
+    let child;
+    try {
+      child = spawn(exe, ['auth', 'login'], { env: claudeEnv(), cwd: P.WORKSPACE, detached: true, windowsHide: false, stdio: 'ignore' });
+    } catch (e) {
+      return done(false, `Could not open the sign-in window: ${e.message}`);
+    }
+    switching = child;
+    log.info('account switch: logged out, sign-in window open');
+    sendAddon({ type: 'claude_switch_started' });
+    const finish = () => {
+      if (switching !== child) return;
+      switching = null;
+      claudeStatus().then(status => {
+        sendAddon({ type: 'claude_status', ...status });
+        done(!!status.loggedIn, status.loggedIn ? '' : 'The sign-in window closed without signing in.');
+      });
+    };
+    child.on('error', e => { log.warn('auth login', e.message); finish(); });
+    child.on('exit', finish);
+  });
 }
 
 // ------------------------------------------------------------------ shutdown

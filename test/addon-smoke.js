@@ -123,6 +123,13 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     await fromPanel({ type: 'newChat' });
     check('/clear drops the session', g('cizState').get().chatSession === '');
 
+    // account switch
+    await fromPanel({ type: 'switchAccount' });
+    check('switch asks the helper', native.sent.some(m => m.type === 'claude_switch') && g('cizState').get().switching === true);
+    await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'other@example.com' });
+    await helperSays({ type: 'claude_switch_done', ok: true });
+    check('switch done: logged, flag cleared', !g('cizState').get().switching && g('cizState').log().some(e => /now signed in as other@example.com/.test(e.text)));
+
     // file tools setting
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'notes' });
     check('relative folder refused', g('cizState').get().filesEnabled === false);
