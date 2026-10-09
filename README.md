@@ -64,6 +64,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | :- | :- |
 | `Install helper.bat` | Installs the helper. Run it yourself: installs made from the Claude desktop app land in its private copy of AppData, which Zen can't see. |
 | `Sign in Claude Code.bat` | Signs the add-on's Claude Code profile (`%LOCALAPPDATA%\claude-in-zen\claude`) in. Separate from Claude Code in VS Code or a terminal. |
+| `Install in Zen.bat` | Builds the `.xpi` (or picks the newest signed one) and opens it in Zen for a permanent install. Run it again to update. |
 | `Load in Zen.bat` | Builds the `.xpi` and opens `about:debugging` with its path copied (temporary install). |
 | `Sign add-on.bat` | Signs the add-on with Mozilla (needs API keys, see below). |
 | `Build friends zip.bat` | Builds `dist\claude-in-zen-friends-v<version>.zip`, using a signed `.xpi` from `signed\` if there is one. |
@@ -80,8 +81,8 @@ Helper changes apply the next time Zen starts it: press Stop, then Start.
 ## Keep it installed
 Zen's build does not hard-require signed add-ons (`MOZ_REQUIRE_SIGNING` is `false`), so there are two routes:
 
-- **Quick:** `about:config` → `xpinstall.signatures.required` → **false**. Then `about:addons` → gear icon →
-  **Install Add-on From File…** → `claude-in-zen.xpi`. Trade-off: Zen stops checking signatures on add-ons you install
+- **Quick:** `about:config` → `xpinstall.signatures.required` → **false**. Then double-click **Install in Zen.bat**
+  (or `about:addons` → gear icon → **Install Add-on From File…** → `claude-in-zen.xpi`). Trade-off: Zen stops checking signatures on add-ons you install
   from a file. Store add-ons are unaffected.
 - **Signed:** keeps signature checks on. Get Mozilla API keys (below), run **Sign add-on.bat**, then install the `.xpi`
   it puts in `signed\`.
