@@ -345,20 +345,13 @@ async function probeDebugPort() {
 // ---------------------------------------------------------------- router
 // Every tool call, from any channel (panel, console, helper), goes through here.
 
-const TOOLS = {
-  async ping() { return { pong: true, version: browser.runtime.getManifest().version }; },
-
-  async tabs_list() {
-    const tabs = await browser.tabs.query({});
-    return tabs.map(t => ({ id: t.id, windowId: t.windowId, active: t.active, title: t.title, url: t.url }));
-  },
-};
+// The tools themselves are in lib/tools.js (CIZ_TOOLS).
 
 async function dispatch(tool, args, source) {
   const s = cizState.get();
   if (s.agent !== 'active') return { ok: false, error: 'Agent is stopped. Press Start in the Claude in Zen panel.' };
   if (!s.signedIn) return { ok: false, error: 'Not signed in. Press "Sign in with Claude" in the panel.' };
-  const fn = TOOLS[tool];
+  const fn = CIZ_TOOLS[tool];
   if (!fn) return { ok: false, error: `Unknown tool: ${tool}` };
 
   const id = nextActionId++;

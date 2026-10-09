@@ -25,6 +25,7 @@
     "scripts": [
       "lib/policy.js",
       "lib/state.js",
+      "lib/tools.js",
       "background.js"
     ],
     "persistent": true
