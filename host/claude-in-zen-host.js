@@ -9,7 +9,7 @@
 // Local clients (the Zen tool server that Claude Code starts) connect over a named pipe and must
 // present the per-session token stored in %LOCALAPPDATA%\claude-in-zen\pipe-token.
 
-const VERSION = '0.5.1';
+const VERSION = '0.5.2';
 
 const fs = require('fs');
 const os = require('os');
