@@ -65,6 +65,12 @@ async function handlePanel(msg, port) {
     case 'checkClaude': return requestClaudeStatus(true);
     case 'switchAccount': return switchAccount();
     case 'updateAddon':
+      if (cizState.get().linked) {
+        // Linked to the project folder: a reload picks up every change, and reconnecting restarts the helper too.
+        await cizState.addLog('info', 'Reloading from your project folder…');
+        setTimeout(() => browser.runtime.reload(), 300);
+        return;
+      }
       if (!sendNative({ type: 'update_addon' })) return cizState.addLog('error', 'Update failed: the helper is not connected.');
       await cizState.set({ updating: true });
       return cizState.addLog('info', 'Building the add-on from your project folder…');
@@ -421,7 +427,7 @@ async function onNativeMessage(msg) {
       nativeRetries = 0;
       await cizState.set({
         native: 'connected', nativeDetail: `helper ${msg.version}`, hostVersion: String(msg.version || ''),
-        sourceVersion: String(msg.sourceVersion || ''), canUpdate: !!msg.canUpdate,
+        sourceVersion: String(msg.sourceVersion || ''), canUpdate: !!msg.canUpdate, linked: !!msg.linked,
         clients: Array.isArray(msg.clients) ? msg.clients.slice(0, 10) : [],
       });
       await cizState.addLog('info', `Helper ${msg.version} connected`);

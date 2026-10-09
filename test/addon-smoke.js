@@ -145,6 +145,17 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     await fromPanel({ type: 'newChat' });
     check('/clear drops the session', g('cizState').get().chatSession === '');
 
+    // update when linked to the project folder: a plain reload
+    let reloaded = 0; browser.runtime.reload = () => { reloaded++; };
+    await helperSays({ type: 'hello', version: '0.5.0', clients: [], sourceVersion: '0.5.0', canUpdate: true, linked: true });
+    await fromPanel({ type: 'updateAddon' });
+    await tick(400);
+    check('linked update reloads instead of building', reloaded === 1 && !native.sent.some(m => m.type === 'update_addon'));
+    await helperSays({ type: 'hello', version: '0.5.0', clients: [], sourceVersion: '0.5.0', canUpdate: true, linked: false });
+    await fromPanel({ type: 'updateAddon' });
+    check('unlinked update asks the helper to build', native.sent.some(m => m.type === 'update_addon'));
+    await helperSays({ type: 'update_result', ok: true, version: '0.5.0' });
+
     // account switch
     await fromPanel({ type: 'switchAccount' });
     check('switch asks the helper', native.sent.some(m => m.type === 'claude_switch') && g('cizState').get().switching === true);

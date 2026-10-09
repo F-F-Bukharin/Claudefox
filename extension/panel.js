@@ -129,12 +129,14 @@ function render(s, log) {
   const installed = browser.runtime.getManifest().version;
   const src = s.native === 'connected' ? s.sourceVersion : '';
   const newer = src && cmpVersion(src, installed) > 0;
-  $('addonVal').textContent = `v${installed}` + (src ? (newer ? ` · v${src} ready` : ' · up to date') : '');
+  $('addonVal').textContent = `v${installed}` + (s.linked && s.native === 'connected' ? ' · linked to project folder'
+    : src ? (newer ? ` · v${src} ready` : ' · up to date') : '');
   $('addonVal').parentElement.classList.toggle('warn', !!newer);
   $('updateBtn').hidden = !(s.native === 'connected' && s.canUpdate);
   $('updateBtn').disabled = !!s.updating;
-  $('updateBtn').textContent = s.updating ? 'building…' : newer ? `update to v${src}` : 'reinstall';
-  $('updateBtn').title = 'Rebuild the add-on from your project folder and install it in Zen';
+  $('updateBtn').textContent = s.updating ? 'building…' : s.linked ? 'update' : newer ? `update to v${src}` : 'reinstall';
+  $('updateBtn').title = s.linked ? 'Reload the add-on and helper from your project folder (no install, no restart)'
+    : 'Rebuild the add-on from your project folder and install it in Zen';
   $('retryNative').hidden = s.agent === 'stopped' || s.native === 'connected';
 
   const [ccls, ctext, ctitle] = claudeLabel(s);

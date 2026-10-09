@@ -427,8 +427,26 @@ const ROOT = path.join(__dirname, '..');
 function sourceInfo() {
   try {
     const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension', 'manifest.json'), 'utf8'));
-    return { sourceVersion: String(m.version || ''), canUpdate: process.platform === 'win32' && fs.existsSync(path.join(ROOT, 'build-xpi.ps1')) };
-  } catch { return { sourceVersion: '', canUpdate: false }; }
+    return { sourceVersion: String(m.version || ''), canUpdate: process.platform === 'win32' && fs.existsSync(path.join(ROOT, 'build-xpi.ps1')), linked: isLinked() };
+  } catch { return { sourceVersion: '', canUpdate: false, linked: false }; }
+}
+
+// True when a Zen profile loads the add-on straight from this folder (a proxy file written by link.ps1).
+function isLinked() {
+  try {
+    const zen = path.join(process.env.APPDATA || '', 'zen');
+    const ini = fs.readFileSync(path.join(zen, 'profiles.ini'), 'utf8');
+    const want = path.resolve(ROOT, 'extension').toLowerCase().replace(/[\\/]+$/, '');
+    for (const m of ini.matchAll(/^Path=(.+)$/gm)) {
+      const rel = m[1].trim();
+      const dir = path.isAbsolute(rel) ? rel : path.join(zen, rel);
+      try {
+        const target = fs.readFileSync(path.join(dir, 'extensions', 'claude-in-zen@f.local'), 'utf8').trim();
+        if (path.resolve(target).toLowerCase().replace(/[\\/]+$/, '') === want) return true;
+      } catch {}
+    }
+  } catch {}
+  return false;
 }
 
 function findZen() {
