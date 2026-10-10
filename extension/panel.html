@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude in Zen</title>
+<script src="theme.js"></script>
 <link rel="stylesheet" href="panel.css">
 </head>
 <body>
@@ -123,50 +124,32 @@
         <dt>Signed in</dt><dd id="acctSince">—</dd>
         <dt>Checked via</dt><dd id="acctVia">—</dd>
         <dt>Account ID</dt><dd id="acctId" class="mono">—</dd>
-        <dt>Remembered</dt><dd>until you sign out</dd>
       </dl>
       <button id="signOutBtn" class="ghost wide">Sign out of the add-on</button>
       <p class="muted small">Signing out here leaves claude.ai itself signed in.</p>
     </section>
-  </main>
 
-  <!-- ============================== SETTINGS ============================== -->
-  <main id="page-settings" class="page scroll" role="tabpanel" hidden>
-    <section class="card rows">
-      <h3>Connections</h3>
-      <div class="row">
-        <span>Helper</span>
-        <span class="val"><span id="nativeDot" class="dot"></span><span id="nativeVal">…</span>
-          <button id="retryNative" class="link" hidden>retry</button></span>
+    <section class="card" id="accountsCard">
+      <h3>Accounts</h3>
+      <ul id="acctList" class="acctlist" aria-live="polite"></ul>
+      <p id="acctEmpty" class="muted small" hidden></p>
+      <div id="acctLogin" class="confirm" hidden>
+        <p>A sign-in window is open. Pick the Claude account there and click Authorize. This list updates when you are done.</p>
+        <div class="confirm-btns"><button id="acctLoginCancel" class="ghost">Cancel sign-in</button></div>
       </div>
-      <div class="row">
-        <span>Add-on</span>
-        <span class="val"><span id="addonVal">…</span>
-          <button id="updateBtn" class="link" hidden>update</button></span>
+      <div id="acctConfirm" class="confirm" hidden>
+        <p id="acctConfirmText"></p>
+        <div class="confirm-btns">
+          <button id="acctNo" class="ghost">Cancel</button>
+          <button id="acctYes" class="primary">Remove</button>
+        </div>
       </div>
-      <p id="updateNote" class="muted small rownote" hidden></p>
-      <div class="row">
-        <span>Claude Code</span>
-        <span class="val"><span id="claudeDot" class="dot"></span><span id="claudeVal">…</span>
-          <button id="checkClaude" class="link" hidden>check</button>
-          <button id="switchClaude" class="link" hidden>switch</button></span>
-      </div>
-      <div class="row">
-        <span>Using Zen now</span>
-        <span class="val" id="clientsVal">nobody</span>
-      </div>
-      <div class="row">
-        <span>Debug port 9222</span>
-        <span class="val"><span id="debugDot" class="dot"></span><span id="debugVal">…</span></span>
-      </div>
-      <div class="row">
-        <span>Pending actions</span>
-        <span class="val" id="pendingVal">0</span>
-      </div>
+      <button id="accountAdd" class="ghost wide">Add account</button>
+      <p class="muted small">Each account keeps its own chats. The chat uses the one marked In use.</p>
     </section>
 
-    <section class="card rows">
-      <h3>Permissions</h3>
+    <section class="card rows" id="permCard">
+            <h3>Permissions</h3>
       <div class="row">
         <label for="filesToggle">File tools</label>
         <span class="val"><input type="checkbox" id="filesToggle" class="switch"></span>
@@ -201,10 +184,59 @@
         <span class="val">never typed</span>
       </div>
     </section>
+  </main>
+
+  <!-- ============================== SETTINGS ============================== -->
+  <main id="page-settings" class="page scroll" role="tabpanel" hidden>
+    <section class="card rows">
+      <div class="row">
+        <label for="themeToggle">Dark mode</label>
+        <span class="val"><input type="checkbox" id="themeToggle" class="switch"></span>
+      </div>
+    </section>
+
+    <section class="card rows">
+      <h3>Connections</h3>
+      <div class="row">
+        <span>Helper</span>
+        <span class="val"><span id="nativeDot" class="dot"></span><span id="nativeVal">…</span>
+          <button id="retryNative" class="link" hidden>retry</button></span>
+      </div>
+      <div class="row">
+        <span>Add-on</span>
+        <span class="val"><span id="addonVal">…</span>
+          <button id="updateBtn" class="link" hidden>update</button></span>
+      </div>
+      <p id="updateNote" class="muted small rownote" hidden></p>
+      <div class="row">
+        <span>Claude Code</span>
+        <span class="val"><span id="claudeDot" class="dot"></span><span id="claudeVal">…</span>
+          <button id="checkClaude" class="link" hidden>check</button>
+          <button id="switchClaude" class="link" hidden>switch</button></span>
+      </div>
+      <div class="row">
+        <span>Using Zen now</span>
+        <span class="val" id="clientsVal">nobody</span>
+      </div>
+      <div class="row">
+        <span>Debug port 9222</span>
+        <span class="val"><span id="debugDot" class="dot"></span><span id="debugVal">…</span></span>
+      </div>
+      <div class="row">
+        <span>Pending actions</span>
+        <span class="val" id="pendingVal">0</span>
+      </div>
+    </section>
 
     <section class="card" id="toolsCard">
-      <div class="loghead"><h3>Tools and plugins</h3><button id="toolsCheck" class="link" title="Start every tool once to see which ones answer, and list your claude.ai connectors">check</button></div>
-      <p class="muted small toolsnote">Extra tools the chat can use. The essentials (vidIQ, Caveman) are on; everything else stays off until you switch it on.</p>
+      <button type="button" class="sechead" id="toolsHead" aria-expanded="false" aria-controls="toolsBody">
+        <span class="title">Tools and plugins</span><span class="sumtext" id="toolsSummary"></span><span class="chev" aria-hidden="true"></span>
+      </button>
+      <div id="toolsBody" class="secbody" hidden>
+        <div class="loghead">
+          <p class="muted small">Extra tools the chat can use. The essentials (vidIQ, Caveman) are on; everything else stays off until you switch it on.</p>
+          <button id="toolsCheck" class="link" title="Start every tool once to see which ones answer, and list your claude.ai connectors">check</button>
+        </div>
       <div id="toolsList" class="tools" aria-live="polite"></div>
       <div id="toolConfirm" class="confirm" hidden>
         <p id="toolConfirmText"></p>
@@ -228,27 +260,33 @@
           <p class="muted small">Plugins and connectors you add on claude.ai appear here by themselves (press check).</p>
         </div>
       </details>
-    </section>
-
-    <section class="card">
-      <h3>Panel</h3>
-      <p class="muted small">The panel docks on the right. Open and close it with the toolbar button or <b>Alt+Shift+C</b>. Zen's title bar above the panel is hidden, so the panel has no header menu. Drag the sidebar's inner edge to make it wider.</p>
-    </section>
-
-    <section class="card">
-      <h3>Developer</h3>
-      <div class="devbtns">
-        <button id="devPing">Ping</button>
-        <button id="devTabs">List my tabs</button>
       </div>
     </section>
 
-    <section class="card logcard">
-      <div class="loghead">
-        <h3>Action log</h3>
-        <button id="clearLog" class="link">clear</button>
+    <section class="card" id="advancedCard">
+      <button type="button" class="sechead" id="advancedHead" aria-expanded="false" aria-controls="advancedBody">
+        <span class="title">Advanced</span><span class="sumtext">Panel, developer, action log</span><span class="chev" aria-hidden="true"></span>
+      </button>
+      <div id="advancedBody" class="secbody" hidden>
+        <div class="sub">
+          <h3>Panel</h3>
+          <p class="muted small">The panel docks on the right. Open and close it with the toolbar button or <b>Alt+Shift+C</b>. Zen's title bar above the panel is hidden, so the panel has no header menu. Drag the sidebar's inner edge to make it wider.</p>
+        </div>
+        <div class="sub">
+          <h3>Developer</h3>
+          <div class="devbtns">
+            <button id="devPing">Ping</button>
+            <button id="devTabs">List my tabs</button>
+          </div>
+        </div>
+        <div class="sub logcard">
+          <div class="loghead">
+            <h3>Action log</h3>
+            <button id="clearLog" class="link">clear</button>
+          </div>
+          <ol id="log"></ol>
+        </div>
       </div>
-      <ol id="log"></ol>
     </section>
 
     <p class="muted small center" id="version"></p>

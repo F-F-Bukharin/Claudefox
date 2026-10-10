@@ -65,6 +65,12 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  onMsg({type:'state',state:{...ready,chatModel:'quality',chatPlus:true},log:[]});
  ok('Quality shown, + hidden', $('modeLabel').textContent==='Quality' && $('modeBtn').getAttribute('aria-label')==='Quality. Switch to Speed.' && $('plusBtn').hidden===true);
   const nFlipS = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click(); ok('Quality click flips to Speed', sent.filter(m=>m.type==='setModel').length===nFlipS+1 && sent.filter(m=>m.type==='setModel').pop().value==='speed'); onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:true},log:[]}); ok('Back in Speed, + shows and stays on', $('plusBtn').hidden===false && $('plusBtn').getAttribute('aria-pressed')==='true');
+ // dark mode: the switch at the top of Settings flips the theme
+ ok('dark mode is the first row of Settings', $('page-settings').querySelector('.row label')?.textContent==='Dark mode' && $('themeToggle').closest('.card')===$('page-settings').querySelector('.card'));
+ $('themeToggle').checked=true; $('themeToggle').dispatchEvent(new w.Event('change'));
+ ok('dark mode on sets the dark theme', w.document.documentElement.dataset.theme==='dark');
+ $('themeToggle').checked=false; $('themeToggle').dispatchEvent(new w.Event('change'));
+ ok('dark mode off sets the light theme', w.document.documentElement.dataset.theme==='light');
  // formatting, copy, selection-safe rendering
  $('input').value='fmt'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
  const f2=sent.filter(m=>m.type==='chat').pop();
@@ -142,6 +148,30 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  ok('tools: add by address sends name and target, on', sent.some(m=>m.type==='toolAdd'&&m.name==='my-mcp'&&m.target==='https://mcp.example.com/mcp'&&m.on===true));
  $('pluginSpec').value='caveman@anthropic-plugin-directory'; $('pluginBtn').click();
  ok('tools: install plugin sends the spec', sent.some(m=>m.type==='pluginInstall'&&m.spec==='caveman@anthropic-plugin-directory'));
+ // Profile: accounts list, Add account, Remove asks first; Permissions sit at the bottom of Profile
+ const acctState={...ready,tools:undefined,accounts:[{id:'a1',email:'personalworksacc@gmail.com',plan:'pro',org:'',loggedIn:true,active:true},{id:'a2',email:'felpecabezaz@gmail.com',plan:'pro',org:'',loggedIn:true,active:false},{id:'a3',email:'old@example.com',plan:'',org:'',loggedIn:false,active:false}]};
+ onMsg({type:'state',state:acctState,log:[]});
+ const arows=[...$('acctList').querySelectorAll('.acctrow')];
+ ok('accounts: one row per account, the active one says In use', arows.length===3 && /In use/.test(arows[0].textContent) && !/In use/.test(arows[1].textContent));
+ ok('accounts: a signed-out account offers Sign in', /Sign in/.test(arows[2].textContent) && /signed out/.test(arows[2].textContent));
+ const mA=sent.length;
+ [...arows[1].querySelectorAll('button')].find(b=>b.textContent==='Use').click();
+ ok('accounts: Use switches the chat to that account', sent.slice(mA).some(m=>m.type==='accountUse'&&m.id==='a2'));
+ [...arows[2].querySelectorAll('button')].find(b=>b.textContent==='Sign in').click();
+ ok('accounts: Sign in asks for that account', sent.slice(mA).some(m=>m.type==='accountSignIn'&&m.id==='a3'));
+ $('accountAdd').click(); ok('accounts: Add account opens a sign-in', sent.slice(mA).some(m=>m.type==='accountAdd'));
+ [...arows[1].querySelectorAll('button')].find(b=>b.textContent==='Remove').click();
+ ok('accounts: Remove asks first', !$('acctConfirm').hidden && /Remove felpecabezaz/.test($('acctConfirmText').textContent) && !sent.slice(mA).some(m=>m.type==='accountRemove'));
+ $('acctYes').click(); ok('accounts: Remove confirmed sends accountRemove', sent.slice(mA).some(m=>m.type==='accountRemove'&&m.id==='a2'));
+ onMsg({type:'state',state:{...acctState,accountLogin:{id:'a2',isNew:false}},log:[]});
+ ok('accounts: a sign-in window shows its note and holds Add account', !$('acctLogin').hidden && $('accountAdd').disabled);
+ const mC=sent.length; $('acctLoginCancel').click(); ok('accounts: cancel sign-in sends accountCancel', sent.slice(mC).some(m=>m.type==='accountCancel'));
+ ok('Permissions sit at the bottom of Profile, not in Settings', $('page-profile').contains($('filesToggle')) && $('page-profile').contains($('unsafeToggle')) && !$('page-settings').contains($('filesToggle')) && $('page-profile').lastElementChild===$('permCard'));
+ ok('Tools and Advanced start closed', $('toolsBody').hidden && $('advancedBody').hidden && $('toolsHead').getAttribute('aria-expanded')==='false' && $('advancedHead').getAttribute('aria-expanded')==='false');
+ $('toolsHead').click(); ok('Tools opens on click', !$('toolsBody').hidden && $('toolsHead').getAttribute('aria-expanded')==='true');
+ $('toolsHead').click(); ok('Tools closes again', $('toolsBody').hidden);
+ $('advancedHead').click(); ok('Advanced holds Panel, Developer and the action log', !$('advancedBody').hidden && ['Panel','Developer','Action log'].every(x=>$('advancedBody').textContent.includes(x)) && $('advancedBody').contains($('log')) && $('advancedBody').contains($('devPing')));
+ $('advancedHead').click(); ok('Advanced closes again', $('advancedBody').hidden);
  // composer: + adds files, the small button opens the menu
  w.document.querySelector('.tabs button[data-page="chat"]').click();
  ok('composer: + and the options button sit in the message box', $('composer').querySelector('.attach #attachBtn') && $('composer').querySelector('.attach #moreBtn') && $('composer').firstElementChild.classList.contains('attach'));

@@ -103,6 +103,13 @@ for (const b of document.querySelectorAll('.seg button')) {
 }
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
 $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list' }));
+// Dark mode: the switch at the top of Settings. theme.js applies the saved choice before the first paint; this keeps it.
+function setTheme(dark) {
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  try { localStorage.setItem('ciz-theme', dark ? 'dark' : 'light'); } catch {}
+}
+$('themeToggle').checked = document.documentElement.dataset.theme === 'dark';
+$('themeToggle').addEventListener('change', e => setTheme(e.target.checked));
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
 // One button flips Speed and Quality. The + on its left (Speed mode only) turns Speed Plus (Haiku at max effort) on and off.
 function toggleMode() {
@@ -288,8 +295,64 @@ function render(s, log) {
   renderTools(s);
   if (log) renderLog(log);
   renderSetup(s);
+  renderAccounts(s);
   if (chat.some(m => m.limit)) renderChat();   // the switch button follows state.switching
 }
+
+// ------------------------------------------------------------ accounts (Profile)
+// Every Claude account the chat can use. Use switches the chat to it; Add account opens a sign-in window;
+// Remove takes one off the list after a question. background.js relays these to the helper (accounts).
+let acctRemoveId = '';
+$('accountAdd').addEventListener('click', () => send('accountAdd'));
+$('acctLoginCancel').addEventListener('click', () => send('accountCancel'));
+$('acctYes').addEventListener('click', () => { $('acctConfirm').hidden = true; if (acctRemoveId) send('accountRemove', { id: acctRemoveId }); acctRemoveId = ''; });
+$('acctNo').addEventListener('click', () => { $('acctConfirm').hidden = true; acctRemoveId = ''; });
+function linkBtn(text, fn, disabled) {
+  const b = el('button', 'link', text);
+  b.disabled = !!disabled;
+  b.addEventListener('click', fn);
+  return b;
+}
+function accountRow(a, s) {
+  const who = a.email || 'Claude account';
+  const li = el('li', 'acctrow' + (a.loggedIn ? '' : ' off'));
+  const info = el('div', 'acctinfo');
+  info.append(el('div', 'aname', who), el('div', 'adet', [a.plan && `${a.plan} plan`, a.org, a.loggedIn ? '' : 'signed out'].filter(Boolean).join(' · ')));
+  const acts = el('div', 'aacts');
+  const stopped = s.agent === 'stopped';
+  if (a.active) acts.appendChild(el('span', 'pill active', 'In use'));
+  else {
+    acts.appendChild(linkBtn(a.loggedIn ? 'Use' : 'Sign in', () => send(a.loggedIn ? 'accountUse' : 'accountSignIn', { id: a.id }), stopped));
+    acts.appendChild(linkBtn('Remove', () => {
+      acctRemoveId = a.id;
+      $('acctConfirmText').textContent = `Remove ${who} from Claude in Zen? You can add it again later.`;
+      $('acctConfirm').hidden = false;
+    }, stopped));
+  }
+  li.append(el('div', 'avatar', who.trim()[0].toUpperCase()), info, acts);
+  return li;
+}
+function renderAccounts(s) {
+  const accts = Array.isArray(s.accounts) ? s.accounts : [];
+  const busy = !!s.accountLogin;
+  const list = $('acctList');
+  list.textContent = '';
+  for (const a of accts) list.appendChild(accountRow(a, s));
+  const note = s.native !== 'connected' ? 'Connect the helper to see your accounts.' : accts.length ? '' : 'No accounts yet. Add one to start.';
+  $('acctEmpty').textContent = note;
+  $('acctEmpty').hidden = !note;
+  $('acctLogin').hidden = !busy;
+  $('accountAdd').disabled = s.native !== 'connected' || s.agent === 'stopped' || busy;
+  $('accountAdd').textContent = busy ? 'Waiting for the sign-in window…' : 'Add account';
+}
+
+// Settings sections that start closed: Tools and plugins, and Advanced (Panel, Developer, Action log).
+function setSection(headId, bodyId, open) {
+  $(bodyId).hidden = !open;
+  $(headId).setAttribute('aria-expanded', String(!!open));
+}
+$('toolsHead').addEventListener('click', () => setSection('toolsHead', 'toolsBody', $('toolsBody').hidden));
+$('advancedHead').addEventListener('click', () => setSection('advancedHead', 'advancedBody', $('advancedBody').hidden));
 
 // First-run guide: the real setup state, in order, with the next action for each open step.
 function renderSetup(s) {
@@ -358,12 +421,14 @@ function renderTools(s) {
   const box = $('toolsList');
   box.textContent = '';
   $('toolsCheck').hidden = s.native !== 'connected';
-  if (s.native !== 'connected') { box.appendChild(el('div', 'tempty', 'Connect the helper to see your tools and plugins.')); return; }
+  if (s.native !== 'connected') { $('toolsSummary').textContent = ''; box.appendChild(el('div', 'tempty', 'Connect the helper to see your tools and plugins.')); return; }
   if (!t) {
     box.appendChild(el('div', 'tempty', 'Looking for your tools…'));
     if (!toolsAsked) { toolsAsked = true; send('tools'); }
     return;
   }
+  const onCount = [...t.plugins, ...t.connectors, ...t.added].filter(x => x.on).length;
+  $('toolsSummary').textContent = onCount ? `${onCount} on` : '';
   $('toolsCheck').textContent = t.busy === 'checking' ? 'checking…' : 'check';
   $('toolsCheck').disabled = !!t.busy;
   const groups = [
@@ -590,7 +655,7 @@ for (const b of menu.querySelectorAll('button')) {
     if (act === 'upload') $('fileInput').click();
     else if (act === 'snap') send('snapTab', { req: String(Date.now()) });
     else if (act === 'caveman') send('setCaveman', { value: !state.caveman });
-    else if (act === 'tools') { showPage('settings'); setTimeout(() => { const c = $('toolsCard'); if (c.scrollIntoView) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); }
+    else if (act === 'tools') { showPage('settings'); setSection('toolsHead', 'toolsBody', true); setTimeout(() => { const c = $('toolsCard'); if (c.scrollIntoView) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); }
     else if (act === 'new') { chat = []; saveChat(); send('newChat'); renderChat(); input.focus(); }
   });
 }

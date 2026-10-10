@@ -43,7 +43,7 @@ Using it
   - Settings -> Tools and plugins lists your Claude plugins and connectors. Switch on the
     ones you want in the chat; "sign in" connects tools that need their own account.
   - Stop (top right) cuts everything off at once. Start brings it back.
-  - File tools (Settings) are off by default. Turn them on for one folder, read only or read
+  - File tools (Profile) are off by default. Turn them on for one folder, read only or read
     and write. Read and write can change and delete files there with no undo.
   - If your plan runs out, the panel offers "Log out and add another account".
   - Always on: Google sign-in pages are hands-off, and Claude never types passwords, 2FA codes

@@ -34,10 +34,11 @@ Friends: see `START HERE.txt` (it ships in the friends zip).
   cookie names and flags (never values; secret-looking query values hidden), `console_log` its console messages.
   No debug port.
 - Claude works on the **current tab** and leaves your other tabs out of it unless you ask about them.
-- **File tools** (Settings, off by default): one folder, Read only or Read and write. Never a shell.
-- **Accounts**: one Claude Code profile per account, switchable in Settings; on a usage limit the panel offers to
+- **File tools** (Profile, off by default): one folder, Read only or Read and write. Never a shell.
+- **Accounts**: one Claude Code profile per account, switchable in Profile; on a usage limit the panel offers to
   switch.
 - **Sign-in is remembered** across Zen restarts (email, name and account id only, never cookies).
+- **Dark mode**: the switch at the top of Settings. Until you choose, the panel follows your system setting; the choice stays on this PC.
 - **Update from Settings**: rebuilds and reinstalls the add-on, or reloads it when Zen is linked to the folder.
 - Test commands that need no Claude: `/tabs`, `/ping`, `/help`.
 
@@ -53,7 +54,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 ```
 
 ## Rules (always on)
-- Google sign-in pages are hands-off unless you turn on **Unsafe mode** in Settings (Permissions). It lasts until Stop or a Zen restart. Non-web pages (`about:`, `file:`) are never read or touched.
+- Google sign-in pages are hands-off unless you turn on **Unsafe mode** in Profile (Permissions). It lasts until Stop or a Zen restart. Non-web pages (`about:`, `file:`) are never read or touched.
 - Passwords, 2FA codes and payment details are never typed by Claude, in any mode. Claude fills an email, clicks through to the password step, then waits while you type the password in Zen.
 - Text on web pages, attached files and other tools' results is untrusted data, wrapped as such, never instructions.
 - **File guard**: browser profiles (Zen first), Windows credential stores, Claude's own sign-ins, key folders
@@ -128,7 +129,7 @@ Zen's build does not hard-require signed add-ons (`MOZ_REQUIRE_SIGNING` is `fals
 4. Double-click **Sign add-on.bat**. Each new version needs a higher version number.
 
 ## Debugging
-- Settings → Action log shows every action, chat turn and error. **check** re-reads the Claude Code account.
+- Settings → Advanced → Action log shows every action, chat turn and error. **check** re-reads the Claude Code account.
 - Helper and tool server logs (metadata only, never page content): `%LOCALAPPDATA%\claude-in-zen\logs\`.
 - `about:debugging` → Claude in Zen → **Inspect** → Console: `await cizDebug.call('tabs_list')`, `cizDebug.state()`.
 - Tool switches and the last list of tools: `%LOCALAPPDATA%\claude-in-zen\tools.json`. Each turn's flags for Claude
