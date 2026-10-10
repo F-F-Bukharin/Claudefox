@@ -15,5 +15,8 @@
     st.setProperty('--wall-from', wall.from || '#f6f4ef');
     st.setProperty('--wall-to', wall.to || '#cfdcef');
     st.setProperty('--wall-img', wall.image ? 'url("' + wall.image + '")' : 'none');
+    // The text colour for this wallpaper (lib/wall.js): white on a dark one, near-black on a light one.
+    var ink = window.cizWallInk ? window.cizWallInk.inkFor(wall, dark ? 'dark' : 'light') : null;
+    if (ink) document.documentElement.dataset.wallInk = ink;
   }
 })();

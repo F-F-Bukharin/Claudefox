@@ -2,16 +2,23 @@
   color-scheme: light;
   --bg: #f6f4ef;
   --card: #ffffff;
-  --ink: #1f1e1c;
-  --muted: #6b6862;
+  --card-ink: #1f1e1c;     /* text on a card, or on anything drawn in the card colour */
+  --card-muted: #625e57;
+  --page-ink: #1f1e1c;     /* text on the page; a wallpaper can change it (data-wall-ink, below) */
+  --page-muted: #6b6862;
+  --ink: var(--page-ink);
+  --muted: var(--page-muted);
   --line: #e4e0d8;
   --outline: #d7d1c5;
-  --accent: #c96442;
+  --accent: #b8573a;
   --accent-ink: #ffffff;
+  --accent-text: #9c4424;   /* the accent as text: legible on white, the page and the tinted file badges */
+  --stop-fill: #b3261e;     /* the fill behind Stop's white text */
+  --go-fill: #2e7d4f;       /* the fill behind Start's white text */
   --user-bubble: #ece7dd;
   --stop: #b3261e;
   --go: #2e7d4f;
-  --warn: #c77700;
+  --warn: #9a5c00;
   --off: #9a968e;
   --plus: #7b4fd6;
   --radius: 12px;
@@ -23,13 +30,19 @@
   color-scheme: dark;
   --bg: #1c1b19;
   --card: #262522;
-  --ink: #eceae4;
-  --muted: #a19d94;
+  --card-ink: #eceae4;
+  --card-muted: #b0aca3;
+  --page-ink: #eceae4;
+  --page-muted: #a19d94;
   --line: #3a3834;
   --outline: #4a4640;
   --accent: #d97757;
+  --accent-ink: #111111;
+  --accent-text: #ef9274;
+  --stop-fill: #b8392f;
+  --go-fill: #2e7d4f;
   --user-bubble: #34322e;
-  --stop: #e2554b;
+  --stop: #f07a6f;
   --go: #4caf7a;
   --warn: #f0a33a;
   --off: #6f6b64;
@@ -52,7 +65,7 @@ h1 { font: 600 20px/1.1 Georgia, "Iowan Old Style", "Times New Roman", serif; ma
 h2 { font: 600 17px/1.3 Georgia, "Iowan Old Style", serif; margin: 0; }
 h3 { font-size: 11.5px; margin: 0 0 8px; font-weight: 650; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
 p { margin: 0; }
-a { color: var(--accent); }
+a { color: var(--accent-text); }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 .center { text-align: center; }
@@ -68,7 +81,7 @@ button:disabled { opacity: .5; cursor: default; }
 button.wide { width: 100%; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; padding: 9px 12px; }
 button.ghost { padding: 8px 12px; }
-button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; text-decoration: underline; background: none; }
+button.link { border: 0; padding: 0 2px; color: var(--accent-text); font-size: 12px; text-decoration: underline; background: none; }
 
 /* ---------- header ---------- */
 .top {
@@ -76,19 +89,19 @@ button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; 
   padding: 14px 14px 10px;
 }
 .brand { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-.brand h1 { flex: none; }
+.brand h1 { flex: none; padding: 2px 9px 3px; border-radius: 8px; background: #ffffff; color: #1f1e1c; box-shadow: var(--shade-1); }
 .pill {
   font-size: 10.5px; font-weight: 650; padding: 2px 8px; border-radius: 999px;
   background: var(--line); color: var(--muted); white-space: nowrap;
 }
-.pill.active { background: color-mix(in srgb, var(--go) 18%, transparent); color: var(--go); }
-.pill.stopped { background: color-mix(in srgb, var(--stop) 18%, transparent); color: var(--stop); }
+.pill.active { background: var(--card); color: var(--go); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--go) 45%, transparent); }
+.pill.stopped { background: var(--card); color: var(--stop); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stop) 45%, transparent); }
 .stopchip, .startchip {
   border: 0; color: #fff; font-weight: 700; font-size: 12.5px;
   padding: 6px 14px; border-radius: 999px; letter-spacing: .3px;
 }
-.stopchip { background: var(--stop); }
-.startchip { background: var(--go); }
+.stopchip { background: var(--stop-fill); }
+.startchip { background: var(--go-fill); }
 
 /* ---------- tabs ---------- */
 .tabs {
@@ -157,13 +170,13 @@ button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; 
 .msgfoot .ran { font-size: 11px; color: var(--muted); }
 .msgfoot .ran.plus { color: var(--plus); font-weight: 600; }
 .msg .copy { align-self: flex-start; font-size: 11.5px; color: var(--muted); opacity: .7; }
-.msg:hover .copy { opacity: 1; color: var(--accent); }
+.msg:hover .copy { opacity: 1; color: var(--ink); text-decoration: underline; text-decoration-color: var(--accent); }
 .msg.user { align-self: flex-end; max-width: 88%; }
 .msg.user .who { text-align: right; }
 .msg.user .body { background: var(--user-bubble); padding: 8px 12px; border-radius: 14px 14px 4px 14px; }
 .msg.assistant .body { padding: 2px 0; }
 .msg.system .body { font-size: 12px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 8px; }
-.msg.error .body { color: var(--stop); }
+.msg.error .body { color: var(--stop); background: var(--card); border-radius: 10px; padding: 6px 10px; }
 .msg .body code, .msg .body .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 .tablist { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .tablist li { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
@@ -212,13 +225,13 @@ textarea:focus-visible { outline: none; }
 .step.ok .mark { color: var(--go); }
 .step.bad { border-color: color-mix(in srgb, var(--stop) 45%, var(--line)); }
 .step.bad .mark { color: var(--stop); }
-.step.run .mark { color: var(--accent); }
+.step.run .mark { color: var(--accent-text); }
 .working { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
 .working .dots:not(:empty)::after { content: "…"; animation: blink 1.2s steps(1) infinite; }
 @keyframes blink { 50% { opacity: .2; } }
-.msg.pending .body::after { content: "▍"; color: var(--accent); animation: blink 1s steps(1) infinite; margin-left: 1px; }
-.body.errline { color: var(--stop); font-size: 12.5px; }
-.limit { font-size: 12px; color: var(--warn); font-weight: 600; }
+.msg.pending .body::after { content: "▍"; color: var(--accent-text); animation: blink 1s steps(1) infinite; margin-left: 1px; }
+.body.errline { color: var(--stop); font-size: 12.5px; background: var(--card); border-radius: 10px; padding: 6px 10px; }
+.limit { font-size: 12px; color: var(--warn); font-weight: 600; background: var(--card); border-radius: 10px; padding: 6px 10px; align-self: flex-start; }
 .limitbtn { align-self: flex-start; margin-top: 4px; font-size: 12.5px; padding: 7px 12px; }
 .send:disabled { opacity: .45; }
 
@@ -367,7 +380,7 @@ textarea:focus-visible { outline: none; }
 .dmark { color: var(--go); font-weight: 700; }
 .dmark.bad { color: var(--stop); }
 .dsteps { font-size: 11.5px; color: var(--muted); text-decoration: none; }
-.dsteps:hover { color: var(--accent); }
+.dsteps:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--accent); }
 .actlist { flex-basis: 100%; margin: 2px 0 0; padding-left: 18px; font-size: 11.5px; color: var(--muted); }
 .actlist li.bad { color: var(--stop); }
 @keyframes sweep { to { transform: translateX(100%); } }
@@ -388,13 +401,13 @@ textarea:focus-visible { outline: none; }
 .md .task.done { color: var(--go); }
 .md blockquote { margin: .5em 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
 .md hr { border: 0; border-top: 1px solid var(--line); margin: .8em 0; }
-.md a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.md a { color: inherit; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 2px; cursor: pointer; }
 .md a.zenlink { text-decoration: none; background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 6px; padding: 0 5px; }
 .md a.zenlink.tab::before { content: "⇥ "; }
 .md a.zenlink.file::before { content: "📄 "; }
 .md .codeblock { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: .5em 0; background: var(--card); }
 .md .codehead { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--line); }
-.md .codecopy { border: 0; padding: 0 4px; font-size: 11px; color: var(--accent); }
+.md .codecopy { border: 0; padding: 0 4px; font-size: 11px; color: var(--accent-text); }
 .md pre { margin: 0; padding: 8px 10px; overflow-x: auto; white-space: pre; }
 .md pre code { background: none; padding: 0; }
 .md .tablewrap { overflow-x: auto; margin: .5em 0; }
@@ -405,7 +418,7 @@ textarea:focus-visible { outline: none; }
 /* ---------- files Claude made ---------- */
 .files-out { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .filecard { display: grid; grid-template-columns: 38px 1fr auto auto; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-.ficon { width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; font-size: 10px; font-weight: 800; letter-spacing: .3px; background: color-mix(in srgb, var(--accent) 16%, var(--card)); color: var(--accent); }
+.ficon { width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; font-size: 10px; font-weight: 800; letter-spacing: .3px; background: color-mix(in srgb, var(--accent) 16%, var(--card)); color: var(--accent-text); }
 .finfo { min-width: 0; }
 .fname { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fmeta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -414,7 +427,7 @@ textarea:focus-visible { outline: none; }
 .rownote { margin: 0 0 8px; text-align: right; }
 
 /* ---------- Unsafe mode ---------- */
-.pill.unsafe { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.pill.unsafe { background: var(--card); color: var(--warn); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 45%, transparent); }
 .unsafe-note { margin: -4px 0 10px; }
 .confirm { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--warn) 9%, var(--card)); }
 .confirm p { font-size: 12.5px; line-height: 1.45; }
@@ -428,8 +441,8 @@ textarea:focus-visible { outline: none; }
   transition: background .15s ease, color .15s ease; }
 .attach-main { width: 32px; }
 .attach-more { width: 18px; border-left: 1px solid var(--line) !important; }
-.attach button:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
-.attach-more[aria-expanded="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.attach button:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent-text); }
+.attach-more[aria-expanded="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent-text); }
 .attach-more[aria-expanded="true"] svg { transform: rotate(180deg); }
 .attach-more svg { transition: transform .2s ease; }
 .attach-more.on::after { content: ""; position: absolute; width: 6px; height: 6px; border-radius: 50%; background: var(--plus); transform: translate(5px, -9px); }
@@ -438,7 +451,7 @@ textarea:focus-visible { outline: none; }
 .attchip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 4px; border: 1px solid var(--line); border-radius: 9px;
   background: var(--bg); font-size: 11.5px; }
 .attchip .ext { flex: none; min-width: 26px; height: 22px; border-radius: 6px; display: grid; place-items: center; padding: 0 4px; font-size: 9.5px; font-weight: 800;
-  letter-spacing: .3px; background: color-mix(in srgb, var(--accent) 16%, var(--card)); color: var(--accent); }
+  letter-spacing: .3px; background: color-mix(in srgb, var(--accent) 16%, var(--card)); color: var(--accent-text); }
 .attchip img { flex: none; width: 22px; height: 22px; border-radius: 5px; object-fit: cover; }
 .attchip .an { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
 .attchip .as { color: var(--muted); flex: none; }
@@ -495,7 +508,7 @@ textarea:focus-visible { outline: none; }
 .tstat .st.bad { color: var(--stop); }
 .trow .switch { align-self: center; }
 .addtool { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
-.addtool summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--accent); list-style: none; }
+.addtool summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--accent-text); list-style: none; }
 .addtool summary::before { content: "+ "; }
 .addtool[open] summary::before { content: "− "; }
 .addform { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
@@ -569,6 +582,16 @@ html[data-wall="gradient"] body { background: linear-gradient(160deg, var(--wall
 html[data-wall="picture"] body {
   background: linear-gradient(color-mix(in srgb, var(--bg) 78%, transparent), color-mix(in srgb, var(--bg) 78%, transparent)), var(--wall-img) center / cover no-repeat fixed;
 }
+
+/* Text on the page takes the wallpaper's ink (lib/wall.js sets data-wall-ink). Cards, and anything drawn in the card colour,
+   keep the card's text colour: inside them --ink and --muted are the card's, so every rule written for text on a card holds. */
+.card, .tabs, .pill, .chip, .inputbox, .modeseg, .menu, .msg.user .body, .filecard, .step-row, .tablist li, .confirm,
+.proposal, .improve-bar, .notice, .md .codeblock, .md th, .msg .sentfiles span, .attchip, .ctx-tab, .step, .msg .body code, #accountAdd {
+  --ink: var(--card-ink); --muted: var(--card-muted); color: var(--card-ink);
+}
+#accountAdd { background: var(--card); border-color: var(--outline); border-radius: var(--radius); box-shadow: var(--shade-1); }
+:root[data-wall-ink="light"] { --page-ink: #ffffff; --page-muted: #ffffff; }
+:root[data-wall-ink="dark"] { --page-ink: #000000; --page-muted: #000000; }
 
 /* Mods (Settings) */
 .modlist { list-style: none; margin: 0; padding: 0; }

@@ -113,6 +113,7 @@ $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list'
 function setTheme(dark) {
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   try { localStorage.setItem('ciz-theme', dark ? 'dark' : 'light'); } catch {}
+  applyWall(wall);   // a picture's text colour depends on the theme too
 }
 $('themeToggle').checked = document.documentElement.dataset.theme === 'dark';
 $('themeToggle').addEventListener('change', e => setTheme(e.target.checked));
@@ -141,10 +142,28 @@ function applyWall(w) {
   $('wallColor').value = w.color;
   $('wallFrom').value = w.from;
   $('wallTo').value = w.to;
+  // The page text takes the ink for this wallpaper (lib/wall.js); the default wallpaper keeps the theme's own.
+  const ink = window.cizWallInk ? cizWallInk.inkFor(w, root.dataset.theme) : null;
+  if (ink) root.dataset.wallInk = ink; else delete root.dataset.wallInk;
 }
 function wallNote(text) { $('wallNote').textContent = text; $('wallNote').hidden = !text; }
 let wall = loadWall();
 applyWall(wall);
+// A picture kept before the text colour existed has no average yet: it is measured once, when the panel opens.
+if (wall.mode === 'picture' && wall.image && !wall.avg) measureWall(wall.image);
+function measureWall(dataUrl) {
+  const img = new Image();
+  img.onload = () => {
+    const small = document.createElement('canvas');
+    small.width = 16;
+    small.height = 16;
+    const ctx = small.getContext('2d');
+    ctx.drawImage(img, 0, 0, 16, 16);
+    const avg = window.cizWallInk ? cizWallInk.averageHex(ctx.getImageData(0, 0, 16, 16).data) : null;
+    if (avg && wall.image === dataUrl) setWall({ avg });
+  };
+  img.src = dataUrl;
+}
 // Returns false when the choice could not be kept in this browser (a picture too big for storage). The choice still applies for this session.
 function setWall(patch) {
   wall = { ...wall, ...patch };
@@ -176,7 +195,13 @@ function pictureToWall(file) {
     canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
     canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
     URL.revokeObjectURL(url);
-    const kept = setWall({ mode: 'picture', image: canvas.toDataURL('image/jpeg', 0.82) });
+    const small = document.createElement('canvas');
+    small.width = 16;
+    small.height = 16;
+    const sctx = small.getContext('2d');
+    sctx.drawImage(canvas, 0, 0, 16, 16);
+    const avg = window.cizWallInk ? cizWallInk.averageHex(sctx.getImageData(0, 0, 16, 16).data) : null;
+    const kept = setWall({ mode: 'picture', image: canvas.toDataURL('image/jpeg', 0.82), avg: avg || '' });
     wallNote(kept ? '' : 'That picture is too big to keep in this browser, so it is used for this session only.');
   };
   img.onerror = () => { URL.revokeObjectURL(url); wallNote('Could not open that picture.'); };

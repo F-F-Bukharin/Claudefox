@@ -11,7 +11,7 @@ const w=dom.window; const sent=[]; let onMsg;
 w.browser={runtime:{connect:()=>({postMessage:m=>sent.push(m),onMessage:{addListener:f=>onMsg=f}}),getManifest:()=>({version:'0.4.0'})},
  storage:{session:{get:async()=>({}),set:async()=>{}}},
  tabs:{query:async()=>[{title:'T',url:'https://x'}],onActivated:{addListener(){}},onUpdated:{addListener(){}}}};
-w.eval(fs.readFileSync(dir+'lib/markdown.js','utf8')+'\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir+'panel.js','utf8'));
+w.eval(fs.readFileSync(dir+'lib/markdown.js','utf8')+'\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir+'lib/wall.js','utf8')); w.eval(fs.readFileSync(dir+'panel.js','utf8'));
 const $=id=>w.document.getElementById(id);
 let pass=0,fail=0;const ok=(n,c,x)=>{c?pass++:fail++;console.log((c?'PASS ':'FAIL ')+n+(x?'  '+x:''))};
 const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort:'off',pending:0,chatModel:'speed',filesMode:'read',filesFolder:''};
@@ -75,6 +75,9 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  ok('wallpaper: Solid marks the page and shows only the colour', w.document.documentElement.dataset.wall==='solid' && !$('wallSolid').hidden && $('wallGradient').hidden && $('wallPicture').hidden);
  $('wallColor').value='#112233'; $('wallColor').dispatchEvent(new w.Event('input'));
  ok('wallpaper: the colour input sets the page colour', w.document.documentElement.style.getPropertyValue('--wall-color').trim()==='#112233', w.document.documentElement.style.getPropertyValue('--wall-color'));
+ ok('wallpaper: a dark colour sets white page text', w.document.documentElement.dataset.wallInk==='light', w.document.documentElement.dataset.wallInk);
+ $('wallColor').value='#f6e7c1'; $('wallColor').dispatchEvent(new w.Event('input'));
+ ok('wallpaper: a cream colour sets black page text', w.document.documentElement.dataset.wallInk==='dark', w.document.documentElement.dataset.wallInk);
  w.document.querySelector('.wallseg button[data-wall="gradient"]').click();
  ok('wallpaper: Gradient shows the two colours', w.document.documentElement.dataset.wall==='gradient' && !$('wallGradient').hidden && $('wallSolid').hidden);
  w.document.querySelector('.wallseg button[data-wall="picture"]').click();
@@ -82,7 +85,8 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  $('wallClear').click();
  ok('wallpaper: Remove picture goes back to Default', w.document.documentElement.dataset.wall==='default' && w.document.querySelector('.wallseg button[data-wall="default"]').getAttribute('aria-checked')==='true');
  ok('dark mode off sets the light theme', w.document.documentElement.dataset.theme==='light');
- // formatting, copy, selection-safe rendering
+ ok('wallpaper: Default takes the ink off the page', !w.document.documentElement.dataset.wallInk);
+// formatting, copy, selection-safe rendering
  $('input').value='fmt'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
  const f2=sent.filter(m=>m.type==='chat').pop();
  onMsg({type:'chatEvent',id:f2.id,event:{kind:'meta',model:'claude-haiku-5-5',effort:'max'}});
