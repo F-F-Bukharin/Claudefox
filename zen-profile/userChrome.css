@@ -6,6 +6,7 @@
   min-width: 620px !important;
   width: 660px;
 }
+#sidebar-box[sidebarcommand="claude-in-zen_f_local-sidebar-action"],
 #sidebar-box[sidebarcommand="claude-in-zen_f_local-sidebar-action"] #sidebar {
   border-radius: var(--zen-native-inner-radius, var(--zen-border-radius, 8px)) !important;
   overflow: hidden !important;
