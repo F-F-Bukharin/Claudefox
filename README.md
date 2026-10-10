@@ -10,7 +10,7 @@ Friends: see `START HERE.txt` (it ships in the friends zip).
 ## Status (v0.8.0)
 - **Chat** with Claude in the panel, streamed, with a progress bar and a Cancel link. Follow-ups continue the
   conversation; `/clear` (or **New chat** in the options menu) starts a new one. Long jobs can run up to an hour.
-- **Quality** and **Speed** sit on the right, under the Current tab line. The **+** on Speed turns on Speed Plus (Haiku 5.5
+- On the right, under the message box, one button flips between **Speed** and **Quality**. The **+** on its left turns on Speed Plus (Haiku 5.5
   at max effort). Speed is Haiku 5.5 at high effort, Quality is Opus 5.5 at high effort. The line under them shows what the
   next message runs on, and each reply shows the model and effort it ran with. An empty chat shows four starter chips above
   the message box.

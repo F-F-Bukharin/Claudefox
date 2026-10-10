@@ -104,18 +104,16 @@ for (const b of document.querySelectorAll('.seg button')) {
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
 $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list' }));
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
-// Quality and Speed are the outputs. The + on Speed turns Speed Plus (Haiku at max effort) on and off.
-function pickModel(mode) {
-  if (mode === 'quality') return send('setModel', { value: 'quality' });
-  if (state.chatModel === 'quality') send('setModel', { value: 'speed' });
-  send('setPlus', { value: false });
+// One button flips Speed and Quality. The + on its left turns Speed Plus (Haiku at max effort) on and off.
+function toggleMode() {
+  send('setModel', { value: state.chatModel === 'quality' ? 'speed' : 'quality' });
 }
 function togglePlus() {
   const on = state.chatModel !== 'quality' && !!state.chatPlus;
   if (!on && state.chatModel === 'quality') send('setModel', { value: 'speed' });
   send('setPlus', { value: !on });
 }
-for (const b of document.querySelectorAll('#modeSeg [data-mode]')) b.addEventListener('click', () => pickModel(b.dataset.mode));
+$('modeBtn').addEventListener('click', toggleMode);
 $('plusBtn').addEventListener('click', togglePlus);
 
 // Tools and plugins (Settings). Switches, sign-in, add and remove go to the helper through the background page.
@@ -267,10 +265,12 @@ function render(s, log) {
   $('filesToggle').disabled = s.agent === 'stopped';
   $('pendingVal').textContent = String(s.pending || 0);
 
-  // model choice: Quality or Speed, and the + that turns Speed Plus on
+  // model choice: one button shows Speed or Quality (a click flips it), and the + turns Speed Plus on
   const quality = s.chatModel === 'quality';
   const plus = !quality && !!s.chatPlus;
-  for (const b of document.querySelectorAll('#modeSeg [data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === (quality ? 'quality' : 'speed')));
+  $('modeSeg').dataset.mode = quality ? 'quality' : 'speed';
+  $('modeLabel').textContent = quality ? 'Quality' : 'Speed';
+  $('modeBtn').setAttribute('aria-label', quality ? 'Quality. Switch to Speed.' : 'Speed. Switch to Quality.');
   $('plusBtn').setAttribute('aria-pressed', String(plus));
   // the line under the outputs: what the next message runs on
   $('modelLine').textContent = (quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort')

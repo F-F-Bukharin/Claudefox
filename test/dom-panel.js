@@ -32,10 +32,11 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  onMsg({type:'state',state:{...ready,claude:{...ready.claude,email:'felpecabezaz@gmail.com'}},log:[]});
  ok('mismatch flagged', /not personalworksacc/.test($('claudeVal').textContent) && /warn/.test($('claudeDot').className));
  onMsg({type:'state',state:ready,log:[]});
- ok('Speed selected by default, + off', $('modeSpeed').getAttribute('aria-pressed')==='true' && $('modeQuality').getAttribute('aria-pressed')==='false' && $('plusBtn').getAttribute('aria-pressed')==='false');
- $('modeQuality').click(); ok('Quality click asks for quality', sent.some(m=>m.type==='setModel'&&m.value==='quality'));
+ ok('Speed shown by default, + off', $('modeLabel').textContent==='Speed' && $('modeSeg').dataset.mode==='speed' && $('modeBtn').getAttribute('aria-label')==='Speed. Switch to Quality.' && $('plusBtn').getAttribute('aria-pressed')==='false' && !!$('plusBtn').querySelector('svg'));
+ $('modeBtn').click(); ok('Speed click asks for Quality', sent.some(m=>m.type==='setModel'&&m.value==='quality'));
  onMsg({type:'state',state:{...ready,chatModel:'quality'},log:[]});
- ok('Quality pressed, model line says Opus', $('modeQuality').getAttribute('aria-pressed')==='true' && $('modelLine').textContent==='Opus 5.5 · high effort');
+ ok('Quality shown, model line says Opus', $('modeLabel').textContent==='Quality' && $('modeSeg').dataset.mode==='quality' && $('modelLine').textContent==='Opus 5.5 · high effort');
+const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click(); ok('Quality click flips back to Speed', sent.filter(m=>m.type==='setModel').length===nFlipQ+1 && sent.filter(m=>m.type==='setModel').pop().value==='speed');
  ok('files note off', /Off/.test($('filesNote').textContent));
  $('filesFolder').value='C:\\notes'; $('filesToggle').checked=true; $('filesToggle').dispatchEvent(new w.Event('change'));
  ok('toggle sends folder and mode', sent.some(m=>m.type==='setFiles'&&m.value&&m.folder==='C:\\notes'&&m.mode==='read'));
@@ -56,15 +57,15 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  ok('limit shows switch button', !!btn && $('sendBtn').disabled===false);
  btn.click(); ok('switch button sends switchAccount', sent.some(m=>m.type==='switchAccount'));
  onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:false},log:[]});
- ok('Speed pressed, + not pressed', $('modeSpeed').getAttribute('aria-pressed')==='true' && $('plusBtn').getAttribute('aria-pressed')==='false');
+ ok('Speed shown, + not pressed', $('modeLabel').textContent==='Speed' && $('plusBtn').getAttribute('aria-pressed')==='false');
  $('plusBtn').click(); ok('+ turns Speed Plus on', sent.some(m=>m.type==='setPlus'&&m.value===true));
  onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:true},log:[]});
  ok('+ pressed, model line says Haiku max effort', $('plusBtn').getAttribute('aria-pressed')==='true' && $('modelLine').textContent==='Haiku 5.5 · max effort');
  $('plusBtn').click(); ok('+ again turns Speed Plus off', sent.filter(m=>m.type==='setPlus').pop().value===false);
  onMsg({type:'state',state:{...ready,chatModel:'quality',chatPlus:true},log:[]});
- ok('Quality pressed, + not pressed', $('modeQuality').getAttribute('aria-pressed')==='true' && $('plusBtn').getAttribute('aria-pressed')==='false');
+ ok('Quality shown, + not pressed', $('modeLabel').textContent==='Quality' && $('modeBtn').getAttribute('aria-label')==='Quality. Switch to Speed.' && $('plusBtn').getAttribute('aria-pressed')==='false');
  $('plusBtn').click(); ok('+ from Quality switches to Speed, then Speed Plus', sent.filter(m=>m.type==='setModel').pop().value==='speed' && sent.filter(m=>m.type==='setPlus').pop().value===true);
- $('modeSpeed').click(); ok('Speed click turns Speed Plus off', sent.filter(m=>m.type==='setPlus').pop().value===false);
+ const nFlipS = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click(); ok('Quality click flips to Speed and keeps + on', sent.filter(m=>m.type==='setModel').length===nFlipS+1 && sent.filter(m=>m.type==='setModel').pop().value==='speed' && sent.filter(m=>m.type==='setPlus').pop().value===true);
  // formatting, copy, selection-safe rendering
  $('input').value='fmt'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
  const f2=sent.filter(m=>m.type==='chat').pop();

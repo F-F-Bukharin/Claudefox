@@ -91,12 +91,9 @@
           <span id="ctxTab" class="ctx-tab">…</span>
         </div>
         <div class="modebox">
-          <div id="modeSeg" class="modeseg" role="group" aria-label="Model: Quality, or Speed with Speed Plus">
-            <button type="button" id="modeQuality" data-mode="quality" aria-pressed="false" title="Quality: Opus 5.5 at high effort. Slower, best answers, uses more.">Quality</button>
-            <div class="speedgrp">
-              <button type="button" id="plusBtn" aria-pressed="false" aria-label="Speed Plus" title="Speed Plus: Haiku 5.5 at max effort. Close to Opus quality, still light on usage. Click to turn it on or off.">+</button>
-              <button type="button" id="modeSpeed" data-mode="speed" aria-pressed="true" title="Speed: Haiku 5.5 at high effort. Fast and light on usage.">Speed</button>
-            </div>
+          <div id="modeSeg" class="modeseg" data-mode="speed" role="group" aria-label="Model: Speed or Quality, with Speed Plus on the left">
+            <button type="button" id="plusBtn" aria-pressed="false" aria-label="Speed Plus" title="Speed Plus: Haiku 5.5 at max effort. Close to Opus quality, still light on usage. Click to turn it on or off."><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3v10M3 8h10"/></svg></button>
+            <button type="button" id="modeBtn" aria-label="Speed. Switch to Quality." title="Click to switch between Speed (Haiku 5.5, high effort) and Quality (Opus 5.5, high effort)."><span id="modeLabel">Speed</span></button>
           </div>
           <p id="modelLine" class="model-line">Haiku 5.5 · high effort</p>
         </div>
