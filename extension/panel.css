@@ -126,7 +126,7 @@ button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; 
 .chat.is-empty { justify-content: flex-start; }
 .chat.is-empty .messages { flex: 0 0 auto; margin-top: max(0px, min(35vh, calc(85vh - 456px))); padding-bottom: 0; }
 .chat.is-empty .empty { margin: 0; padding: 8px 8px 6px; }
-.chat.is-empty .composer { margin-top: auto; margin-bottom: 14.75vh; }
+.chat.is-empty .composer { margin-top: auto; margin-bottom: 11.5vh; }
 .messages {
   flex: 1; min-height: 0; overflow-y: auto;
   padding: 14px 14px 6px;
