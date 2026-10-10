@@ -212,29 +212,27 @@ textarea:focus-visible { outline: none; }
 .limitbtn { align-self: flex-start; margin-top: 4px; font-size: 12.5px; padding: 7px 12px; }
 .send:disabled { opacity: .45; }
 
-/* composer row, under the text bar: Current tab on the left; Speed Plus | Speed | Quality and the model line on the right */
+/* composer row, under the text bar: Current tab on the left; the outputs on the right: Quality, and Speed with a + that turns Speed Plus on */
 .composer-row { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; min-width: 0; padding: 0 4px; }
 .composer-row .context { flex: 1 1 0; min-width: 0; min-height: 32px; }
 .modebox { flex: none; margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.modeseg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--line); }
-.modeseg button {
-  border: 0; border-radius: 999px; height: 26px; padding: 0 12px; line-height: 1; white-space: nowrap;
-  background: transparent; color: var(--muted); font-size: 12px; font-weight: 700;
-  transition: background .15s, color .15s;
-}
+.model-line { margin: 0; font-size: 11.5px; color: var(--muted); padding-right: 4px; }
+.modeseg { display: inline-flex; align-items: center; gap: 6px; }
+.modeseg button { height: 30px; border-radius: 999px; line-height: 1; white-space: nowrap; font-size: 12.5px; font-weight: 700; color: var(--muted); background: transparent; transition: background .15s, color .15s, border-color .15s; }
 .modeseg button:hover { color: var(--ink); }
 .modeseg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.modeseg button[data-mode="plus"][aria-checked="true"] { background: var(--plus); color: #fff; }
-.modeseg button[data-mode="speed"][aria-checked="true"] {
-  background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: color-mix(in srgb, var(--accent) 75%, var(--ink));
-  box-shadow: 0 1px 2px rgb(0 0 0 / .12);
-}
-.modeseg button[data-mode="quality"][aria-checked="true"] { background: color-mix(in srgb, var(--accent) 78%, #000); color: #fff; }
-.model-line { margin: 0; font-size: 11.5px; color: var(--muted); padding-right: 4px; }
+#modeQuality { padding: 0 14px; border: 1.5px solid var(--line); background: var(--card); }
+#modeQuality[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 78%, #000); border-color: transparent; color: #fff; }
+.speedgrp { display: inline-flex; align-items: stretch; height: 30px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--card); overflow: hidden; }
+.speedgrp button { border: 0; border-radius: 0; }
+#plusBtn { width: 32px; padding: 0; font-size: 17px; font-weight: 800; border-right: 1px solid var(--line); }
+#plusBtn:hover { color: var(--plus); }
+#plusBtn[aria-pressed="true"] { background: var(--plus); color: #fff; }
+#modeSpeed { padding: 0 14px; }
+#modeSpeed[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: color-mix(in srgb, var(--accent) 75%, var(--ink)); }
 
-/* the starter chips show only in an empty chat, under the composer */
-.starters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; padding: 0 4px; }
-.starters .chip { border-radius: 12px; text-align: left; padding: 10px 12px; font-size: 12.5px; line-height: 1.3; color: var(--ink); }
+/* the starter chips sit above the text bar and show only in an empty chat */
+.starters { margin: 8px 0 0; padding: 0 4px; }
 .chat:not(.is-empty) .starters { display: none; }
 
 /* file tools */

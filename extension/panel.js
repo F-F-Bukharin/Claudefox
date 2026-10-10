@@ -104,13 +104,19 @@ for (const b of document.querySelectorAll('.seg button')) {
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
 $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list' }));
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
-// Speed Plus, Speed and Quality are one control: Speed Plus is Haiku at max effort, Speed Haiku at high effort, Quality Opus at high effort.
-function pickMode(mode) {
+// Quality and Speed are the outputs. The + on Speed turns Speed Plus (Haiku at max effort) on and off.
+function pickModel(mode) {
   if (mode === 'quality') return send('setModel', { value: 'quality' });
   if (state.chatModel === 'quality') send('setModel', { value: 'speed' });
-  send('setPlus', { value: mode === 'plus' });
+  send('setPlus', { value: false });
 }
-for (const b of document.querySelectorAll('#modeSeg button')) b.addEventListener('click', () => pickMode(b.dataset.mode));
+function togglePlus() {
+  const on = state.chatModel !== 'quality' && !!state.chatPlus;
+  if (!on && state.chatModel === 'quality') send('setModel', { value: 'speed' });
+  send('setPlus', { value: !on });
+}
+for (const b of document.querySelectorAll('#modeSeg [data-mode]')) b.addEventListener('click', () => pickModel(b.dataset.mode));
+$('plusBtn').addEventListener('click', togglePlus);
 
 // Tools and plugins (Settings). Switches, sign-in, add and remove go to the helper through the background page.
 $('toolsCheck').addEventListener('click', () => send('toolsCheck'));
@@ -261,12 +267,12 @@ function render(s, log) {
   $('filesToggle').disabled = s.agent === 'stopped';
   $('pendingVal').textContent = String(s.pending || 0);
 
-  // model choice: one control (Speed Plus | Speed | Quality)
+  // model choice: Quality or Speed, and the + that turns Speed Plus on
   const quality = s.chatModel === 'quality';
   const plus = !quality && !!s.chatPlus;
-  const mode = quality ? 'quality' : plus ? 'plus' : 'speed';
-  for (const b of document.querySelectorAll('#modeSeg button')) b.setAttribute('aria-checked', String(b.dataset.mode === mode));
-  // the line under the control: what the next message runs on
+  for (const b of document.querySelectorAll('#modeSeg [data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === (quality ? 'quality' : 'speed')));
+  $('plusBtn').setAttribute('aria-pressed', String(plus));
+  // the line under the outputs: what the next message runs on
   $('modelLine').textContent = (quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort')
     + (s.caveman && s.agent !== 'stopped' && s.signedIn ? ' · caveman' : '');
 
