@@ -317,5 +317,83 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
   $('improveLeave').click();
   ok('Leave hides the bar and the panel is no longer improving', $('improveBar').hidden && !w.document.body.classList.contains('improving'));
 }
+ {
+  // The army: the octopus (Quality only), its card, the model line, and the trail of workers in a reply
+  const frame3 = () => new Promise(r => w.requestAnimationFrame(() => r()));
+  if ($('sendBtn').disabled) { const last=sent.filter(m=>m.type==='chat').pop(); onMsg({type:'chatDone',id:last.id,ok:true}); }
+  onMsg({type:'state',state:{...ready,chatModel:'speed',chatArmy:false},log:[]});
+  ok('army: the octopus is hidden in Speed, the + shows', $('armyBtn').hidden===true && $('plusBtn').hidden===false);
+  onMsg({type:'state',state:{...ready,chatModel:'quality',chatArmy:false,armyToday:2},log:[]});
+  ok('army: the octopus shows in Quality, before the mode button, not pressed', $('armyBtn').hidden===false && $('armyBtn').nextElementSibling===$('plusBtn') && $('armyBtn').getAttribute('aria-pressed')==='false' && $('armyBtn').getAttribute('aria-label')==='Army' && !!$('armyBtn').querySelector('svg'));
+  ok('army: the model line without the army is the plain Quality one', $('modelLine').textContent==='Opus 5.5 · high effort');
+  $('armyBtn').click();
+  ok('army: a click opens the card, sets aria-expanded and focuses the switch, and does not switch the army', !$('armyCard').hidden && $('armyBtn').getAttribute('aria-expanded')==='true' && w.document.activeElement===$('armyToggle') && !sent.some(m=>m.type==='setArmy'));
+  ok('army: the runs line for 2 runs, no warning', $('armyRuns').textContent==='Runs today: 2 of 5 recommended.' && !$('armyRuns').classList.contains('warnnote'));
+  w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  ok('army: Esc closes the card and returns focus to the octopus', $('armyCard').hidden && $('armyBtn').getAttribute('aria-expanded')==='false' && w.document.activeElement===$('armyBtn'));
+  $('armyBtn').click(); w.document.body.click();
+  ok('army: a click outside closes the card', $('armyCard').hidden);
+  $('armyBtn').click(); $('armyClose').click();
+  ok('army: the close button closes the card', $('armyCard').hidden && w.document.activeElement===$('armyBtn'));
+  $('armyBtn').click();
+  $('armyToggle').checked=true; $('armyToggle').dispatchEvent(new w.Event('change'));
+  ok('army: the switch sends setArmy on', sent.filter(m=>m.type==='setArmy').pop()?.value===true);
+  onMsg({type:'state',state:{...ready,chatModel:'quality',chatArmy:true,armyToday:6},log:[]});
+  ok('army: aria-pressed and the switch follow chatArmy', $('armyBtn').getAttribute('aria-pressed')==='true' && $('armyToggle').checked===true && !$('armyCard').hidden);
+  ok('army: the runs line past 5 warns', $('armyRuns').textContent==="Runs today: 6. That's past the recommended 5, so usage is high." && $('armyRuns').classList.contains('warnnote'));
+  ok('army: the model line names the army', $('modelLine').textContent==='Opus 5.5 · max effort · army of 5 Haiku');
+  $('armyToggle').checked=false; $('armyToggle').dispatchEvent(new w.Event('change'));
+  ok('army: the switch sends setArmy off', sent.filter(m=>m.type==='setArmy').pop()?.value===false);
+  onMsg({type:'state',state:{...ready,chatModel:'quality',chatArmy:true,armyToday:6,agent:'stopped'},log:[]});
+  ok('army: the switch is disabled while stopped', $('armyToggle').disabled===true);
+  onMsg({type:'state',state:{...ready,chatModel:'speed',chatArmy:true},log:[]});
+  ok('army: switching to Speed hides the octopus and closes the card', $('armyBtn').hidden && $('armyCard').hidden && $('armyBtn').getAttribute('aria-expanded')==='false' && $('modelLine').textContent==='Haiku 5.5 · high effort');
+  onMsg({type:'state',state:{...ready,chatModel:'quality',chatArmy:true,armyToday:6},log:[]});
+  $('input').value='compare five shops'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
+  const am=sent.filter(m=>m.type==='chat').pop();
+  onMsg({type:'chatEvent',id:am.id,event:{kind:'tool',name:'army_start',input:'{}'}});
+  await frame3();
+  ok('army: the step label for army_start', /Sending the army/.test($('messages').querySelector('.msg.pending .plabel')?.textContent||''));
+  onMsg({type:'chatEvent',id:am.id,event:{kind:'tool_result',error:false,text:'ok'}});
+  onMsg({type:'chatEvent',id:am.id,event:{kind:'tool',name:'army_wait',input:'{}'}});
+  await frame3();
+  ok('army: the step label for army_wait', /Waiting for the army/.test($('messages').querySelector('.msg.pending .plabel')?.textContent||''));
+  const wk=(id,state,extra)=>({id,goal:'Price of the X1 at shop '+id,state,tab_id:null,host:'',action:'',steps:0,ms:0,error:'',sources:[],...extra});
+  onMsg({type:'chatEvent',id:am.id,event:{kind:'army',run:'r1',round:1,started:true,finished:false,today:6,workers:[
+    wk('w1','working',{tab_id:101,host:'shop-a.com',action:'Reading the page: shop-a.com',steps:3}),
+    wk('w2','starting'),
+    wk('w3','done',{host:'shop-c.com',steps:4,sources:['https://shop-c.com/x1','https://shop-c.com/x1/specs','https://shop-c.com/a','https://shop-c.com/b']}),
+    wk('w4','failed',{host:'shop-d.com',error:'The page asked for a sign-in, so the worker stopped.'}),
+    wk('w5','stopped',{host:'shop-e.com'})]}});
+  await frame3();
+  const trail=[...$('messages').querySelectorAll('.msg.assistant')].pop().querySelector('.army-trail');
+  const arows=trail?[...trail.querySelectorAll('.arow')]:[];
+  ok('army: 5 workers draw 5 rows with the right marks', arows.length===5 && arows.map(r=>r.querySelector('.amark').textContent).join('')==='……✓✕■', arows.map(r=>r.querySelector('.amark').textContent).join(''));
+  ok('army: the header counts the done workers', /Army · 1 of 5 done/.test(trail.querySelector('.ahead').textContent));
+  ok('army: rows show W1, the host and the action; done says steps; failed shows the error', /W1/.test(arows[0].textContent) && /shop-a\.com/.test(arows[0].textContent) && /Reading the page: shop-a\.com/.test(arows[0].textContent) && /4 steps/.test(arows[2].textContent) && /asked for a sign-in/.test(arows[3].textContent));
+  ok('army: a finished row lists up to 3 sources', arows[2].querySelectorAll('.asrc a').length===3 && !arows[0].querySelector('.asrc'));
+  const show=arows[0].querySelector('.ashow');
+  ok('army: only a working row with a tab has Show', !!show && arows.filter(r=>r.querySelector('.ashow')).length===1);
+  const nOpen=sent.length; show.click();
+  ok('army: Show sends openTab with the tab id', sent.slice(nOpen).some(m=>m.type==='openTab'&&m.id===101));
+  arows[2].querySelector('.asrc a').click();
+  ok('army: a source opens through onLink', sent.some(m=>m.type==='openLink'&&m.url==='https://shop-c.com/x1'));
+  ok('army: the past-5 notice shows for a started run with today 6', /Army run 6 today: past the recommended 5, so this uses a lot of your plan\./.test([...$('messages').querySelectorAll('.msg.assistant')].pop().querySelector('.notice')?.textContent||''));
+  ok('army: the trail sits above the reply text, and the progress bar still shows', !!([...$('messages').querySelectorAll('.msg.assistant')].pop().querySelector('.progress .pfill')));
+  onMsg({type:'chatEvent',id:am.id,event:{kind:'army',run:'r1',round:1,started:false,finished:true,workers:[
+    wk('w1','done',{host:'shop-a.com',steps:6}),wk('w2','done',{host:'shop-b.com',steps:5}),wk('w3','done',{host:'shop-c.com',steps:4}),
+    wk('w4','failed',{host:'shop-d.com',error:'Sign-in page.'}),wk('w5','done',{host:'shop-e.com',steps:2})]}});
+  onMsg({type:'chatEvent',id:am.id,event:{kind:'text',text:'Shop C is cheapest.'}});
+  onMsg({type:'chatDone',id:am.id,ok:true});
+  await frame3();
+  const fin=[...$('messages').querySelectorAll('.msg.assistant')].pop();
+  ok('army: a finished message shows the collapsed summary line', fin.querySelector('.army-trail .asum')?.textContent.startsWith('Army: 5 workers · 4 done · 1 failed') && !fin.querySelector('.army-trail .arow'), fin.querySelector('.army-trail')?.textContent);
+  ok('army: the trail comes before the reply text', !!fin.querySelector('.army-trail') && (fin.querySelector('.army-trail').compareDocumentPosition(fin.querySelector('.body.md')) & 4)!==0);
+  fin.querySelector('.army-trail .asum button').click();
+  const fin2=[...$('messages').querySelectorAll('.msg.assistant')].pop();
+  ok('army: the toggle opens the rows again', fin2.querySelectorAll('.army-trail .arow').length===5);
+  fin2.querySelector('.army-trail .asum button').click();
+  ok('army: and closes them', [...$('messages').querySelectorAll('.msg.assistant')].pop().querySelectorAll('.army-trail .arow').length===0);
+ }
  console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
 })().catch(e=>{console.log('ERROR',e.stack);process.exit(1)});

@@ -219,6 +219,28 @@ function togglePlus() {
 $('modeBtn').addEventListener('click', toggleMode);
 $('plusBtn').addEventListener('click', togglePlus);
 
+// The octopus (Quality mode only) opens the army card. The switch inside the card turns the army on; the octopus itself only shows it.
+const ARMY_RECOMMENDED = 5;
+function openArmy(open) {
+  $('armyCard').hidden = !open;
+  $('armyBtn').setAttribute('aria-expanded', String(open));
+  if (open) $('armyToggle').focus();
+}
+function closeArmy(refocus) {
+  if ($('armyCard').hidden) return;
+  openArmy(false);
+  if (refocus) $('armyBtn').focus();
+}
+$('armyBtn').addEventListener('click', e => { e.stopPropagation(); if ($('armyCard').hidden) openArmy(true); else closeArmy(true); });
+$('armyClose').addEventListener('click', () => closeArmy(true));
+$('armyToggle').addEventListener('change', e => send('setArmy', { value: e.target.checked }));
+document.addEventListener('click', e => { if (!$('armyCard').hidden && !e.target.closest('#armyCard, #armyBtn')) closeArmy(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('armyCard').hidden) { e.preventDefault(); closeArmy(true); } });
+function armyRunsText(n) {
+  return n > ARMY_RECOMMENDED ? `Runs today: ${n}. That's past the recommended ${ARMY_RECOMMENDED}, so usage is high.`
+    : `Runs today: ${n} of ${ARMY_RECOMMENDED} recommended.`;
+}
+
 // Tools and plugins (Settings). Switches, sign-in, add and remove go to the helper through the background page.
 $('toolsCheck').addEventListener('click', () => send('toolsCheck'));
 $('addBtn').addEventListener('click', () => {
@@ -381,8 +403,18 @@ function render(s, log) {
   $('modeBtn').setAttribute('aria-label', quality ? 'Quality. Switch to Speed.' : 'Speed. Switch to Quality.');
   $('plusBtn').setAttribute('aria-pressed', String(plus));
   $('plusBtn').hidden = quality;
+  // the octopus takes the +'s place in Quality; leaving Quality hides it and closes its card
+  const army = quality && !!s.chatArmy;
+  $('armyBtn').hidden = !quality;
+  $('armyBtn').setAttribute('aria-pressed', String(army));
+  if (!quality) closeArmy(false);
+  $('armyToggle').checked = army;
+  $('armyToggle').disabled = s.agent === 'stopped';
+  const runs = Number(s.armyToday) || 0;
+  $('armyRuns').textContent = armyRunsText(runs);
+  $('armyRuns').classList.toggle('warnnote', runs > ARMY_RECOMMENDED);
   // the line under the outputs: what the next message runs on
-  $('modelLine').textContent = (quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort')
+  $('modelLine').textContent = (army ? 'Opus 5.5 · max effort · army of 5 Haiku' : quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort')
     + (s.caveman && s.agent !== 'stopped' && s.signedIn ? ' · caveman' : '');
 
   // notice under the composer: why nothing will run right now
@@ -1051,6 +1083,7 @@ function onChatEvent(id, ev) {
     const steps = Array.isArray(ev.steps) && ev.steps.length ? ev.steps : (m.plan && m.plan.steps) || [];
     m.plan = { steps, done: Number(ev.done) || 0, note: String(ev.note || ''), at: m.steps.length };
   }
+  else if (ev.kind === 'army') onArmyEvent(m, ev);
   else if (ev.kind === 'notice') {
     m.notices = (m.notices || []).concat([{ text: String(ev.text || '').slice(0, 300), action: ev.action && typeof ev.action === 'object' ? ev.action : null }]).slice(-5);
   }
@@ -1062,6 +1095,30 @@ function onChatEvent(id, ev) {
     if (step) { step.state = ev.error ? 'bad' : 'ok'; step.result = String(ev.text || ''); }
   }
   scheduleRender();
+}
+
+// The army trail: the latest snapshot of the run in m.army, and the last two runs before it in m.armyPrev.
+const ARMY_STATES = ['starting', 'working', 'done', 'failed', 'stopped'];
+function armyWorker(w) {
+  const sources = (Array.isArray(w.sources) ? w.sources : []).map(String).filter(u => /^https?:\/\//i.test(u)).slice(0, 5).map(u => u.slice(0, 500));
+  return {
+    id: String(w.id || '').slice(0, 8), goal: String(w.goal || '').slice(0, 120),
+    state: ARMY_STATES.includes(w.state) ? w.state : 'starting',
+    tab_id: Number.isInteger(w.tab_id) ? w.tab_id : null, host: String(w.host || '').slice(0, 80),
+    action: String(w.action || '').slice(0, 120), steps: Number(w.steps) || 0, ms: Number(w.ms) || 0,
+    error: String(w.error || '').slice(0, 200), sources,
+  };
+}
+function onArmyEvent(m, ev) {
+  const run = String(ev.run || '').slice(0, 20);
+  if (m.army && m.army.run !== run) m.armyPrev = (m.armyPrev || []).concat([m.army]).slice(-2);
+  const since = m.army && m.army.run === run ? m.army.since : Date.now();
+  m.army = { run, round: Number(ev.round) || 1, finished: !!ev.finished, since, until: ev.finished ? Date.now() : 0,
+    workers: (Array.isArray(ev.workers) ? ev.workers : []).slice(0, 5).map(armyWorker) };
+  const today = Number(ev.today) || 0;
+  if (ev.started && today > ARMY_RECOMMENDED) {
+    m.notices = (m.notices || []).concat([{ text: `Army run ${today} today: past the recommended ${ARMY_RECOMMENDED}, so this uses a lot of your plan.`, action: null }]).slice(-5);
+  }
 }
 
 function onChatDone(msg) {
@@ -1121,6 +1178,7 @@ const VERB = {
   WebSearch: 'Searching the web', WebFetch: 'Reading a web page', Read: 'Reading a file', Glob: 'Looking for files',
   Grep: 'Searching files', Edit: 'Editing a file', Write: 'Saving a file', read_document: 'Reading a document',
   network_log: 'Reading the network log', console_log: 'Reading the console', Skill: 'Using a skill',
+  army_start: 'Sending the army', army_wait: 'Waiting for the army',
 };
 
 // What the current step is doing, in words: "Searching the web: niche tamagotchi repair".
@@ -1206,6 +1264,76 @@ function progressBlock(m) {
   return box;
 }
 
+// The army block above the reply: one row per worker while the message runs, one summary line once it has finished.
+const expandedArmy = new Set();   // finished answers whose army rows are open
+const ARMY_MARK = { starting: '…', working: '…', done: '✓', failed: '✕', stopped: '■' };
+const secsText = ms => { const s = ms / 1000; return s < 10 ? `${s.toFixed(1)} s` : s < 90 ? `${Math.round(s)} s` : `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`; };
+function armyRuns(m) { return (m.armyPrev || []).concat(m.army ? [m.army] : []); }
+function armyRow(w) {
+  const li = el('li', 'arow ' + w.state);
+  li.title = w.goal;
+  li.appendChild(el('span', 'amark', ARMY_MARK[w.state]));
+  li.appendChild(el('span', 'aid', w.id.toUpperCase()));
+  if (w.host) li.appendChild(el('span', 'ahost', w.host));
+  const running = w.state === 'working' || w.state === 'starting';
+  const what = w.state === 'working' ? w.action : w.state === 'starting' ? 'Starting' : w.state === 'failed' ? w.error || 'Failed'
+    : w.state === 'stopped' ? 'Stopped' : `${w.steps} step${w.steps === 1 ? '' : 's'}`;
+  if (what) li.appendChild(el('span', 'awhat', what));
+  if (w.state === 'working' && w.tab_id != null) {
+    const show = el('button', 'link ashow', 'Show');
+    show.type = 'button';
+    show.title = 'Switch to this worker\'s tab';
+    show.addEventListener('click', () => send('openTab', { id: w.tab_id }));
+    li.appendChild(show);
+  }
+  if (!running && w.sources.length) {
+    const src = el('span', 'asrc');
+    for (const u of w.sources.slice(0, 3)) {
+      const a = el('a', '', u.replace(/^https?:\/\/(www\.)?/i, '').slice(0, 40));
+      a.href = u;
+      a.title = u;
+      a.addEventListener('click', e => { e.preventDefault(); onLink('url', u); });
+      src.appendChild(a);
+    }
+    li.appendChild(src);
+  }
+  return li;
+}
+function armyRunBlock(r) {
+  const box = el('div', 'arun');
+  const done = r.workers.filter(w => w.state === 'done').length;
+  const head = el('div', 'ahead');
+  head.appendChild(el('span', '', `Army · ${done} of ${r.workers.length} done`));
+  const time = el('span', 'atime', secsText((r.until || Date.now()) - r.since));
+  if (!r.finished) time.dataset.since = String(r.since);
+  head.appendChild(time);
+  const ul = el('ol', 'arows');
+  for (const w of r.workers) ul.appendChild(armyRow(w));
+  box.append(head, ul);
+  return box;
+}
+function armyBlock(m) {
+  const runs = armyRuns(m);
+  if (!runs.length) return null;
+  const box = el('div', 'army-trail');
+  if (m.pending) { for (const r of runs) box.appendChild(armyRunBlock(r)); return box; }
+  const all = runs.flatMap(r => r.workers);
+  const count = st => all.filter(w => w.state === st).length;
+  const parts = [`${all.length} worker${all.length === 1 ? '' : 's'}`];
+  for (const [st, word] of [['done', 'done'], ['failed', 'failed'], ['stopped', 'stopped']]) if (count(st)) parts.push(`${count(st)} ${word}`);
+  const line = el('div', 'asum');
+  line.appendChild(el('span', '', `Army: ${parts.join(' · ')}`));
+  const open = expandedArmy.has(m.id);
+  const t = el('button', 'link dsteps', open ? 'Hide ▴' : 'Show ▾');
+  t.type = 'button';
+  t.setAttribute('aria-expanded', String(open));
+  t.addEventListener('click', () => { if (open) expandedArmy.delete(m.id); else expandedArmy.add(m.id); renderChat(); });
+  line.appendChild(t);
+  box.appendChild(line);
+  if (open) for (const r of runs) box.appendChild(armyRunBlock(r));
+  return box;
+}
+
 const FILE_ICON = { md: 'MD', html: 'HTML', htm: 'HTML', csv: 'CSV', json: 'JSON', svg: 'SVG', txt: 'TXT', doc: 'DOC', docx: 'DOCX', pdf: 'PDF', xlsx: 'XLSX' };
 function fileCard(f) {
   const card = document.createElement('div'); card.className = 'filecard';
@@ -1232,6 +1360,7 @@ setInterval(() => {
     el.querySelector('.pfill').style.width = Math.round(progressOf(m) * 100) + '%';
     el.querySelector('.plabel').textContent = progressLabel(m);
   }
+  for (const t of document.querySelectorAll('.atime[data-since]')) t.textContent = secsText(Date.now() - Number(t.dataset.since));
 }, 1000);
 
 // Light formatting for replies: **bold**, `code`, "- " bullets. Built as DOM nodes, never HTML.
@@ -1264,7 +1393,7 @@ const msgNodes = new WeakMap();   // message -> { sig, el }
 let chatPainted = false;          // the chat as first drawn (on open) does not animate
 
 function msgSig(m) {
-  return JSON.stringify(m) + '|' + (m.limit && state.switching ? 1 : 0) + '|' + (expandedSteps.has(m.id) ? 1 : 0);
+  return JSON.stringify(m) + '|' + (m.limit && state.switching ? 1 : 0) + '|' + (expandedSteps.has(m.id) ? 1 : 0) + (expandedArmy.has(m.id) ? 1 : 0);
 }
 
 function buildMsg(m) {
@@ -1288,6 +1417,10 @@ function buildMsg(m) {
       box.appendChild(b);
     }
     div.appendChild(box);
+  }
+  if (m.role === 'assistant') {
+    const ab = armyBlock(m);
+    if (ab) div.appendChild(ab);
   }
 
   if (m.text || !m.pending) {
