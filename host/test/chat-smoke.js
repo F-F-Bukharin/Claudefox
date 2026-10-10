@@ -345,6 +345,9 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     fs.writeFileSync(record + '.next-email', 'one@example.com');
     toHelper({ type: 'account_add' });
     const started = await next(m => m.type === 'account_result' && m.action === 'login_started', 8000);
+    toHelper({ type: 'accounts' });
+    const during = await next(m => m.type === 'accounts' && m.login && m.login.isNew, 8000);
+    check('while a new account signs in, the list has no placeholder row for it', during.accounts.length === 1 && during.accounts[0].id === 'main' && during.login.id === started.id, JSON.stringify(during.accounts.map(a => a.id)));
     const added = await next(m => m.type === 'account_result' && m.action === 'login', 15000);
     const newId = added.id;
     check('add account: sign-in window, then the new account is active', started.isNew && added.ok && added.email === 'one@example.com' && /^a[0-9a-z]+$/.test(newId));

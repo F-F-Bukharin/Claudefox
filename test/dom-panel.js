@@ -164,6 +164,7 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  ok('accounts: Remove asks first, inside its own card', !arows[1].querySelector('.confirm').hidden && /Remove felpecabezaz/.test(arows[1].querySelector('.confirm').textContent) && !sent.slice(mA).some(m=>m.type==='accountRemove'));
  [...arows[1].querySelectorAll('.confirm button')].find(b=>b.textContent==='Remove').click(); ok('accounts: Remove confirmed sends accountRemove', sent.slice(mA).some(m=>m.type==='accountRemove'&&m.id==='a2'));
  onMsg({type:'state',state:{...acctState,accountLogin:{id:'a2',isNew:false}},log:[]});
+ok('Signing in: the card says so, and the account buttons wait', /Signing in/.test($('acctLogin').textContent) && [...$('acctList').querySelectorAll('.aacts button')].every(b=>b.disabled));
  ok('accounts: a sign-in window shows its note and holds Add account', !$('acctLogin').hidden && $('accountAdd').disabled);
  const mC=sent.length; $('acctLoginCancel').click(); ok('accounts: cancel sign-in sends accountCancel', sent.slice(mC).some(m=>m.type==='accountCancel'));
 onMsg({type:'state',state:{...acctState,accountBusy:'a2'},log:[]});

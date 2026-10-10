@@ -328,7 +328,7 @@ function accountCard(a, s) {
   txt.append(el('div', 'name', who), el('div', 'muted', [a.plan && `${a.plan} plan`, a.org, a.loggedIn ? '' : 'signed out'].filter(Boolean).join(' · ')));
   const head = el('div', 'acct');
   head.append(el('div', 'avatar', who.trim()[0].toUpperCase()), txt);
-  const stopped = s.agent === 'stopped';
+  const stopped = s.agent === 'stopped' || !!s.accountLogin;   // no account changes while a sign-in window is open
   const acts = el('div', 'aacts');
   if (a.active) acts.appendChild(el('span', 'pill active', 'In use'));
   else acts.appendChild(actBtn(a.id === s.accountBusy ? 'Switching…' : a.loggedIn ? 'Use' : 'Sign in', 'primary', () => send(a.loggedIn ? 'accountUse' : 'accountSignIn', { id: a.id }), stopped || !!s.accountBusy));

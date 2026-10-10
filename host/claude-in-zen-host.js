@@ -682,7 +682,9 @@ function removeAccountDir(id) {
 }
 
 async function listAccounts() {
-  const ids = accountIds();
+  // A new account is not on the list until its sign-in finishes: until then its folder is only the sign-in in progress.
+  const pending = login && login.isNew ? login.id : '';
+  const ids = accountIds().filter(id => id !== pending);
   if (acc.hidden.includes('main')) {
     // "Sign in Claude Code.bat" may have signed the removed main profile back in: show it again.
     const s = await statusOf(P.CLAUDE_CONFIG_DIR);
@@ -779,6 +781,7 @@ function startLogin(id, isNew) {
   try { fs.mkdirSync(dir, { recursive: true }); openLoginWindow(exe, dir); }
   catch (e) { if (isNew) removeAccountDir(id); return accountDone(action, id, false, `Could not open the sign-in window: ${e.message}`); }
   login = { id, dir, isNew, started: Date.now(), timer: null };
+  sendAccounts();   // the panel drops the new folder's row and shows the sign-in instead
   log.info(`accounts: sign-in window open for ${isNew ? 'a new account' : id}`);
   accountDone('login_started', id, true, '', { isNew });
   const poll = async () => {
