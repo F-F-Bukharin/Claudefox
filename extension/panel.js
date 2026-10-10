@@ -672,6 +672,33 @@ function autoGrow() {
   input.style.height = Math.min(input.scrollHeight, 180) + 'px';
 }
 
+// The typed letters sit level with the + and send buttons: the middle of the 34 px text bar is where the lowercase
+// letters' band (the x-height) is centred. Where that band falls in a line depends on the font (Segoe UI, the Windows
+// font, puts the baseline lower than DejaVu does), so the padding is worked out from the font the textarea uses.
+function centreTyping() {
+  const cs = getComputedStyle(input);
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;white-space:pre;margin:0;padding:0;'
+    + `font-family:${cs.fontFamily};font-size:${cs.fontSize};font-weight:${cs.fontWeight};line-height:20px;`;
+  probe.textContent = 'x';
+  const mark = document.createElement('span');   // zero-size box on the baseline: its top is the baseline
+  mark.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline;';
+  probe.appendChild(mark);
+  document.body.appendChild(probe);
+  const baseline = mark.getBoundingClientRect().top - probe.getBoundingClientRect().top;
+  probe.remove();
+  if (!(baseline > 0)) return;   // nothing laid out (a hidden panel): keep the CSS padding
+  const ctx = centreTyping.ctx || (centreTyping.ctx = document.createElement('canvas').getContext('2d'));
+  ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const xHeight = ctx.measureText('x').actualBoundingBoxAscent;
+  if (!(xHeight > 0)) return;
+  const top = 17 - baseline + xHeight / 2;   // the x-height band's middle lands on 17 px, the middle of 34 px
+  input.style.paddingTop = top.toFixed(2) + 'px';
+  input.style.paddingBottom = (34 - 20 - top).toFixed(2) + 'px';
+}
+centreTyping();
+if (document.fonts) document.fonts.ready.then(centreTyping);
+
 let chatSeq = 0;
 let liveRuns = null;   // chat ids the background still runs (null until it tells us)
 

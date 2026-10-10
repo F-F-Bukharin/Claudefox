@@ -180,9 +180,11 @@ button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; 
   box-shadow: 0 1px 3px rgb(0 0 0 / .06);
 }
 .inputbox:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+/* The text bar is 34 px tall, like the + and send buttons. One line of typing is 20 px; panel.js (centreTyping)
+   sets the padding so the typed letters sit on the middle of the bar. This is the fallback until it runs. */
 textarea {
   flex: 1; min-width: 0; width: 100%; resize: none; border: 0; outline: none; background: transparent; color: var(--ink);
-  font: inherit; line-height: 1.45; max-height: 180px; padding: 4px 0;
+  font: inherit; line-height: 20px; min-height: 34px; max-height: 180px; padding: 7px 0;
 }
 textarea:focus-visible { outline: none; }
 .send {
