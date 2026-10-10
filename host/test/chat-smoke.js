@@ -104,7 +104,7 @@ process.stdin.on('end', async () => {
 });
 `, { mode: 0o755 });
 
-const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_CLAUDE: fake, ANTHROPIC_API_KEY: 'sk-should-not-leak' };
+const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_CLAUDE: fake, ANTHROPIC_API_KEY: 'sk-should-not-leak', CLAUDE_IN_ZEN_PICK: 'C:\\Users\\Test\\Notes' };
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -336,6 +336,9 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
 
     // Accounts: one Claude Code profile per account, Google-style.
     const mainDir = path.join(tmp, 'claude-in-zen', 'claude');
+    toHelper({ type: 'pick_folder' });
+    const picked = await next(m => m.type === 'pick_folder_result', 5000);
+    check('Choose folder: the helper answers with the folder the window picked', picked.ok === true && picked.path === 'C:\\Users\\Test\\Notes' && picked.cancelled === false, JSON.stringify(picked));
     toHelper({ type: 'accounts' });
     let list = await next(m => m.type === 'accounts', 8000);
     check('accounts: main profile listed, signed out, active', list.accounts.length === 1 && list.accounts[0].id === 'main' && !list.accounts[0].loggedIn && list.accounts[0].active);

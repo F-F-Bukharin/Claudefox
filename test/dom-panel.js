@@ -180,6 +180,12 @@ ok('connections: each one has a bold name and a status', w.document.querySelecto
 ok('connections: Claude Code has a detail line', /The chat spends this/.test($('claudeDetail').textContent));
 $('switchClaude').click();
 ok('Manage accounts opens Profile at the accounts', !$('page-profile').hidden && $('switchClaude').textContent==='Manage accounts');
+onMsg({type:'state',state:{...acctState,folderPicking:true,filesFolder:'C:\\Users\\F\\Notes'},log:[]});
+ok('Choose folder: the button waits while the folder window is open', $('chooseFolder').disabled && $('chooseFolder').textContent==='Choosing…');
+onMsg({type:'state',state:{...acctState,folderPicking:false,filesFolder:'C:\\Users\\F\\Notes'},log:[]});
+ok('Choose folder: the folder chosen is shown, and the typed path sits under a disclosure', !$('chooseFolder').disabled && $('folderNow').textContent==='C:\\Users\\F\\Notes' && $('filesFolder').closest('details')!==null && /Type the path instead/.test($('filesFolder').closest('details').querySelector('summary').textContent));
+$('chooseFolder').click();
+ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
  ok('Permissions sit at the bottom of Profile, not in Settings', $('page-profile').contains($('filesToggle')) && $('page-profile').contains($('unsafeToggle')) && !$('page-settings').contains($('filesToggle')) && $('page-profile').lastElementChild===$('permCard'));
  ok('Tools and Advanced start closed', $('toolsBody').hidden && $('advancedBody').hidden && $('toolsHead').getAttribute('aria-expanded')==='false' && $('advancedHead').getAttribute('aria-expanded')==='false');
  $('toolsHead').click(); ok('Tools opens on click', !$('toolsBody').hidden && $('toolsHead').getAttribute('aria-expanded')==='true');

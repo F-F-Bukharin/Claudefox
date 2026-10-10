@@ -213,6 +213,18 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     await helperSays({ type: 'account_result', action: 'login', id: 'a2', ok: true, email: 'third@example.com' });
     check('a finished sign-in clears it and says who', g('cizState').get().accountLogin === null && g('cizState').log().some(e => /Signed in as third@example.com/.test(e.text)));
 
+    // Choose folder: a folder window answers, and the folder picked becomes the file tools folder
+    await fromPanel({ type: 'pickFolder' });
+    check('Choose folder asks the helper for a folder window', native.sent.some(m => m.type === 'pick_folder') && g('cizState').get().folderPicking === true);
+    await helperSays({ type: 'pick_folder_result', ok: true, path: '', cancelled: true });
+    check('a cancelled folder window changes nothing', g('cizState').get().folderPicking === false && g('cizState').get().filesFolder !== 'C:\\Users\\F\\Notes');
+    await fromPanel({ type: 'pickFolder' });
+    await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\F\\Notes', cancelled: false });
+    check('the folder picked becomes the file tools folder', g('cizState').get().filesFolder === 'C:\\Users\\F\\Notes' && g('cizState').get().folderPicking === false);
+    await fromPanel({ type: 'pickFolder' });
+    await helperSays({ type: 'pick_folder_result', ok: false, error: 'The folder window did not finish. Type the path instead.' });
+    check('a folder window that fails says so and stops waiting', g('cizState').get().folderPicking === false && g('cizState').log().some(e => /did not finish/.test(e.text)));
+
     // file tools setting (sign-out check is at the end)
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'notes' });
     check('relative folder refused', g('cizState').get().filesEnabled === false);

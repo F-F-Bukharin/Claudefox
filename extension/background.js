@@ -63,6 +63,7 @@ async function handlePanel(msg, port) {
     case 'stop':       return stopAll('Stop button');
     case 'start':      return startAgent();
     case 'setFiles':   return setFiles(!!msg.value, msg.mode, msg.folder);
+    case 'pickFolder': return pickFolder();
     case 'retryNative': nativeRetries = 0; return connectNative();
     case 'checkClaude': return requestClaudeStatus(true);
     case 'accounts':      return sendNative({ type: 'accounts' });
@@ -404,6 +405,13 @@ async function startAgent() {
   connectNative();
 }
 
+// "Choose folder…": the helper opens a folder window and answers with pick_folder_result.
+async function pickFolder() {
+  if (cizState.get().folderPicking) return;
+  if (!sendNative({ type: 'pick_folder' })) return cizState.addLog('error', 'Choosing a folder needs the helper. Type the path instead.');
+  await cizState.set({ folderPicking: true });
+}
+
 async function setFiles(value, mode, folder) {
   const m = mode === 'write' ? 'write' : 'read';
   const f = String(folder == null ? cizState.get().filesFolder : folder).trim().slice(0, 1000);
@@ -537,6 +545,7 @@ function connectNative() {
     nativePort = null;
     if (cizState.get().accountLogin) cizState.set({ accountLogin: null });
     if (cizState.get().accountBusy) cizState.set({ accountBusy: '' });
+    if (cizState.get().folderPicking) cizState.set({ folderPicking: false });
     failChats('The helper stopped, so the answer was cut off.');
     if (err && /No such native application/i.test(err.message)) {
       cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
@@ -671,6 +680,13 @@ async function onNativeMessage(msg) {
       await cizState.set({ clients: Array.isArray(msg.clients) ? msg.clients.slice(0, 10) : [] });
       return;
 
+    case 'pick_folder_result': {
+      await cizState.set({ folderPicking: false });
+      if (!msg.ok) return cizState.addLog('error', msg.error || 'The folder window did not finish. Type the path instead.');
+      if (msg.cancelled || !msg.path) return;
+      await setFiles(!!cizState.get().filesEnabled, cizState.get().filesMode, msg.path);
+      return cizState.addLog('info', `Folder chosen: ${msg.path}`);
+    }
     case 'claude_status':
       await cizState.set({
         claude: {

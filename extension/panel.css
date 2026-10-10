@@ -300,6 +300,13 @@ textarea:focus-visible { outline: none; }
 .conn-detail { font-size: 12px; color: var(--muted); }
 .conn-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; flex: none; }
 
+/* file tools: the folder chosen, the Choose folder button, and the typed path under a disclosure */
+.pickrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.folderNow { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.typepath { font-size: 12.5px; }
+.typepath summary { cursor: pointer; color: var(--muted); padding: 4px 0; }
+.typepath .textin { margin-top: 6px; }
+
 .switch { appearance: none; width: 34px; height: 20px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; margin: 0; flex: none; }
 .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
 .switch:checked { background: var(--go); }

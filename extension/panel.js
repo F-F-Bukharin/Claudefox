@@ -102,6 +102,7 @@ const filesMode = () => (state.filesMode === 'write' ? 'write' : 'read');
 $('filesToggle').addEventListener('change', e => send('setFiles', { value: e.target.checked, mode: filesMode(), folder: $('filesFolder').value }));
 $('filesFolder').addEventListener('change', e => send('setFiles', { value: !!state.filesEnabled, mode: filesMode(), folder: e.target.value }));
 $('filesFolder').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+$('chooseFolder').addEventListener('click', () => send('pickFolder'));
 for (const b of document.querySelectorAll('.seg button')) {
   b.addEventListener('click', () => send('setFiles', { value: !!state.filesEnabled, mode: b.dataset.mode, folder: $('filesFolder').value }));
 }
@@ -262,6 +263,10 @@ function render(s, log) {
   $('filesToggle').checked = !!s.filesEnabled;
   if (document.activeElement !== $('filesFolder')) $('filesFolder').value = s.filesFolder || '';
   $('filesFolder').disabled = s.agent === 'stopped';
+  $('folderNow').textContent = s.filesFolder || 'No folder chosen yet';
+  $('folderNow').classList.toggle('muted', !s.filesFolder);
+  $('chooseFolder').textContent = s.folderPicking ? 'Choosing…' : 'Choose folder…';
+  $('chooseFolder').disabled = !!s.folderPicking || s.agent === 'stopped';
   for (const b of document.querySelectorAll('.seg button')) {
     b.setAttribute('aria-checked', String(b.dataset.mode === (s.filesMode === 'write' ? 'write' : 'read')));
     b.disabled = s.agent === 'stopped';

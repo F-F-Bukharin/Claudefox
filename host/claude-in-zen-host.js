@@ -57,6 +57,24 @@ function sendAddon(msg) {
   try { nm.send(msg); return true; } catch (e) { log.error('send to add-on failed', e.message); return false; }
 }
 
+// "Choose folder…": a Windows folder window (pick-folder.ps1, run in an STA thread, which the dialog needs).
+// CLAUDE_IN_ZEN_PICK is a test stub: the path to return, or "cancel".
+let folderWindowOpen = false;
+function pickFolder() {
+  const stub = process.env.CLAUDE_IN_ZEN_PICK;
+  if (stub !== undefined) return sendAddon({ type: 'pick_folder_result', ok: true, path: stub === 'cancel' ? '' : stub, cancelled: stub === 'cancel' });
+  if (folderWindowOpen) return sendAddon({ type: 'pick_folder_result', ok: false, error: 'A folder window is already open.' });
+  if (process.platform !== 'win32') return sendAddon({ type: 'pick_folder_result', ok: false, error: 'The folder window works on Windows. Type the path instead.' });
+  folderWindowOpen = true;
+  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', path.join(__dirname, 'pick-folder.ps1')],
+    { windowsHide: true, timeout: 10 * 60 * 1000 }, (err, stdout) => {
+      folderWindowOpen = false;
+      if (err) return sendAddon({ type: 'pick_folder_result', ok: false, error: 'The folder window did not finish. Type the path instead.' });
+      const picked = String(stdout || '').replace(/^\uFEFF/, '').trim();
+      sendAddon({ type: 'pick_folder_result', ok: true, path: picked, cancelled: !picked });
+    });
+}
+
 function onAddon(msg) {
   if (!msg || typeof msg !== 'object') return;
   switch (msg.type) {
@@ -88,6 +106,7 @@ function onAddon(msg) {
       updateAddon();
       return;
 
+    case 'pick_folder':  return pickFolder();
     case 'accounts':
       sendAccounts();
       return;

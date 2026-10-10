@@ -150,8 +150,15 @@
         <span class="val"><input type="checkbox" id="filesToggle" class="switch"></span>
       </div>
       <div class="files">
-        <input id="filesFolder" class="textin mono" type="text" spellcheck="false" autocomplete="off"
-          placeholder="Folder, e.g. C:\Users\you\Documents\notes" aria-label="Folder Claude may use">
+        <div class="pickrow">
+          <p id="folderNow" class="folderNow mono"></p>
+          <button id="chooseFolder" class="ghost" type="button">Choose folder…</button>
+        </div>
+        <details class="typepath">
+          <summary>Type the path instead</summary>
+          <input id="filesFolder" class="textin mono" type="text" spellcheck="false" autocomplete="off"
+            placeholder="Folder, e.g. C:\Users\you\Documents\notes" aria-label="Folder Claude may use">
+        </details>
         <div class="seg" role="radiogroup" aria-label="File access">
           <button type="button" role="radio" data-mode="read">Read only</button>
           <button type="button" role="radio" data-mode="write">Read and write</button>
