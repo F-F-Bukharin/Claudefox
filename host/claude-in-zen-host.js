@@ -26,6 +26,7 @@ const guard = require('./lib/guard');
 const uploads = require('./lib/uploads');
 const OUTPUT = require('./lib/output');
 const { extractText, kindOf: docKind } = require('./lib/doctext');
+const armyguard = require('./lib/armyguard');
 
 log.open('host.log');
 // Stray console output must never reach stdout (the native messaging channel).
@@ -34,7 +35,7 @@ for (const k of ['log', 'info', 'warn', 'debug']) console[k] = (...a) => log.inf
 const nm = new NativeChannel(process.stdin, process.stdout);
 const token = crypto.randomBytes(32).toString('hex');
 const clients = new Map();   // id -> { id, sock, name, authed }
-const pending = new Map();   // host call id -> { clientId, callId, timer, tool, started }
+const pending = new Map();   // host call id -> { clientId, callId, timer, tool, started, note?, internal? }
 let nextId = 1;
 let addonVersion = null;
 let shuttingDown = false;
@@ -118,6 +119,8 @@ function onAddon(msg) {
       clearTimeout(p.timer);
       log.info(`result ${p.tool} ${msg.ok ? 'ok' : 'error'} ${Date.now() - p.started} ms`);
       if (msg.ok && msg.result && typeof msg.result.pdf_base64 === 'string') msg.result = savePdf(msg.result);
+      if (p.internal) return p.internal({ ok: !!msg.ok, result: msg.result, error: msg.error });   // the helper's own call
+      if (p.note) { try { p.note(msg); } catch (e) { log.error('army note', e.message); } }
       const c = clients.get(p.clientId);
       if (c) sendLine(c.sock, { type: 'result', id: p.callId, ok: !!msg.ok, result: msg.result, error: msg.error });
       return;
@@ -263,12 +266,15 @@ function onClient(c, m) {
   if (!m || typeof m !== 'object') return;
 
   if (!c.authed) {
-    if (m.type === 'hello' && safeEqual(m.token, token)) {
+    // An army worker's tool server also names its worker; a token of an unknown or finished worker is refused.
+    const worker = m.type === 'hello' && m.army !== undefined ? army.workerFor(m.army) : null;
+    if (m.type === 'hello' && safeEqual(m.token, token) && (m.army === undefined || worker)) {
       c.authed = true;
+      c.worker = worker;
       c.name = String(m.client || 'client').replace(/[^\w .()-]/g, '').slice(0, 40) || 'client';
       sendLine(c.sock, { type: 'hello_ok', version: VERSION, addon: addonVersion });
       log.info(`client "${c.name}" connected`);
-      announceClients();
+      if (!worker) announceClients();   // workers show in the army trail, not in the clients list
     } else {
       sendLine(c.sock, { type: 'error', error: 'unauthorized' });
       c.sock.end();
@@ -276,9 +282,24 @@ function onClient(c, m) {
     return;
   }
 
+  // A worker's call: only its own tabs and its budget (lib/armyguard.js). A refused call never reaches Zen.
+  let armyCtx = null, note = null;
+  if (m.type === 'call' && c.worker) {
+    const w = c.worker, tool = String(m.tool);
+    const chk = armyguard.checkCall(w, tool, m.args, Date.now());
+    if (!chk.ok) {
+      log.info(`call ${tool} from "${c.name}" refused: ${chk.error}`);
+      sendLine(c.sock, { type: 'result', id: m.id, ok: false, error: chk.error });
+      return;
+    }
+    m.args = chk.args;
+    armyCtx = { run: w.run.id, worker: w.id };
+    note = res => { armyguard.noteResult(w, tool, chk.args, res); army.trailSoon(w.run); };
+  }
+
   if (m.type === 'call' && HELPER_TOOLS[m.tool]) {
     log.info(`call ${m.tool} from "${c.name}" (answered by the helper)`);
-    Promise.resolve().then(() => HELPER_TOOLS[m.tool](m.args || {}))
+    Promise.resolve().then(() => HELPER_TOOLS[m.tool](m.args || {}, c))
       .then(result => sendLine(c.sock, { type: 'result', id: m.id, ok: true, result }),
         e => sendLine(c.sock, { type: 'result', id: m.id, ok: false, error: e.message || String(e) }));
     return;
@@ -291,9 +312,9 @@ function onClient(c, m) {
       pending.delete(hid);
       sendLine(c.sock, { type: 'result', id: m.id, ok: false, error: `Zen did not answer within ${ms / 1000} s.` });
     }, ms);
-    pending.set(hid, { clientId: c.id, callId: m.id, timer, tool: String(m.tool), started: Date.now() });
+    pending.set(hid, { clientId: c.id, callId: m.id, timer, tool: String(m.tool), started: Date.now(), note });
     log.info(`call ${m.tool} from "${c.name}"`);
-    if (!sendAddon({ type: 'call', id: hid, tool: String(m.tool), args: m.args || {}, source: c.name })) {
+    if (!sendAddon(Object.assign({ type: 'call', id: hid, tool: String(m.tool), args: m.args || {}, source: c.name }, armyCtx ? { army: armyCtx } : {}))) {
       clearTimeout(timer);
       pending.delete(hid);
       sendLine(c.sock, { type: 'result', id: m.id, ok: false, error: 'Could not reach the add-on.' });
@@ -306,8 +327,23 @@ function onClient(c, m) {
   }
 }
 
+// A call the helper itself makes to the add-on (an army worker's first tab). Resolves with the add-on's answer.
+function callAddon(tool, args, extra, ms) {
+  return new Promise(resolve => {
+    const hid = `h${nextId++}`;
+    const timer = setTimeout(() => { pending.delete(hid); resolve({ ok: false, error: `Zen did not answer within ${ms / 1000} s.` }); }, ms);
+    pending.set(hid, { internal: resolve, timer, tool, started: Date.now() });
+    log.info(`call ${tool} from the helper`);
+    if (!sendAddon(Object.assign({ type: 'call', id: hid, tool, args }, extra || {}))) {
+      clearTimeout(timer);
+      pending.delete(hid);
+      resolve({ ok: false, error: 'Could not reach the add-on.' });
+    }
+  });
+}
+
 function clientNames() {
-  return [...clients.values()].filter(c => c.authed).map(c => c.name);
+  return [...clients.values()].filter(c => c.authed && !c.worker).map(c => c.name);
 }
 
 function announceClients() {
@@ -384,13 +420,22 @@ function writeMcpConfig() {
     },
   };
   try { fs.writeFileSync(P.MCP_CONFIG, JSON.stringify(cfg, null, 2)); } catch (e) { log.error('mcp.json', e.message); }
+  // Army turns: the same server, which then also offers army_start and army_wait to the lead.
+  const lead = JSON.parse(JSON.stringify(cfg));
+  lead.mcpServers['claude-in-zen'].env.CLAUDE_IN_ZEN_ARMY_LEAD = '1';
+  try { fs.writeFileSync(P.MCP_ARMY_CONFIG, JSON.stringify(lead, null, 2)); } catch (e) { log.error('mcp-army.json', e.message); }
 }
 
 const CHAT_TIMEOUT_MS = 60 * 60 * 1000;   // long jobs (a whole course's homework) take a while; Cancel is always there
 const { MODELS, chatArgs } = require('./lib/chatargs');
 const selfimprove = require('./lib/selfimprove');
 const LIMIT_RE = /usage limit|limit reached|rate.?limit|reached your|limit will reset|out of (extra )?usage/i;
-let chat = null;   // the running turn: { id, child, sessionId, finished, stderr, resultError, timer, files, key }
+let chat = null;   // the running turn: { id, child, sessionId, finished, stderr, resultError, timer, files, key, army, armyRuns }
+// Army mode (lib/army.js): the workers of the running turn.
+const army = require('./lib/army').createArmy({
+  callAddon, sendAddon, emit: (run, event) => emitChat(run, event), currentChat: () => chat, findClaude,
+  envFor: key => claudeEnv(accountDir(key)), mcpServer: path.join(__dirname, 'zen-mcp.js'), limitRe: LIMIT_RE,
+});
 function isDir(p) { try { return fs.statSync(p).isDirectory(); } catch { return false; } }
 
 // An improve run keeps the first 2,000 characters of what Claude says, for its note (lib/selfimprove.js).
@@ -490,6 +535,7 @@ function finishChat(run, ok, error) {
   run.finished = true;
   clearTimeout(run.timer);
   if (chat === run) chat = null;
+  army.stopChat(run, shuttingDown);   // workers never outlive their turn (the lead may answer without waiting)
   if (run.improve && !ok) {
     selfimprove.recordEnd(run.sandbox.id, { outcome: `failed or stopped without a change: ${String(error || 'stopped').slice(0, 200)}`, said: run.said || '' });
     selfimprove.drop(run.sandbox);
@@ -528,6 +574,7 @@ function startChat(msg) {
     files.folder = path.resolve(folder);
   }
   const choice = improve ? MODELS.selfimprove : (MODELS[msg.model] || MODELS.speed);
+  const armyOn = !improve && msg.model === 'army';
   const unsafe = !improve && msg.unsafe === true;
   const caveman = !improve && msg.caveman === true;
   const resume = !improve && typeof msg.resume === 'string' && /^[0-9a-f-]{36}$/i.test(msg.resume) ? msg.resume : '';
@@ -535,7 +582,7 @@ function startChat(msg) {
 
   // The turn is reserved now (one at a time); it starts after the tool list is fresh and the uploads are saved.
   const run = { id, child: null, key, files, effort: choice.effort, sessionId: resume, finished: false, stderr: '', resultError: '', started: Date.now(), timer: null,
-    wroteText: false, actedSinceText: false, progressIds: new Set(), improve, sandbox };
+    wroteText: false, actedSinceText: false, progressIds: new Set(), improve, sandbox, army: armyOn, armyRuns: [] };
   chat = run;
   emitChat(run, { kind: 'meta', model: choice.model, effort: choice.effort });   // what the helper asked for
   run.timer = setTimeout(() => cancelChat(id, 'The answer took longer than an hour and was stopped.'), CHAT_TIMEOUT_MS);
@@ -547,6 +594,7 @@ function startChat(msg) {
     if (!improve) { try { saved = uploads.save(msg.attachments); } catch (e) { saved.errors.push(`attachments: ${e.message}`); } }
     const tb = improve ? { servers: [], settings: {} } : toolbox.chatOptions(key);
     const opts = { unsafe, caveman, tb, cavemanText: caveman ? toolbox.skillText(key, 'caveman', 'caveman') : '' };
+    if (armyOn) Object.assign(opts, { army: true, mcpConfig: P.MCP_ARMY_CONFIG });
     let child;
     try {
       child = spawn(exe, improve ? selfimprove.args(run.sandbox, choice, toolbox.chatOptions(key).settings) : chatArgs(files, resume, choice, opts), {
@@ -561,7 +609,7 @@ function startChat(msg) {
       return finishChat(run, false, `Could not start Claude Code: ${e.message}`);
     }
     run.child = child;
-    log.info(`chat ${id} started (${choice.model}${improve ? ', improve' : `, files: ${files.mode || 'off'}`}, ${resume ? 'resumed' : 'new'}${unsafe ? ', unsafe mode' : ''}`
+    log.info(`chat ${id} started (${choice.model}${armyOn ? ', army' : ''}${improve ? ', improve' : `, files: ${files.mode || 'off'}`}, ${resume ? 'resumed' : 'new'}${unsafe ? ', unsafe mode' : ''}`
       + `${tb.servers.length ? `, tools: ${tb.servers.join(', ')}` : ''}${saved.files.length ? `, ${saved.files.length} attachment(s)` : ''}${caveman ? ', caveman' : ''})`);
 
     child.stdin.on('error', () => {});
@@ -635,6 +683,8 @@ function cancelChat(id, reason) {
 // read_document: the text of a Word, PowerPoint, Excel or OpenDocument file in the file-tools folder or among the
 // files attached to the chat, with the same limits as the file tools (never a protected place).
 const HELPER_TOOLS = {
+  army_start: (args, client) => army.start(args, client),
+  army_wait: (args, client) => army.wait(args, client),
   read_document(args) {
     const run = chat;
     const raw = String((args && args.path) || '').trim();
