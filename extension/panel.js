@@ -15,7 +15,7 @@ let callSeq = 1;
 // ------------------------------------------------------------ background link
 
 port.onMessage.addListener(msg => {
-  if (msg.type === 'state') { state = msg.state; render(msg.state, msg.log); }
+  if (msg.type === 'state') { state = msg.state; render(msg.state, msg.log); maybeLoadMods(msg.state); }
   if (msg.type === 'callResult') {
     const done = pendingCalls.get(msg.id);
     if (done) { pendingCalls.delete(msg.id); done(msg); }
@@ -373,6 +373,7 @@ function render(s, log) {
   if (log) renderLog(log);
   renderSetup(s);
   renderAccounts(s);
+  renderMods(s);
   if (chat.some(m => m.limit)) renderChat();   // the switch button follows state.switching
 }
 
@@ -1313,3 +1314,102 @@ function renderChat() {
     showPage(PAGES.includes(got.panelPage) ? got.panelPage : 'chat');
   } catch { renderChat(); showPage('chat'); }
 })();
+
+// ------------------------------------------------------------ mods
+
+// A mod is a folder in extension/mods/<id>/ (see extension/mods/README.txt): panel.js and/or style.css. The helper
+// lists the folders and says which mods are on. This page loads the on mods once, after its own code, one at a time.
+const MOD_ID = /^[a-z0-9][a-z0-9-]{1,39}$/;
+const MOD_MARK = 'ciz-mods-loading';   // set while a mod's script loads: a crash or a hang shows on the next start
+let modsStarted = false;
+let modsSig = '';
+const modByUrl = new Map();            // a mod's script address, without the query -> its id
+const modStopped = new Set();          // mods already turned off in this page
+const bareUrl = u => String(u || '').split('?')[0];
+
+function modMark(id) { try { if (id) localStorage.setItem(MOD_MARK, id); else localStorage.removeItem(MOD_MARK); } catch {} }
+function modMarked() { try { return localStorage.getItem(MOD_MARK) || ''; } catch { return ''; } }
+
+// Turns a mod off. The helper keeps the reason, and the next start skips the mod. Reported once per page.
+function modStop(id, why) {
+  if (!MOD_ID.test(String(id || '')) || modStopped.has(id)) return;
+  modStopped.add(id);
+  send('modUpdate', { id, enabled: false, broken: String(why || 'It stopped with an error.').slice(0, 300) });
+}
+
+window.addEventListener('error', e => {
+  const id = modByUrl.get(bareUrl(e.filename));
+  if (id) modStop(id, e.message || 'It threw an error.');
+});
+window.addEventListener('unhandledrejection', e => {
+  const text = String((e.reason && e.reason.stack) || e.reason || '');
+  for (const [url, id] of modByUrl) if (text.includes(url)) modStop(id, 'A promise it made was rejected.');
+});
+
+// Loads the on mods the first time the helper has listed them. Later changes take effect after Reload panel.
+function maybeLoadMods(s) {
+  if (modsStarted || !s.modsKnown) return;
+  modsStarted = true;
+  const crashed = modMarked();
+  modMark('');
+  if (MOD_ID.test(crashed)) modStop(crashed, 'The panel stopped while this mod was loading, so it is turned off.');
+  let chain = Promise.resolve();
+  for (const m of Array.isArray(s.mods) ? s.mods : []) {
+    if (!m || !MOD_ID.test(String(m.id || '')) || !m.enabled || m.broken || m.id === crashed) continue;
+    chain = chain.then(() => loadMod(m));
+  }
+}
+
+function loadMod(m) {
+  return new Promise(done => {
+    const folder = `mods/${m.id}/`;
+    if (m.style) {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = `${folder}style.css?v=${Date.now()}`;
+      document.head.appendChild(css);
+    }
+    if (!m.panel) return done();
+    const js = document.createElement('script');
+    js.src = `${folder}panel.js?v=${Date.now()}`;
+    modByUrl.set(bareUrl(js.src), m.id);
+    modMark(m.id);
+    js.onload = () => { modMark(''); done(); };
+    js.onerror = () => { modMark(''); modStop(m.id, 'panel.js could not be loaded.'); done(); };
+    document.head.appendChild(js);
+  });
+}
+
+// The Mods card: one row per mod, with its state and a switch. Rebuilt only when the list changes.
+function renderMods(s) {
+  const list = Array.isArray(s.mods) ? s.mods : [];
+  const sig = JSON.stringify([list, !!s.modsKnown]);
+  if (sig === modsSig) return;
+  modsSig = sig;
+  const ul = $('modsList');
+  ul.textContent = '';
+  for (const m of list) {
+    const li = el('li', 'mod');
+    const text = el('div', 'mod-text');
+    text.appendChild(el('div', 'mod-name', m.name || m.id));
+    if (m.description) text.appendChild(el('div', 'mod-desc', m.description));
+    text.appendChild(el('div', m.broken ? 'mod-state bad' : 'mod-state', m.broken ? `Stopped: ${m.broken}` : (m.enabled ? 'On' : 'Off')));
+    const sw = el('input', 'switch');
+    sw.type = 'checkbox';
+    sw.checked = !!m.enabled;
+    sw.setAttribute('aria-label', `${m.name || m.id}, on`);
+    sw.addEventListener('change', () => send('modUpdate', { id: m.id, enabled: sw.checked }));
+    li.append(text, sw);
+    ul.appendChild(li);
+  }
+  ul.hidden = !list.length;
+  const empty = $('modsEmpty');
+  empty.hidden = list.length > 0;
+  empty.textContent = s.modsKnown
+    ? 'No mods yet. Ask Improve Claude in Zen for one, and it is made in extension\\mods.'
+    : 'The helper lists the mods when it is connected.';
+}
+
+$('modsCheck').addEventListener('click', () => send('modsRefresh'));
+$('modsReload').addEventListener('click', () => location.reload());
+$('modsOff').addEventListener('click', () => send('modsAllOff'));

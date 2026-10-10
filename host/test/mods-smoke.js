@@ -42,7 +42,9 @@ ok('turning it back on works', MODS.scanMods(modsDir, stateFile).find(m => m.id 
 MODS.setModState(modsDir, stateFile, 'saved', { broken: 'boom at line 3' });
 let s = MODS.scanMods(modsDir, stateFile).find(m => m.id === 'saved');
 ok('a reported failure marks the mod broken, with its message', s.broken === 'boom at line 3', s.broken);
-ok('a broken mod stays on (its switch is what turns it off)', s.enabled === true);
+ok('a reported failure turns the mod off', s.enabled === false);
+MODS.setModState(modsDir, stateFile, 'saved', { enabled: false });
+ok('the reason stays while the mod is off', MODS.scanMods(modsDir, stateFile).find(m => m.id === 'saved').broken === 'boom at line 3');
 MODS.setModState(modsDir, stateFile, 'saved', { enabled: true, broken: '' });
 s = MODS.scanMods(modsDir, stateFile).find(m => m.id === 'saved');
 ok('turning it on again clears the error (try again)', s.broken === '' && s.enabled === true);

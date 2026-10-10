@@ -4,6 +4,7 @@
 
 const CIZ_DEFAULT_STATE = Object.freeze({
   mods: [],                   // from the helper: { id, name, description, panel, style, enabled, broken }
+  modsKnown: false,           // true once the helper has listed the mods folder; the panel loads the on mods then, once
   agent: 'active',            // 'active' | 'stopped'
   signedIn: false,
   account: null,              // { email, name, uuid, via }

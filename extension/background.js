@@ -131,8 +131,15 @@ async function handlePanel(msg, port) {
     case 'setModel':   return cizState.set({ chatModel: msg.value === 'quality' ? 'quality' : 'speed' });
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
     case 'setUnsafe': return setUnsafe(!!msg.value);
-    case 'modUpdate': return sendNative({ type: 'mod_update', id: String(msg.id || ''), enabled: msg.enabled, broken: msg.broken });
-    case 'modsAllOff': return sendNative({ type: 'mods_all_off' });
+    case 'modUpdate':
+      if (!sendNative({ type: 'mod_update', id: String(msg.id || ''), enabled: msg.enabled, broken: msg.broken })) return cizState.addLog('error', 'Mods: the helper is not connected, so the change was not saved.');
+      return;
+    case 'modsAllOff':
+      if (!sendNative({ type: 'mods_all_off' })) return cizState.addLog('error', 'Mods: the helper is not connected, so nothing was turned off.');
+      return;
+    case 'modsRefresh':
+      if (!sendNative({ type: 'mods' })) return cizState.addLog('error', 'Mods: the helper is not connected, so the folder was not checked.');
+      return;
   }
 }
 
@@ -686,7 +693,7 @@ function requestClaudeStatus(fromPanel) {
 async function onNativeMessage(msg) {
   if (!msg || typeof msg !== 'object') return;
   switch (msg.type) {
-    case 'mods': return cizState.set({ mods: Array.isArray(msg.mods) ? msg.mods : [] });
+    case 'mods': return cizState.set({ mods: Array.isArray(msg.mods) ? msg.mods : [], modsKnown: true });
     case 'hello':
       nativeRetries = 0;
       await cizState.set({

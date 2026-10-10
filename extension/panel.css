@@ -569,3 +569,14 @@ html[data-wall="gradient"] body { background: linear-gradient(160deg, var(--wall
 html[data-wall="picture"] body {
   background: linear-gradient(color-mix(in srgb, var(--bg) 78%, transparent), color-mix(in srgb, var(--bg) 78%, transparent)), var(--wall-img) center / cover no-repeat fixed;
 }
+
+/* Mods (Settings) */
+.modlist { list-style: none; margin: 0; padding: 0; }
+.modlist[hidden], #modsEmpty[hidden] { display: none; }
+.mod { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.modlist .mod:first-child { border-top: 0; }
+.mod-text { flex: 1; min-width: 0; }
+.mod-name { font-weight: 600; overflow-wrap: anywhere; }
+.mod-desc, .mod-state { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.mod-state.bad { color: var(--stop); }
+.modsacts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }

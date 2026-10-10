@@ -63,8 +63,11 @@ function setModState(modsDir, stateFile, id, patch) {
   const state = readState(stateFile);
   const next = { ...(state[id] && typeof state[id] === 'object' ? state[id] : {}) };
   if (typeof patch.enabled === 'boolean') next.enabled = patch.enabled;
-  if (typeof patch.broken === 'string') next.broken = patch.broken.slice(0, 300);
-  if (patch.enabled === true && !patch.broken) next.broken = '';
+  if (typeof patch.broken === 'string') {
+    next.broken = patch.broken.slice(0, 300);
+    if (next.broken) next.enabled = false;   // a reported failure turns the mod off, and the reason is kept
+  }
+  if (patch.enabled === true && !patch.broken) next.broken = '';   // turning it on again is how a mod is tried again
   state[id] = next;
   writeState(stateFile, state);
   return { ok: true };

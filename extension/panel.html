@@ -280,6 +280,17 @@
       </div>
     </section>
 
+    <section class="card mods" id="modsCard">
+      <h3>Mods</h3>
+      <p class="note">Small add-ons for this panel, kept in <code>extension\mods</code>. A mod that throws is stopped and shown here, and the rest keep running. Switch changes take effect after Reload panel.</p>
+      <ul class="modlist" id="modsList" hidden></ul>
+      <p class="note" id="modsEmpty" hidden></p>
+      <div class="modsacts">
+        <button type="button" class="link" id="modsCheck">Check the folder</button>
+        <button type="button" class="link" id="modsReload">Reload panel</button>
+        <button type="button" class="link" id="modsOff">Turn all mods off</button>
+      </div>
+    </section>
     <section class="card" id="toolsCard">
       <button type="button" class="sechead" id="toolsHead" aria-expanded="false" aria-controls="toolsBody">
         <span class="title">Tools and plugins</span><span class="sumtext" id="toolsSummary"></span><span class="chev" aria-hidden="true"></span>
