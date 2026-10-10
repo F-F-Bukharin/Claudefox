@@ -129,7 +129,7 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     r = await call('read_page', { tab_id: 2 });
     check('Google sign-in tab refused', !r.ok && /Google sign-in/.test(r.error) && !injected.includes(2));
     r = await call('get_page_text', { tab_id: 3 });
-    check('about: page refused', !r.ok && /off-limits/.test(r.error) && !injected.includes(3));
+    check('about: page refused (screenshot only)', !r.ok && /browser page.*screenshot shows it/.test(r.error) && !injected.includes(3));
     r = await call('navigate', { tab_id: 1, url: 'https://accounts.google.com/ServiceLogin' });
     check('navigate to Google sign-in refused', !r.ok && /Refused/.test(r.error));
     r = await call('tab_open', { url: 'file:///C:/secret.txt' });
@@ -263,7 +263,7 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     r = await call('read_page', { tab_id: 2 });
     check('Unsafe mode lets Claude read the Google sign-in tab', r.ok && injected.includes(2));
     r = await call('get_page_text', { tab_id: 3 });
-    check('Unsafe mode still refuses about: pages', !r.ok && /off-limits/.test(r.error));
+    check('Unsafe mode still refuses about: pages', !r.ok && /browser page.*screenshot shows it/.test(r.error));
 
     // Google Docs: read through the export, with the user's session
     r = await call('get_page_text', { tab_id: 6 });
