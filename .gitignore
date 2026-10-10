@@ -1,11 +1,10 @@
-# Build output
-claude-in-zen*.xpi
-signed/*.xpi
-web-ext-artifacts/
+# Build output: made by tools\ (build/README.txt is kept)
+build/*
+!build/README.txt
 
 # Local scratch
 .diag/
 _restore.tgz
 node_modules/
 *.log
-dist/
+web-ext-artifacts/

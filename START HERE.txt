@@ -5,7 +5,7 @@ A Claude panel in Zen's sidebar that can read and act on your tabs, using YOUR C
 subscription through Claude Code. Personal project, not made or endorsed by Anthropic or Zen.
 
 Put this folder somewhere it can stay (for example Documents\Claude in Zen). If you move it
-later, run "Install helper.bat" again.
+later, double-click "Set up Claude in Zen.bat" again.
 
 You need
   - Windows, with Zen Browser installed.
@@ -13,28 +13,32 @@ You need
   - Claude Code: https://code.claude.com/docs/en/setup
   - A Claude Pro or Max plan. Usage counts against your plan like any Claude Code use.
 
-1. Install the helper
-   Double-click "Install helper.bat". No admin needed. It links the add-on to Claude Code.
+1. Run the setup
+   Double-click "Set up Claude in Zen.bat". No admin needed. It does these in order:
+     - installs the helper that links the add-on to Claude Code;
+     - signs Claude Code in. A browser opens: check it is signed in to the claude.ai account
+       you want the panel to use, then click Authorize. This is a separate profile, so it does
+       not change Claude Code anywhere else on your PC;
+     - opens Zen on its add-ons page with the add-on's path copied, for step 2.
+   It is safe to run again. If a step stops with a message, fix that and run it again.
 
-2. Sign Claude Code in
-   Double-click "Sign in Claude Code.bat". A browser opens: check it is signed in to the
-   claude.ai account you want the panel to use, then click Authorize. This is a separate
-   profile, so it does not change Claude Code anywhere else on your PC.
-
-3. Install the add-on in Zen
-   If claude-in-zen.xpi is signed (ask whoever sent this), just do step 3b.
-   3a. Unsigned build only: type about:config in the address bar, search
+2. Install the add-on in Zen
+   If claude-in-zen.xpi is signed (ask whoever sent this), just do step 2b.
+   2a. Unsigned build only: type about:config in the address bar, search
        xpinstall.signatures.required and set it to false. (Zen then stops checking signatures
        on add-ons you install from a file; add-ons from the store are unaffected.)
-   3b. about:addons -> gear icon -> Install Add-on From File -> pick claude-in-zen.xpi.
+   2b. On the add-ons page: gear icon -> Install Add-on From File -> paste the path (Ctrl+V),
+       then Enter. The path is already on your clipboard. If it is not, pick claude-in-zen.xpi
+       from this folder instead.
 
-4. Open the panel
+3. Open the panel
    Toolbar button or Alt+Shift+C. Sign in to claude.ai in a normal tab, then in the panel:
    Profile -> Sign in with Claude. The panel's checklist shows anything still missing.
 
 Using it
   - Type normally to talk to Claude. Speed (Haiku) is quick and light on usage, Quality
-    (Opus) is slower and better. Click the Speed / Quality button under the message box to switch. In Speed, the + on its left turns on Speed Plus.
+    (Opus) is slower and better. Click the Speed / Quality button under the message box to
+    switch. In Speed, the + on its left turns on Speed Plus.
   - The + at the left of the message box adds files (Word, PDF, slides, sheets, images...).
     You can also paste or drop them in. The small button next to it has more options:
     a screenshot of the tab, Caveman mode (short replies, fewer tokens), tools, new chat.
@@ -51,7 +55,7 @@ Using it
     or payment details.
 
 Optional: sidebar on the right, about 660 px wide
-  Close Zen, then double-click "Apply Zen settings.bat". It adds its lines to your Zen
+  Close Zen, then double-click "tools\Apply Zen settings.bat". It adds its lines to your Zen
   profile without touching your own settings. Undo: run zen-profile\apply.ps1 -Remove.
 
 Remove it

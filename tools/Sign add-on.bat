@@ -4,15 +4,15 @@ rem Reads your keys from the WEB_EXT_API_KEY and WEB_EXT_API_SECRET user environ
 rem The keys never appear in this file or in the chat.
 if "%WEB_EXT_API_KEY%"=="" goto nokeys
 if "%WEB_EXT_API_SECRET%"=="" goto nokeys
-cd /d "%~dp0extension"
+cd /d "%~dp0..\extension"
 echo Signing... this usually takes 1 to 5 minutes.
-call npx --yes web-ext@8 sign --channel=unlisted --artifacts-dir "%~dp0signed"
+call npx --yes web-ext@8 sign --channel=unlisted --artifacts-dir "%~dp0..\build\signed"
 echo.
-echo Done if no errors above. The signed .xpi is in the "signed" folder.
+echo Done if no errors above. The signed .xpi is in the build\signed folder.
 echo Install it in Zen: about:addons, gear icon, Install Add-on From File.
 pause
 exit /b 0
 :nokeys
-echo The API key variables are not set. See README.md, section "Make it permanent".
+echo The API key variables are not set. See README.md, section "Mozilla API keys".
 pause
 exit /b 1

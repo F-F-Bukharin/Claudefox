@@ -16,9 +16,9 @@ function Get-XpiVersion([string]$Path) {
   } finally { $zip.Dispose() }
 }
 
-# The newest signed .xpi in signed\ built from this exact version, or $null.
+# The newest signed .xpi in build\signed built from this exact version, or $null.
 function Find-SignedXpi([string]$Root, [string]$Version) {
-  $dir = Join-Path $Root 'signed'
+  $dir = Join-Path $Root 'build\signed'
   if (-not (Test-Path $dir)) { return $null }
   foreach ($f in (Get-ChildItem $dir -Filter *.xpi | Sort-Object LastWriteTime -Descending)) {
     try { if ((Get-XpiVersion $f.FullName) -eq $Version) { return $f.FullName } } catch {}

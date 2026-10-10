@@ -9,7 +9,7 @@
 // Local clients (the Zen tool server that Claude Code starts) connect over a named pipe and must
 // present the per-session token stored in %LOCALAPPDATA%\claude-in-zen\pipe-token.
 
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';
 
 const fs = require('fs');
 const os = require('os');
@@ -467,7 +467,7 @@ function startChat(msg) {
   if (!text.trim() && !(Array.isArray(msg.attachments) && msg.attachments.length)) return refuse('The message is empty.');
   if (text.length > 50000) return refuse('The message is too long.');
   const exe = findClaude();
-  if (!exe) return refuse('Claude Code is not installed on this PC. Install it, then run "Sign in Claude Code.bat".');
+  if (!exe) return refuse('Claude Code is not installed on this PC. Install it, then double-click "Set up Claude in Zen.bat".');
 
   const files = { mode: null, folder: '' };
   if (msg.files === 'read' || msg.files === 'write') {
@@ -576,7 +576,7 @@ const HELPER_TOOLS = {
 };
 
 // ------------------------------------------------------------------ update the add-on
-// The project folder this helper runs from (host\..). With the source there, the helper runs install-xpi.ps1:
+// The project folder this helper runs from (host\..). With the source there, the helper runs tools\install-xpi.ps1:
 // it rebuilds the .xpi (or picks the signed one for this version) and hands it to Zen, which shows its install
 // prompt. When Zen is linked to the folder the add-on just reloads instead. Friends' copies have no source.
 
@@ -585,7 +585,7 @@ const ROOT = path.join(__dirname, '..');
 function sourceInfo() {
   try {
     const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension', 'manifest.json'), 'utf8'));
-    return { sourceVersion: String(m.version || ''), canUpdate: process.platform === 'win32' && fs.existsSync(path.join(ROOT, 'install-xpi.ps1')), linked: isLinked() };
+    return { sourceVersion: String(m.version || ''), canUpdate: process.platform === 'win32' && fs.existsSync(path.join(ROOT, 'tools', 'install-xpi.ps1')), linked: isLinked() };
   } catch { return { sourceVersion: '', canUpdate: false, linked: false }; }
 }
 
@@ -622,7 +622,7 @@ function updateAddon() {
   // install-xpi.ps1 drops them too; dropping them here keeps PowerShell itself clean.
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (/^(MOZ_|XRE_|XUL_|MOZILLA_)/i.test(k)) delete env[k];
-  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'install-xpi.ps1'), '-Quiet'],
+  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'tools', 'install-xpi.ps1'), '-Quiet'],
     { cwd: ROOT, env, timeout: 120000, windowsHide: true }, (err, stdout) => {
       const lines = String(stdout || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       if (err && err.code === 2) return done(false, 'Zen is linked to the project folder, so the add-on reloads instead of reinstalling.');

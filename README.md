@@ -7,7 +7,8 @@ Not affiliated with or endorsed by Anthropic or Zen.
 Plan, decisions and TODO: `claude/zen-addon-plan.md` in the Mod Making project.
 Friends: see `START HERE.txt` (it ships in the friends zip).
 
-## Status (v0.8.0)
+## Status (v0.9.0)
+- **Setup in one double-click**: `Set up Claude in Zen.bat` installs the helper, signs Claude Code in and opens Zen's add-ons page with the add-on's path copied. Safe to run again.
 - **Chat** with Claude in the panel, streamed, with a progress bar and a Cancel link. Follow-ups continue the
   conversation; `/clear` (or **New chat** in the options menu) starts a new one. Long jobs can run up to an hour.
 - On the right, under the message box, one button flips between **Speed** and **Quality**. The **+** on its left, in Speed mode, turns on Speed Plus (Haiku 5.5
@@ -90,22 +91,26 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `host/zen-mcp.js`, `host/lib/tools.js` | The Zen tool server (MCP over stdio) and its tool catalog. |
 | `host/install.ps1` | Registers the helper with Zen for this Windows user (no admin). |
 | `zen-profile/` | `user.js` and `userChrome.css` (sidebar on the right, Claude panel about 660 px wide) and `apply.ps1`, which merges them into the Zen profile. |
-| `test/`, `host/test/` | Tests; `Run tests.bat` or `node test/run-all.js` runs them all. `node test/injection-live.js` is the live prompt-injection test (uses your plan, run it by hand). |
+| `test/`, `host/test/` | Tests; `tools\Run tests.bat` or `node test/run-all.js` runs them all. `node test/injection-live.js` is the live prompt-injection test (uses your plan, run it by hand). |
+| `Set up Claude in Zen.bat` (root) | The friends' one-double-click setup. The friends zip ships it with `host\`, `zen-profile\`, `tools\Sign in Claude Code.bat` and `tools\Apply Zen settings.bat`. |
+| `tools\` | The scripts you run while developing (`.bat` and `.ps1`), listed in the next table. |
+| `build\` | Build output, kept out of git except `build\README.txt`: `claude-in-zen.xpi`, `signed\` (signed builds) and `friends\` (the zip to send). |
 
 | Script | What it does |
 | :- | :- |
-| `Install helper.bat` | Installs the helper. Run it yourself: installs made from the Claude desktop app land in its private copy of AppData, which Zen can't see. |
-| `Sign in Claude Code.bat` | Signs the add-on's Claude Code profile (`%LOCALAPPDATA%\claude-in-zen\claude`) in. Separate from Claude Code in VS Code or a terminal. |
-| `Link add-on to Zen.bat` | **Best for development.** Close Zen first. Points Zen at `extension\` in this folder, so **update** in Settings reloads add-on and helper in one click: no `.xpi`, no install prompt, no restart. Undo with `zen-profile\link.ps1 -Unlink`. |
-| `Install in Zen.bat` | Builds the `.xpi` (or picks the newest signed one) and opens it in Zen for a permanent install. Run it again to update. |
-| `Load in Zen.bat` | Builds the `.xpi` and opens `about:debugging` with its path copied (temporary install). |
-| `Sign add-on.bat` | Signs the add-on with Mozilla (needs API keys, see below). |
-| `Build friends zip.bat` | Builds `dist\claude-in-zen-friends-v<version>.zip`, using a signed `.xpi` from `signed\` if there is one. |
-| `Apply Zen settings.bat` | Close Zen first. Merges the `zen-profile` settings into your Zen profile between marker lines; `apply.ps1 -Remove` undoes it. |
-| `Run tests.bat` | Runs all tests. |
+| `Set up Claude in Zen.bat` (root) | The friends' one-double-click setup: installs the helper, signs Claude Code in, and opens Zen's add-ons page with the `.xpi` path copied (only when `claude-in-zen.xpi` sits next to it, as in the friends zip). |
+| `tools\Install helper.bat` | Installs only the helper. Run it yourself: installs made from the Claude desktop app land in its private copy of AppData, which Zen can't see. |
+| `tools\Sign in Claude Code.bat` | Signs the add-on's Claude Code profile (`%LOCALAPPDATA%\claude-in-zen\claude`) in. Separate from Claude Code in VS Code or a terminal. |
+| `tools\Link add-on to Zen.bat` | **Best for development.** Close Zen first. Points Zen at `extension\` in this folder, so **update** in Settings reloads add-on and helper in one click: no `.xpi`, no install prompt, no restart. Undo with `zen-profile\link.ps1 -Unlink`. |
+| `tools\Install in Zen.bat` | Builds `build\claude-in-zen.xpi` (or picks the newest signed one in `build\signed`) and opens it in Zen for a permanent install. Run it again to update. |
+| `tools\Load in Zen.bat` | Builds `build\claude-in-zen.xpi` and opens `about:debugging` with its path copied (temporary install). |
+| `tools\Sign add-on.bat` | Signs the add-on with Mozilla into `build\signed` (needs API keys, see below). |
+| `tools\Build friends zip.bat` | Builds `build\friends\claude-in-zen-friends-v<version>.zip`, using a signed `.xpi` from `build\signed` if there is one. |
+| `tools\Apply Zen settings.bat` | Close Zen first. Merges the `zen-profile` settings into your Zen profile between marker lines; `apply.ps1 -Remove` undoes it. |
+| `tools\Run tests.bat` | Runs all tests. |
 
 ## Try it (temporary install)
-1. Double-click **Load in Zen.bat**. It rebuilds `claude-in-zen.xpi` and opens `about:debugging` in Zen.
+1. Double-click **tools\Load in Zen.bat**. It rebuilds `build\claude-in-zen.xpi` and opens `about:debugging` in Zen.
 2. Click **Load Temporary Add-on…**, press **Ctrl+V** in the file name box, then **Enter**.
 3. Open the panel with the toolbar button or **Alt+Shift+C**, and follow the checklist on the chat page.
 
@@ -115,18 +120,18 @@ Helper changes apply the next time Zen starts it: press Stop, then Start.
 ## Keep it installed
 Zen's build does not hard-require signed add-ons (`MOZ_REQUIRE_SIGNING` is `false`), so there are two routes:
 
-- **Quick:** `about:config` → `xpinstall.signatures.required` → **false**. Then double-click **Install in Zen.bat**
-  (or `about:addons` → gear icon → **Install Add-on From File…** → `claude-in-zen.xpi`). Trade-off: Zen stops checking signatures on add-ons you install
+- **Quick:** `about:config` → `xpinstall.signatures.required` → **false**. Then double-click **tools\Install in Zen.bat**
+  (or `about:addons` → gear icon → **Install Add-on From File…** → `build\claude-in-zen.xpi`). Trade-off: Zen stops checking signatures on add-ons you install
   from a file. Store add-ons are unaffected.
-- **Signed:** keeps signature checks on. Get Mozilla API keys (below), run **Sign add-on.bat**, then install the `.xpi`
-  it puts in `signed\`.
+- **Signed:** keeps signature checks on. Get Mozilla API keys (below), run **tools\Sign add-on.bat**, then install the `.xpi`
+  it puts in `build\signed\`.
 
 ### Mozilla API keys (signed route)
 1. Sign in at https://addons.mozilla.org, open https://addons.mozilla.org/developers/addon/api/key/ and accept the agreement.
 2. Click **Generate new credentials** to get a **JWT issuer** and a **JWT secret**.
 3. Windows search → "Edit environment variables for your account" → add `WEB_EXT_API_KEY` (issuer) and
    `WEB_EXT_API_SECRET` (secret).
-4. Double-click **Sign add-on.bat**. Each new version needs a higher version number.
+4. Double-click **tools\Sign add-on.bat**. Each new version needs a higher version number.
 
 ## Debugging
 - Settings → Advanced → Action log shows every action, chat turn and error. **check** re-reads the Claude Code account.

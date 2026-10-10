@@ -179,7 +179,7 @@ function claudeLabel(s) {
   const c = s.claude;
   if (!c) return ['', 'checking…', ''];
   if (!c.installed) return ['bad', 'not installed', 'Install Claude Code on this PC'];
-  if (!c.loggedIn) return ['warn', 'not signed in', 'Run "Sign in Claude Code"'];
+  if (!c.loggedIn) return ['warn', 'not signed in', 'Double-click "Sign in Claude Code.bat" in the tools folder'];
   if (s.switching) return ['warn', 'switching… finish in the sign-in window', ''];
   const plan = c.plan ? `Plan: ${c.plan}. ` : '';
   const zen = s.account && s.account.email;
@@ -229,7 +229,7 @@ function render(s, log) {
   // get one-click updates. Linked: "update" reloads from the folder. Newer source: install it.
   $('updateBtn').hidden = !(s.native === 'connected' && s.canUpdate && (s.linked || newer));
   const note = s.updateNote || (s.native === 'connected' && s.canUpdate && !s.linked
-    ? 'For one-click updates: close Zen, run "Link add-on to Zen.bat" once, start Zen. After that, update just reloads.' : '');
+    ? 'For one-click updates: close Zen, run "Link add-on to Zen.bat" (tools folder) once, start Zen. After that, update just reloads.' : '');
   $('updateNote').textContent = note;
   $('updateNote').hidden = !note;
   $('updateBtn').disabled = !!s.updating;
@@ -383,13 +383,13 @@ function renderSetup(s) {
   const c = s.claude || {};
   const steps = [
     { done: s.native === 'connected', title: 'Install the helper',
-      hint: 'Install Node.js if you don\u2019t have it, then double-click "Install helper.bat" in the Claude in Zen folder.',
+      hint: 'Install Node.js if you don\u2019t have it, then double-click "Set up Claude in Zen.bat" in the Claude in Zen folder.',
       action: s.agent === 'active' && s.native !== 'connected' ? ['Retry', () => send('retryNative')] : null },
     { done: !!c.installed, title: 'Install Claude Code',
       hint: 'Install it from code.claude.com/docs/en/setup, then press Retry.',
       action: s.native === 'connected' ? ['Retry', () => send('checkClaude')] : null },
     { done: !!c.loggedIn, title: 'Sign Claude Code in',
-      hint: 'Double-click "Sign in Claude Code.bat" and click Authorize. The chat uses this account.',
+      hint: 'Double-click "Sign in Claude Code.bat" in the tools folder and click Authorize. The chat uses this account.',
       action: c.installed ? ['Open sign-in', () => send('switchAccount')] : null },
     { done: !!s.signedIn, title: 'Sign in to claude.ai in the panel',
       hint: 'Sign in to claude.ai in a normal tab, then press Sign in. Zen remembers it after that.',

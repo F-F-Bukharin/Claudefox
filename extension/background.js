@@ -492,9 +492,9 @@ async function startChat(msg) {
   if (chatRuns.size) return fail('Claude is still answering. Wait, or press Cancel.');
   if (s.agent !== 'active') return fail('Claude is stopped. Press Start first.');
   if (!s.signedIn) return fail('Not signed in. Open the Profile page and sign in first.');
-  if (s.native !== 'connected') return fail('The helper is not connected. Run "Install helper.bat", then press retry in Settings.');
+  if (s.native !== 'connected') return fail('The helper is not connected. Run "Set up Claude in Zen.bat", then press retry in Settings.');
   if (s.claude && !s.claude.installed) return fail('Claude Code is not installed on this PC.');
-  if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Run "Sign in Claude Code.bat".');
+  if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Double-click "Sign in Claude Code.bat" in the tools folder.');
   const files = s.filesEnabled ? s.filesMode : '';
   chatRuns.set(id, { startedAt: Date.now() });
   const model = s.chatModel === 'quality' ? 'quality' : s.chatPlus ? 'speedplus' : 'speed';
@@ -730,7 +730,7 @@ async function onNativeMessage(msg) {
 
     case 'update_result':
       await cizState.set({ updating: false, updateNote: msg.ok
-        ? `v${msg.version} sent to Zen. If no install prompt shows up, run "Install in Zen.bat" yourself, or link Zen once for one-click updates.`
+        ? `v${msg.version} sent to Zen. If no install prompt shows up, run "Install in Zen.bat" (tools folder) yourself, or link Zen once for one-click updates.`
         : `Update: ${msg.error}` });
       await cizState.addLog(msg.ok ? 'info' : 'error', msg.ok
         ? `v${msg.version} handed to Zen${msg.note ? ` (${msg.note.replace(/\.$/, '')})` : ''}. Click Add, then Okay, in Zen's prompt. The panel reloads after.`

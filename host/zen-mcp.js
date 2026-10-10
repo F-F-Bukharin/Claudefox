@@ -6,7 +6,7 @@
 // tools and forwards each call over the local pipe to the helper, which hands it to the add-on.
 // stdout carries MCP messages, so nothing else may write to it.
 
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';
 
 const fs = require('fs');
 const net = require('net');
