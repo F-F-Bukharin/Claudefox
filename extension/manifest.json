@@ -34,6 +34,7 @@
       "lib/docx.js",
       "lib/netlog.js",
       "lib/army.js",
+      "lib/local.js",
       "lib/tools.js",
       "background.js"
     ],

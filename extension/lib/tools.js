@@ -4,7 +4,8 @@
 // content-script world: the page's own scripts cannot see or change it.
 //
 // Fixed rules enforced here, whatever Claude asks:
-//   - Non-web pages (about:, file:, moz-extension:) are never read or touched.
+//   - Non-web pages (about:, moz-extension:) are never read or touched. file: pages only inside folders the user
+//     allowed (lib/local.js), and never by army workers.
 //   - Google sign-in pages are not read or touched unless Unsafe mode is on (Settings).
 //   - Password, 2FA and payment fields are never filled or typed into.
 
@@ -765,11 +766,26 @@ function cizArmyRefuse(url) {
   if (cizUrlBlocked(url, { unsafe: false }).blocked) throw new Error('Army workers can\'t use Google sign-in pages, even in Unsafe mode.');
 }
 
+function cizGateOpts() {
+  const s = cizState.get();
+  return { unsafe: !!s.unsafe, localGrants: s.localGrants || [] };
+}
+
+// A file: tab (never an army call, those are refused before): Zen must let the add-on in, and the user must allow
+// the folder. Outside the grants this asks the user and waits for the answer.
+async function cizLocalGate(gate) {
+  if ((await cizLocal.fileAccess()) === 'no') throw new Error(CIZ_FILE_ACCESS_OFF);
+  if (gate.local) return;
+  const r = await cizLocal.ask(gate.needGrant);
+  if (!r.ok) throw new Error(r.error);
+}
+
 // A tab Claude may read or act on: not a non-web page, and not a Google sign-in page unless Unsafe mode is on.
 async function cizPageTab(args) {
   const tab = await cizTabFor(args);
   if (args && args.__army) { cizArmyRefuse(tab.url); return tab; }
-  const gate = cizUrlBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
+  const gate = cizUrlBlocked(tab.url || '', cizGateOpts());
+  if (gate.local || gate.needGrant) { await cizLocalGate(gate); return tab; }
   if (gate.blocked) {
     if (/^about:/i.test(tab.url || '') && !cizViewBlocked(tab.url).blocked) {
       throw new Error(`Tab ${tab.id} is a browser page (${String(tab.url).split(/[?#]/)[0]}): add-ons can't read or click inside those, but screenshot shows it.`);
@@ -787,7 +803,10 @@ async function cizInPage(tab, op, args) {
   try {
     res = await browser.tabs.executeScript(tab.id, { code, runAt: 'document_idle' });
   } catch (e) {
-    throw new Error(String((e && e.message) || e).replace(/^Error:\s*/, ''));
+    const why = String((e && e.message) || e).replace(/^Error:\s*/, '');
+    // Zen's "Access local files" switch is off (or was turned off since the last check).
+    if (/^file:/i.test(tab.url || '') && /permission|not allowed|denied|cannot access/i.test(why)) throw new Error(CIZ_FILE_ACCESS_OFF);
+    throw new Error(why);
   }
   return res && res[0];
 }
@@ -838,6 +857,8 @@ function cizRefuseUrl(url, army) {
     try { cizArmyRefuse(url); } catch (e) { throw new Error(`Refused: ${e.message}`); }
     return;
   }
+  // Firefox refuses to open file: URLs from add-ons; local pages open through the helper's local_page_open.
+  if (/^file:/i.test(url)) throw new Error('Refused: file: pages are off-limits to tab_open and navigate. To open a file from this computer, use local_page_open.');
   const gate = cizUrlBlocked(url, { unsafe: !!cizState.get().unsafe });
   if (gate.blocked) throw new Error(`Refused: ${gate.reason}.`);
 }
@@ -995,7 +1016,7 @@ const CIZ_TOOLS = {
       // Re-check the tab each round: it may have navigated somewhere off-limits.
       let found = false;
       try { found = await cizInPage(await cizPageTab(args), 'exists', probe); }
-      catch (e) { if (/Cannot use tab|No tab|selector|Army workers/.test(e.message)) throw e; }
+      catch (e) { if (/Cannot use tab|No tab|selector|Army workers|did not allow|No answer about|Zen keeps add-ons out/.test(e.message)) throw e; }
       if (found) return { found: true, waited_ms: Date.now() - t0 };
       if (Date.now() - t0 >= timeout) return { found: false, waited_ms: Date.now() - t0 };
       await cizSleep(250);
@@ -1006,8 +1027,9 @@ const CIZ_TOOLS = {
     // Looking is allowed on more pages than acting: about: pages too (see cizViewBlocked).
     const tab = await cizTabFor(args);
     if (args.__army) cizArmyRefuse(tab.url);
-    const gate = cizViewBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
-    if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
+    const gate = cizViewBlocked(tab.url || '', cizGateOpts());
+    if (gate.local || gate.needGrant) await cizLocalGate(gate);
+    else if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
     // captureTab only: bringing the tab to the front to capture it would take the user's tab away from them.
     // scale 1: one image pixel per CSS pixel, so click x/y can be read straight off the picture.
     let dataUrl, why = 'Zen returned no image';

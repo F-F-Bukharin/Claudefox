@@ -21,6 +21,7 @@ const booted = (async function init() {
   try { const pref = await browser.storage.local.get('caveman'); await cizState.set({ caveman: !!pref.caveman }); } catch {}
   try { const a = await browser.storage.local.get('armyOn'); await cizState.set(a.armyOn === true ? { chatArmy: true, chatModel: 'quality' } : { chatArmy: false }); } catch {}
   try { const r = (await browser.storage.local.get('armyRuns')).armyRuns; await cizState.set({ armyToday: r && r.day === localDay() ? Number(r.count) || 0 : 0 }); } catch {}
+  try { await cizLocal.init(); } catch {}   // the allowed folders, and whether Zen lets the add-on into file: pages
   try { const o = await browser.storage.local.get('outputMode'); await cizState.set({ outputMode: o.outputMode === 'store' ? 'store' : 'download' }); } catch {}
   cizNetStart();
   await cizState.addLog('info', 'Add-on started');
@@ -145,6 +146,8 @@ async function handlePanel(msg, port) {
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
     case 'setArmy':    return setArmy(!!msg.value);
     case 'setUnsafe': return setUnsafe(!!msg.value);
+    case 'grantAnswer':      return cizLocal.answer(String(msg.id || ''), !!msg.allow);
+    case 'localGrantRemove': return cizLocal.remove(String(msg.folder || ''));
     case 'modUpdate':
       if (!sendNative({ type: 'mod_update', id: String(msg.id || ''), enabled: msg.enabled, broken: msg.broken })) return cizState.addLog('error', 'Mods: the helper is not connected, so the change was not saved.');
       return;
@@ -462,11 +465,12 @@ async function stopAll(source) {
     pendingActions.delete(id);
   }
   await cizArmy.closeAll();      // every army worker's tab goes too
+  await cizLocal.cancelAll();    // an open folder question counts as no
   failChats('Stopped.');
   cizNetReset();                 // forget recorded requests, stop watching consoles
   disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
   await cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, pending: 0 });
-  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, army tabs closed, helper disconnected, file tools off, Unsafe mode off, network log cleared.`);
+  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, army tabs closed, folder questions answered no, helper disconnected, file tools off, Unsafe mode off, network log cleared.`);
 }
 
 async function startAgent() {
@@ -823,6 +827,23 @@ async function onNativeMessage(msg) {
       const army = msg.army && typeof msg.army === 'object' ? { run: String(msg.army.run || '').slice(0, 40), worker: String(msg.army.worker || '').slice(0, 40) } : null;
       const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'), army);
       sendNative({ type: 'result', id: msg.id, ...out });
+      return;
+    }
+
+    case 'local_grant': {   // the helper's local_page_open or local_files wants to look in a folder (lib/local.js)
+      const p = String(msg.path || '');
+      const folder = msg.kind === 'dir' ? cizNormFolder(p) : cizFolderOf(p);
+      const s = cizState.get();
+      const r = s.agent !== 'active' ? { ok: false, error: 'Agent is stopped. Press Start in the Claude in Zen panel.' }
+        : !s.signedIn ? { ok: false, error: 'Not signed in. Press "Sign in with Claude" in the panel.' }
+          : !folder ? { ok: false, error: 'Give a full path on this computer, like C:\\Users\\you\\Downloads\\game.' }
+            : await cizLocal.ask(folder);
+      sendNative({ type: 'local_grant_result', id: msg.id, ok: !!r.ok, folder, error: r.error || '' });
+      return;
+    }
+    case 'local_tab': {     // the helper opened a file in Zen: which tab shows it
+      const r = await cizLocal.findTab(String(msg.url || ''));
+      sendNative({ type: 'local_tab_result', id: msg.id, ok: !!r.ok, tab_id: r.tab_id == null ? null : r.tab_id, title: r.title || '', error: r.error || '' });
       return;
     }
 
