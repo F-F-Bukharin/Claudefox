@@ -289,6 +289,17 @@ textarea:focus-visible { outline: none; }
 .dot.bad { background: var(--stop); }
 .val.warn { color: var(--warn); font-weight: 600; }
 
+/* connections: a bold name, its status, an optional detail line, and its buttons */
+.conns { gap: 0; }
+.conn { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.conns h3 + .conn { border-top: 0; padding-top: 4px; }
+.conn-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.conn-name { font-weight: 650; }
+.conn-status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.conn-status.warn { color: var(--warn); font-weight: 600; }
+.conn-detail { font-size: 12px; color: var(--muted); }
+.conn-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; flex: none; }
+
 .switch { appearance: none; width: 34px; height: 20px; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; margin: 0; flex: none; }
 .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
 .switch:checked { background: var(--go); }

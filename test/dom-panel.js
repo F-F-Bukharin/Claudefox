@@ -176,6 +176,10 @@ onMsg({type:'state',state:{...acctState,accounts:acctState.accounts.map(a=>({...
 ok('the chat line says when claude.ai is still on another account', $('acctChat').textContent === 'The chat uses felpecabezaz@gmail.com. The add-on is still signed in to claude.ai as personalworksacc@gmail.com; sign out of claude.ai and back in as felpecabezaz@gmail.com, and the add-on follows.');
 onMsg({type:'state',state:{...acctState,accounts:acctState.accounts.map(a=>({...a,active:a.id==='a2'})),account:{email:'felpecabezaz@gmail.com',name:'F',uuid:'u'}},log:[]});
 ok('the chat line is the plain one once claude.ai is on the same account', $('acctChat').textContent === 'The chat uses felpecabezaz@gmail.com.');
+ok('connections: each one has a bold name and a status', w.document.querySelectorAll('.conns .conn-name').length===6 && !!$('claudeVal').textContent);
+ok('connections: Claude Code has a detail line', /The chat spends this/.test($('claudeDetail').textContent));
+$('switchClaude').click();
+ok('Manage accounts opens Profile at the accounts', !$('page-profile').hidden && $('switchClaude').textContent==='Manage accounts');
  ok('Permissions sit at the bottom of Profile, not in Settings', $('page-profile').contains($('filesToggle')) && $('page-profile').contains($('unsafeToggle')) && !$('page-settings').contains($('filesToggle')) && $('page-profile').lastElementChild===$('permCard'));
  ok('Tools and Advanced start closed', $('toolsBody').hidden && $('advancedBody').hidden && $('toolsHead').getAttribute('aria-expanded')==='false' && $('advancedHead').getAttribute('aria-expanded')==='false');
  $('toolsHead').click(); ok('Tools opens on click', !$('toolsBody').hidden && $('toolsHead').getAttribute('aria-expanded')==='true');

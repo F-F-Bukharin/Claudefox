@@ -91,7 +91,11 @@ $('stopBtn').addEventListener('click', () => send('stop'));
 $('startBtn').addEventListener('click', () => send('start'));
 $('retryNative').addEventListener('click', () => send('retryNative'));
 $('checkClaude').addEventListener('click', () => send('checkClaude'));
-$('switchClaude').addEventListener('click', () => send('switchAccount'));
+$('switchClaude').addEventListener('click', () => {
+  showPage('profile');
+  const group = $('accountsGroup');
+  if (group.scrollIntoView) group.scrollIntoView({ block: 'start' });
+});
 $('updateBtn').addEventListener('click', () => send('updateAddon'));
 $('clearLog').addEventListener('click', () => send('clearLog'));
 const filesMode = () => (state.filesMode === 'write' ? 'write' : 'read');
@@ -213,6 +217,7 @@ function render(s, log) {
   $('nativeDot').className = 'dot ' + cls;
   $('nativeVal').textContent = s.native === 'connected' && s.hostVersion ? `${text} · v${s.hostVersion}` : text;
   $('nativeVal').title = s.nativeDetail || '';
+  $('nativeDetail').textContent = s.native === 'connected' ? '' : (s.nativeDetail || '');
   const installed = browser.runtime.getManifest().version;
   const src = s.native === 'connected' ? s.sourceVersion : '';
   const newer = src && cmpVersion(src, installed) > 0;
@@ -227,7 +232,7 @@ function render(s, log) {
   $('updateNote').textContent = note;
   $('updateNote').hidden = !note;
   $('updateBtn').disabled = !!s.updating;
-  $('updateBtn').textContent = s.updating ? 'building…' : s.linked ? 'update' : newer ? `update to v${src}` : 'reinstall';
+  $('updateBtn').textContent = s.updating ? 'Building…' : s.linked ? 'Update' : newer ? `Update to v${src}` : 'Reinstall';
   $('updateBtn').title = s.linked ? 'Reload the add-on and helper from your project folder (no install, no restart)'
     : 'Rebuild the add-on from your project folder and install it in Zen';
   $('retryNative').hidden = s.agent === 'stopped' || s.native === 'connected';
@@ -235,9 +240,9 @@ function render(s, log) {
   const [ccls, ctext, ctitle] = claudeLabel(s);
   $('claudeDot').className = 'dot ' + ccls;
   $('claudeVal').textContent = ctext;
-  $('claudeVal').title = ctitle;
+  $('claudeDetail').textContent = ctitle;
   $('checkClaude').hidden = s.native !== 'connected';
-  $('switchClaude').hidden = s.native !== 'connected' || s.agent === 'stopped' || !!s.switching || !(s.claude && s.claude.installed);
+  $('switchClaude').hidden = s.native !== 'connected';
   const clients = Array.isArray(s.clients) ? s.clients : [];
   $('clientsVal').textContent = clients.length ? clients.join(', ') : 'nobody';
   const on = s.debugPort === 'on';

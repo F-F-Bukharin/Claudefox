@@ -190,36 +190,52 @@
       </div>
     </section>
 
-    <section class="card rows">
+    <section class="card conns">
       <h3>Connections</h3>
-      <div class="row">
-        <span>Helper</span>
-        <span class="val"><span id="nativeDot" class="dot"></span><span id="nativeVal">…</span>
-          <button id="retryNative" class="link" hidden>retry</button></span>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Helper</div>
+          <div class="conn-status"><span id="nativeDot" class="dot"></span><span id="nativeVal">…</span></div>
+          <div class="conn-detail" id="nativeDetail"></div>
+        </div>
+        <div class="conn-acts"><button id="retryNative" class="ghost" hidden>Retry</button></div>
       </div>
-      <div class="row">
-        <span>Add-on</span>
-        <span class="val"><span id="addonVal">…</span>
-          <button id="updateBtn" class="link" hidden>update</button></span>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Add-on</div>
+          <div class="conn-status"><span id="addonVal">…</span></div>
+          <div class="conn-detail" id="updateNote" hidden></div>
+        </div>
+        <div class="conn-acts"><button id="updateBtn" class="ghost" hidden>Update</button></div>
       </div>
-      <p id="updateNote" class="muted small rownote" hidden></p>
-      <div class="row">
-        <span>Claude Code</span>
-        <span class="val"><span id="claudeDot" class="dot"></span><span id="claudeVal">…</span>
-          <button id="checkClaude" class="link" hidden>check</button>
-          <button id="switchClaude" class="link" hidden>switch</button></span>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Claude Code</div>
+          <div class="conn-status"><span id="claudeDot" class="dot"></span><span id="claudeVal">…</span></div>
+          <div class="conn-detail" id="claudeDetail"></div>
+        </div>
+        <div class="conn-acts">
+          <button id="checkClaude" class="ghost" hidden>Check</button>
+          <button id="switchClaude" class="ghost" hidden>Manage accounts</button>
+        </div>
       </div>
-      <div class="row">
-        <span>Using Zen now</span>
-        <span class="val" id="clientsVal">nobody</span>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Using Zen now</div>
+          <div class="conn-status" id="clientsVal">nobody</div>
+        </div>
       </div>
-      <div class="row">
-        <span>Debug port 9222</span>
-        <span class="val"><span id="debugDot" class="dot"></span><span id="debugVal">…</span></span>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Debug port 9222</div>
+          <div class="conn-status"><span id="debugDot" class="dot"></span><span id="debugVal">…</span></div>
+        </div>
       </div>
-      <div class="row">
-        <span>Pending actions</span>
-        <span class="val" id="pendingVal">0</span>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Pending actions</div>
+          <div class="conn-status" id="pendingVal">0</div>
+        </div>
       </div>
     </section>
 
