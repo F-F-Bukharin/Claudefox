@@ -377,14 +377,4 @@ textarea:focus-visible { outline: none; }
 .fmeta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fbtn { padding: 5px 10px; font-size: 12px; }
 
-/* ---------- rounded panel corners ----------
-   Zen clips only the bottom corners of a sidebar, so the panel rounds itself: the page stays transparent
-   (Zen's own background shows in the corners) and the panel color is painted as a rounded layer behind it.
-   (A background on body would fill the whole canvas, corners included, so it lives on ::before instead.) */
-html, body { background: transparent !important; }
-body::before {
-  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: var(--bg); border-radius: 10px;
-}
-
 .rownote { margin: 0 0 8px; text-align: right; }
