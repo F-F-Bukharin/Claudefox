@@ -32,26 +32,17 @@
   </nav>
 
   <!-- ============================== CHAT ============================== -->
-  <main id="page-chat" class="page chat" role="tabpanel">
+  <main id="page-chat" class="page chat is-empty" role="tabpanel">
     <div id="messages" class="messages" aria-live="polite">
       <div id="emptyState" class="empty">
         <div class="empty-mark"><img src="icons/icon.svg" alt="" width="40" height="40"></div>
         <h2 id="emptyTitle">What should I do in Zen?</h2>
         <p id="emptyText">Ask me to read, summarize or do things in your tabs.</p>
         <ol id="setup" class="setup" hidden></ol>
-        <div class="chips">
-          <button class="chip" data-fill="/tabs">/tabs: list my tabs</button>
-          <button class="chip" data-fill="/ping">/ping</button>
-          <button class="chip" data-fill="/help">/help</button>
-        </div>
       </div>
     </div>
 
     <div class="composer">
-      <div class="context">
-        <span class="ctx-label">Current tab</span>
-        <span id="ctxTab" class="ctx-tab">…</span>
-      </div>
       <form id="composer" class="inputbox">
         <div class="attach">
           <button type="button" id="attachBtn" class="attach-main" title="Add files: Word, PDF, images, slides, sheets… You can also paste or drop them here." aria-label="Add files">
@@ -88,13 +79,27 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           <span class="mtext">New chat</span></button>
       </div>
-      <div class="composer-foot">
-        <p id="composerHint" class="composer-hint"></p>
-        <div class="modelbox">
-          <button type="button" id="plusBtn" class="pluschip" title="Speed Plus: Haiku 5.5 at max effort. Close to Opus quality, still light on usage. Click to toggle.">Speed Plus</button>
-          <button type="button" id="modelBtn" class="modelchip">Speed</button>
+      <div class="composer-row">
+        <div class="context">
+          <span class="ctx-label">Current tab</span>
+          <span id="ctxTab" class="ctx-tab">…</span>
+        </div>
+        <div class="modebox">
+          <div id="modeSeg" class="modeseg" role="radiogroup" aria-label="Speed Plus, Speed or Quality">
+            <button type="button" role="radio" id="modePlus" data-mode="plus" aria-checked="false" title="Speed Plus: Haiku 5.5 at max effort. Close to Opus quality, still light on usage.">Speed Plus</button>
+            <button type="button" role="radio" id="modeSpeed" data-mode="speed" aria-checked="true" title="Speed: Haiku 5.5 at high effort. Fast and light on usage.">Speed</button>
+            <button type="button" role="radio" id="modeQuality" data-mode="quality" aria-checked="false" title="Quality: Opus 5.5 at high effort. Slower, best answers, uses more.">Quality</button>
+          </div>
+          <p id="modelLine" class="model-line">Haiku 5.5 · high effort</p>
         </div>
       </div>
+      <div class="chips starters">
+        <button class="chip" data-fill="Summarize this page">Summarize this page</button>
+        <button class="chip" data-fill="/tabs">/tabs: list my tabs</button>
+        <button class="chip" data-fill="Find the main links on this page">Find the main links</button>
+        <button class="chip" data-fill="/help">/help: what I can do</button>
+      </div>
+      <p id="composerHint" class="composer-hint"></p>
     </div>
   </main>
 

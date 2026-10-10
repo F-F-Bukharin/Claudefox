@@ -104,8 +104,13 @@ for (const b of document.querySelectorAll('.seg button')) {
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
 $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list' }));
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
-$('modelBtn').addEventListener('click', () => send('setModel', { value: state.chatModel === 'quality' ? 'speed' : 'quality' }));
-$('plusBtn').addEventListener('click', () => send('setPlus', { value: !state.chatPlus }));
+// Speed Plus, Speed and Quality are one control: Speed Plus is Haiku at max effort, Speed Haiku at high effort, Quality Opus at high effort.
+function pickMode(mode) {
+  if (mode === 'quality') return send('setModel', { value: 'quality' });
+  if (state.chatModel === 'quality') send('setModel', { value: 'speed' });
+  send('setPlus', { value: mode === 'plus' });
+}
+for (const b of document.querySelectorAll('#modeSeg button')) b.addEventListener('click', () => pickMode(b.dataset.mode));
 
 // Tools and plugins (Settings). Switches, sign-in, add and remove go to the helper through the background page.
 $('toolsCheck').addEventListener('click', () => send('toolsCheck'));
@@ -256,30 +261,24 @@ function render(s, log) {
   $('filesToggle').disabled = s.agent === 'stopped';
   $('pendingVal').textContent = String(s.pending || 0);
 
-  // model choice
+  // model choice: one control (Speed Plus | Speed | Quality)
   const quality = s.chatModel === 'quality';
   const plus = !quality && !!s.chatPlus;
-  $('modelBtn').textContent = quality ? 'Quality' : 'Speed';
-  $('modelBtn').classList.toggle('quality', quality);
-  $('modelBtn').classList.toggle('plus', plus);
-  $('modelBtn').title = (quality ? 'Quality: Opus 5.5, high effort. Slower, best answers, uses more.'
-    : plus ? 'Speed Plus: Haiku 5.5, max effort.' : 'Speed: Haiku 5.5, high effort. Fast and light on usage.') + ' Click to switch to ' + (quality ? 'Speed.' : 'Quality.');
-  $('plusBtn').hidden = quality;
-  $('plusBtn').classList.toggle('on', plus);
-  $('plusBtn').setAttribute('aria-pressed', String(plus));
+  const mode = quality ? 'quality' : plus ? 'plus' : 'speed';
+  for (const b of document.querySelectorAll('#modeSeg button')) b.setAttribute('aria-checked', String(b.dataset.mode === mode));
+  // the line under the control: what the next message runs on
+  $('modelLine').textContent = (quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort')
+    + (s.caveman && s.agent !== 'stopped' && s.signedIn ? ' · caveman' : '');
 
-  // composer hint: what the next message runs on
+  // notice under the composer: why nothing will run right now
   $('composerHint').textContent =
     s.agent === 'stopped' ? 'Stopped. Press Start to let Claude act again.' :
-    !s.signedIn ? 'Not signed in. Open the Profile page to sign in.' :
-    quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort';
-  $('composerHint').title = 'Enter to send · Shift+Enter for a new line';
+    !s.signedIn ? 'Not signed in. Open the Profile page to sign in.' : '';
 
   // caveman mode (the + menu)
   const cave = document.querySelector('#moreMenu [data-act="caveman"]');
   cave.setAttribute('aria-checked', String(!!s.caveman));
   $('moreBtn').classList.toggle('on', !!s.caveman);
-  if (s.caveman && s.agent !== 'stopped' && s.signedIn) $('composerHint').textContent += ' · caveman';
 
   renderTools(s);
   if (log) renderLog(log);
@@ -886,6 +885,7 @@ function renderChat() {
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
   for (const el of box.querySelectorAll('.msg')) el.remove();
   $('emptyState').hidden = chat.length > 0;
+  $('page-chat').classList.toggle('is-empty', chat.length === 0);
   for (const m of chat) {
     const div = document.createElement('div');
     div.className = 'msg ' + m.role + (m.pending ? ' pending' : '');

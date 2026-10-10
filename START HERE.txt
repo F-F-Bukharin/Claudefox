@@ -34,7 +34,7 @@ You need
 
 Using it
   - Type normally to talk to Claude. Speed (Haiku) is quick and light on usage, Quality
-    (Opus) is slower and better. Click the button under the message box to switch.
+    (Opus) is slower and better. Pick Speed Plus, Speed or Quality under the message box.
   - The + at the left of the message box adds files (Word, PDF, slides, sheets, images...).
     You can also paste or drop them in. The small button next to it has more options:
     a screenshot of the tab, Caveman mode (short replies, fewer tokens), tools, new chat.

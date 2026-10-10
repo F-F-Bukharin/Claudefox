@@ -121,6 +121,10 @@ button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; 
 
 /* ---------- chat ---------- */
 .chat { display: flex; flex-direction: column; }
+/* an empty chat keeps the greeting, the composer and the starter chips together, in the middle of the panel */
+.chat.is-empty { justify-content: center; }
+.chat.is-empty .messages { flex: 0 1 auto; padding-bottom: 0; }
+.chat.is-empty .empty { margin: 0; padding: 8px 8px 6px; }
 .messages {
   flex: 1; min-height: 0; overflow-y: auto;
   padding: 14px 14px 6px;
@@ -160,7 +164,7 @@ button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; 
 .tablist .tu { grid-column: 2; color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tablist li.active { border-color: var(--accent); }
 
-.composer { padding: 8px 12px 28px; display: flex; flex-direction: column; gap: 6px; }
+.composer { flex: none; padding: 8px 12px 18px; display: flex; flex-direction: column; gap: 8px; }
 .context { display: flex; gap: 6px; align-items: center; font-size: 11.5px; min-width: 0; }
 .ctx-label { color: var(--muted); flex: none; }
 .ctx-tab {
@@ -184,7 +188,8 @@ textarea:focus-visible { outline: none; }
   background: var(--accent); color: var(--accent-ink);
   display: grid; place-items: center; padding: 0;
 }
-.composer-hint { font-size: 11.5px; color: var(--muted); min-height: 1em; padding: 0 4px; }
+.composer-hint { font-size: 11.5px; color: var(--muted); padding: 0 4px; }
+.composer-hint:empty { display: none; }
 
 /* chat stream */
 .steps { list-style: none; margin: 2px 0 2px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
@@ -207,37 +212,30 @@ textarea:focus-visible { outline: none; }
 .limitbtn { align-self: flex-start; margin-top: 4px; font-size: 12.5px; padding: 7px 12px; }
 .send:disabled { opacity: .45; }
 
-/* model choice: one chip under the input, click to flip */
-.composer-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; min-height: 46px; }
-.composer-foot .composer-hint { flex: 1; min-width: 0; }
-.modelchip {
-  flex: none; align-self: center; border-radius: 999px; padding: 0 22px; height: 40px; min-width: 118px;
-  display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1;
-  font-size: 14.5px; font-weight: 700; letter-spacing: .3px;
-  border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  background: color-mix(in srgb, var(--accent) 16%, var(--card));   /* Speed: light orange */
-  color: color-mix(in srgb, var(--accent) 75%, var(--ink));
-  transition: background .15s, color .15s, border-color .15s;
+/* composer row, under the text bar: Current tab on the left; Speed Plus | Speed | Quality and the model line on the right */
+.composer-row { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; min-width: 0; padding: 0 4px; }
+.composer-row .context { flex: 1 1 0; min-width: 0; min-height: 32px; }
+.modebox { flex: none; margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.modeseg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--line); }
+.modeseg button {
+  border: 0; border-radius: 999px; height: 26px; padding: 0 12px; line-height: 1; white-space: nowrap;
+  background: transparent; color: var(--muted); font-size: 12px; font-weight: 700;
+  transition: background .15s, color .15s;
 }
-.modelchip:hover { background: color-mix(in srgb, var(--accent) 26%, var(--card)); }
-.modelchip.quality {                                                  /* Quality: dark orange */
-  background: color-mix(in srgb, var(--accent) 78%, #000); border-color: transparent; color: #fff;
+.modeseg button:hover { color: var(--ink); }
+.modeseg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.modeseg button[data-mode="plus"][aria-checked="true"] { background: var(--plus); color: #fff; }
+.modeseg button[data-mode="speed"][aria-checked="true"] {
+  background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: color-mix(in srgb, var(--accent) 75%, var(--ink));
+  box-shadow: 0 1px 2px rgb(0 0 0 / .12);
 }
-.modelchip.quality:hover { background: color-mix(in srgb, var(--accent) 68%, #000); }
-.modelbox { display: flex; align-items: center; gap: 8px; flex: none; }
-.modelchip.plus {                                                     /* Speed Plus: purple */
-  background: color-mix(in srgb, var(--plus) 18%, var(--card)); border-color: color-mix(in srgb, var(--plus) 55%, transparent);
-  color: color-mix(in srgb, var(--plus) 80%, var(--ink));
-}
-.modelchip.plus:hover { background: color-mix(in srgb, var(--plus) 28%, var(--card)); }
-.pluschip {
-  flex: none; align-self: center; border-radius: 999px; height: 28px; padding: 0 11px;
-  display: inline-flex; align-items: center; justify-content: center; line-height: 1;
-  font-size: 11.5px; font-weight: 700; letter-spacing: .2px;
-  border: 1.5px solid color-mix(in srgb, var(--plus) 40%, transparent); background: var(--card); color: var(--muted);
-}
-.pluschip:hover { color: var(--plus); }
-.pluschip.on { background: var(--plus); border-color: transparent; color: #fff; }
+.modeseg button[data-mode="quality"][aria-checked="true"] { background: color-mix(in srgb, var(--accent) 78%, #000); color: #fff; }
+.model-line { margin: 0; font-size: 11.5px; color: var(--muted); padding-right: 4px; }
+
+/* the starter chips show only in an empty chat, under the composer */
+.starters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; padding: 0 4px; }
+.starters .chip { border-radius: 12px; text-align: left; padding: 10px 12px; font-size: 12.5px; line-height: 1.3; color: var(--ink); }
+.chat:not(.is-empty) .starters { display: none; }
 
 /* file tools */
 .files { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 8px; }
