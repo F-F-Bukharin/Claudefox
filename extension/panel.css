@@ -523,9 +523,10 @@ textarea:focus-visible { outline: none; }
 @media (prefers-reduced-motion: reduce) { .sechead .chev { transition: none; } }
 
 /* ---------- Improve Claude in Zen: the bar, the reduced panel, and the proposal card ---------- */
-.improve-bar { display: flex; align-items: center; gap: 10px; margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--card); font-size: 12px; line-height: 1.4; color: var(--ink); }
+.improve-bar { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 14px 16px 0; padding: 10px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); text-align: center; font-size: 12px; line-height: 1.45; color: var(--ink); }
 .improve-bar[hidden] { display: none; }
-.improve-bar span { flex: 1; }
+.improve-bar b { font-size: 13px; font-weight: 600; }
+.improve-bar span { color: var(--muted); }
 body.improving .modebox, body.improving .starters, body.improving .model-line { display: none; }
 .proposal { margin: 6px 0 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); font-size: 12.5px; }
 .proposal p { margin: 4px 0; }

@@ -255,6 +255,7 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
   ok('the + menu has Improve Claude in Zen, on Opus 5.5', !!item && /Improve Claude in Zen/.test(item.textContent) && /Opus 5\.5/.test(item.textContent));
   $('moreBtn').click(); item.click();
   ok('the improve bar shows, and the panel is marked improving', !$('improveBar').hidden && /Opus 5\.5/.test($('improveBar').textContent) && w.document.body.classList.contains('improving'));
+  ok('the improve placeholder is short enough to fit the composer on one line', typeof ($('input') && $('input').placeholder) === 'string' && $('input').placeholder.length <= 30);
   $('input').value = '';
   $('composer').dispatchEvent(new w.Event('submit', {cancelable: true}));
   const im = sent.filter(m => m.type === 'chat').pop();

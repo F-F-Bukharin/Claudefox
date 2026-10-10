@@ -791,7 +791,7 @@ function startImprove() {
   improveOn = true;
   document.body.classList.add('improving');
   $('improveBar').hidden = false;
-  input.placeholder = 'What should Claude in Zen do better? Leave it empty and Claude picks one change.';
+  input.placeholder = 'Empty means Claude picks';
   input.focus();
 }
 function leaveImprove() {
