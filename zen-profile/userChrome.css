@@ -13,3 +13,10 @@
   overflow: clip !important;
   clip-path: inset(0 round var(--zen-native-inner-radius, var(--zen-border-radius, 10px))) !important;
 }
+
+/* Hide Zen's title bar above the panel (its "Claude in Zen" menu and close button). Open and close the
+   panel with the toolbar button or Alt+Shift+C. The bar's menu, with Move Sidebar to Right, goes too.
+   Delete this rule to bring the bar back. */
+#sidebar-box[sidebarcommand="claude-in-zen_f_local-sidebar-action"] > #sidebar-header {
+  display: none !important;
+}

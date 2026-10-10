@@ -86,10 +86,12 @@ button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; 
 
 /* ---------- tabs ---------- */
 .tabs {
+  position: relative;
   display: flex; gap: 2px; margin: 0 12px; padding: 3px;
   background: var(--line); border-radius: 10px;
 }
 .tabs button {
+  position: relative; z-index: 1; background: none; transition: color .2s ease;
   flex: 1; min-width: 0; border: 0; border-radius: 8px; padding: 6px 4px;
   font-size: 12.5px; font-weight: 600; color: var(--muted);
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -97,7 +99,15 @@ button.link { border: 0; padding: 0 2px; color: var(--accent); font-size: 12px; 
 }
 .tabs button span { overflow: hidden; text-overflow: ellipsis; }
 .tabs svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.tabs button[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.tabs button[aria-selected="true"] { color: var(--ink); }
+/* One highlight sits under the buttons and slides between them (panel.js: placeThumb). */
+.tab-thumb {
+  position: absolute; top: 3px; bottom: 3px; left: 0; width: 0; z-index: 0;
+  border-radius: 8px; background: var(--card); box-shadow: 0 1px 2px rgb(0 0 0 / .12);
+  transform: translateX(0); pointer-events: none;
+}
+.tab-thumb.animate { transition: transform .28s cubic-bezier(.3, .7, .2, 1), width .28s cubic-bezier(.3, .7, .2, 1); }
+@media (prefers-reduced-motion: reduce) { .tab-thumb.animate, .tabs button { transition: none; } }
 
 /* ---------- pages ---------- */
 .page { flex: 1; min-height: 0; }

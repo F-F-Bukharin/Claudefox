@@ -90,5 +90,12 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  ok('finished answer shows done line with time', /Done in 4\.2 s/.test([...$('messages').querySelectorAll('.msg.assistant')].pop().querySelector('.donebar')?.textContent||''));
  const before=[...$('messages').querySelectorAll('.msg.assistant')].pop(); onMsg({type:'state',state:{...ready,chatModel:'quality'},log:[]});
  ok('state updates do not rebuild the chat (keeps selection)', before.isConnected);
- console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
+  // top tabs: the highlight sits under the selected tab and slides when the tab changes
+ Object.defineProperty(w.HTMLElement.prototype,'offsetWidth',{configurable:true,get(){return this.tagName==='BUTTON'?100:0}});
+ Object.defineProperty(w.HTMLElement.prototype,'offsetLeft',{configurable:true,get(){return this.tagName==='BUTTON'?[...this.parentElement.querySelectorAll('button')].indexOf(this)*100:0}});
+ w.document.querySelector('.tabs button[data-page="settings"]').click();
+ ok('tab highlight moves under Settings', $('tabThumb').style.transform==='translateX(200px)' && $('tabThumb').style.width==='100px', $('tabThumb').style.transform);
+ w.document.querySelector('.tabs button[data-page="chat"]').click();
+ ok('tab highlight slides back to Claude', $('tabThumb').style.transform==='translateX(0px)' && $('tabThumb').classList.contains('animate'));
+console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
 })().catch(e=>{console.log('ERROR',e.stack);process.exit(1)});

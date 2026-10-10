@@ -59,10 +59,26 @@ function showPage(name) {
   }
   try { browser.storage.session.set({ panelPage: name }); } catch {}
   if (name === 'chat') $('input').focus();
+  placeThumb();
 }
 for (const b of document.querySelectorAll('.tabs button')) {
   b.addEventListener('click', () => showPage(b.dataset.page));
 }
+
+// The highlight behind the top tabs slides from one tab to the next (CSS: .tab-thumb). The first
+// placement is instant, so the panel does not slide in when it opens.
+let thumbReady = false;
+function placeThumb() {
+  const thumb = $('tabThumb');
+  const on = document.querySelector('.tabs button[aria-selected="true"]');
+  if (!thumb || !on || !on.offsetWidth) return;   // not laid out yet (panel hidden): the next resize places it
+  thumb.classList.toggle('animate', thumbReady);
+  thumb.style.width = on.offsetWidth + 'px';
+  thumb.style.transform = 'translateX(' + on.offsetLeft + 'px)';
+  thumbReady = true;
+}
+window.addEventListener('resize', placeThumb);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeThumb);
 
 // ------------------------------------------------------------ buttons
 
