@@ -300,44 +300,45 @@ function render(s, log) {
 }
 
 // ------------------------------------------------------------ accounts (Profile)
-// Every Claude account the chat can use. Use switches the chat to it; Add account opens a sign-in window;
-// Remove takes one off the list after a question. background.js relays these to the helper (accounts).
-let acctRemoveId = '';
+// Every Claude account the chat can use: one card each. Use switches the chat to it; Add account opens a sign-in
+// window; Remove asks inside that account's own card first. background.js relays these to the helper (accounts).
 $('accountAdd').addEventListener('click', () => send('accountAdd'));
 $('acctLoginCancel').addEventListener('click', () => send('accountCancel'));
-$('acctYes').addEventListener('click', () => { $('acctConfirm').hidden = true; if (acctRemoveId) send('accountRemove', { id: acctRemoveId }); acctRemoveId = ''; });
-$('acctNo').addEventListener('click', () => { $('acctConfirm').hidden = true; acctRemoveId = ''; });
-function linkBtn(text, fn, disabled) {
-  const b = el('button', 'link', text);
+function actBtn(text, cls, fn, disabled) {
+  const b = el('button', cls, text);
+  b.type = 'button';
   b.disabled = !!disabled;
   b.addEventListener('click', fn);
   return b;
 }
-function accountRow(a, s) {
+function accountCard(a, s) {
   const who = a.email || 'Claude account';
-  const li = el('li', 'acctrow' + (a.loggedIn ? '' : ' off'));
-  const info = el('div', 'acctinfo');
-  info.append(el('div', 'aname', who), el('div', 'adet', [a.plan && `${a.plan} plan`, a.org, a.loggedIn ? '' : 'signed out'].filter(Boolean).join(' · ')));
-  const acts = el('div', 'aacts');
+  const card = el('section', 'card acctcard' + (a.loggedIn ? '' : ' off'));
+  const txt = el('div', 'who');
+  txt.append(el('div', 'name', who), el('div', 'muted', [a.plan && `${a.plan} plan`, a.org, a.loggedIn ? '' : 'signed out'].filter(Boolean).join(' · ')));
+  const head = el('div', 'acct');
+  head.append(el('div', 'avatar', who.trim()[0].toUpperCase()), txt);
   const stopped = s.agent === 'stopped';
+  const acts = el('div', 'aacts');
   if (a.active) acts.appendChild(el('span', 'pill active', 'In use'));
-  else {
-    acts.appendChild(linkBtn(a.loggedIn ? 'Use' : 'Sign in', () => send(a.loggedIn ? 'accountUse' : 'accountSignIn', { id: a.id }), stopped));
-    acts.appendChild(linkBtn('Remove', () => {
-      acctRemoveId = a.id;
-      $('acctConfirmText').textContent = `Remove ${who} from Claude in Zen? You can add it again later.`;
-      $('acctConfirm').hidden = false;
-    }, stopped));
-  }
-  li.append(el('div', 'avatar', who.trim()[0].toUpperCase()), info, acts);
-  return li;
+  else acts.appendChild(actBtn(a.loggedIn ? 'Use' : 'Sign in', 'primary', () => send(a.loggedIn ? 'accountUse' : 'accountSignIn', { id: a.id }), stopped));
+  const confirm = el('div', 'confirm');
+  confirm.hidden = true;
+  const answers = el('div', 'confirm-btns');
+  answers.append(
+    actBtn('Cancel', 'ghost', () => { confirm.hidden = true; }),
+    actBtn('Remove', 'primary', () => { confirm.hidden = true; send('accountRemove', { id: a.id }); }));
+  confirm.append(el('p', '', `Remove ${who} from Claude in Zen? You can add it again later.`), answers);
+  if (!a.active) acts.appendChild(actBtn('Remove', 'ghost', () => { confirm.hidden = false; }, stopped));
+  card.append(head, acts, confirm);
+  return card;
 }
 function renderAccounts(s) {
   const accts = Array.isArray(s.accounts) ? s.accounts : [];
   const busy = !!s.accountLogin;
   const list = $('acctList');
   list.textContent = '';
-  for (const a of accts) list.appendChild(accountRow(a, s));
+  for (const a of accts) list.appendChild(accountCard(a, s));
   const note = s.native !== 'connected' ? 'Connect the helper to see your accounts.' : accts.length ? '' : 'No accounts yet. Add one to start.';
   $('acctEmpty').textContent = note;
   $('acctEmpty').hidden = !note;

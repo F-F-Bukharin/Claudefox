@@ -129,24 +129,17 @@
       <p class="muted small">Signing out here leaves claude.ai itself signed in.</p>
     </section>
 
-    <section class="card" id="accountsCard">
+    <div class="acctgroup" id="accountsGroup">
       <h3>Accounts</h3>
-      <ul id="acctList" class="acctlist" aria-live="polite"></ul>
+      <div id="acctList" class="acctlist" aria-live="polite"></div>
       <p id="acctEmpty" class="muted small" hidden></p>
-      <div id="acctLogin" class="confirm" hidden>
+      <section class="card" id="acctLogin" hidden>
         <p>A sign-in window is open. Pick the Claude account there and click Authorize. This list updates when you are done.</p>
         <div class="confirm-btns"><button id="acctLoginCancel" class="ghost">Cancel sign-in</button></div>
-      </div>
-      <div id="acctConfirm" class="confirm" hidden>
-        <p id="acctConfirmText"></p>
-        <div class="confirm-btns">
-          <button id="acctNo" class="ghost">Cancel</button>
-          <button id="acctYes" class="primary">Remove</button>
-        </div>
-      </div>
+      </section>
       <button id="accountAdd" class="ghost wide">Add account</button>
       <p class="muted small">Each account keeps its own chats. The chat uses the one marked In use.</p>
-    </section>
+    </div>
 
     <section class="card rows" id="permCard">
             <h3>Permissions</h3>
