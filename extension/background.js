@@ -14,6 +14,8 @@ let nextActionId = 1;
   cizState.onChange(pushToPanels);
   cizState.onChange(updateBadge);
   await cizState.set({ pending: 0 });
+  try { const pref = await browser.storage.local.get('caveman'); await cizState.set({ caveman: !!pref.caveman }); } catch {}
+  cizNetStart();
   await cizState.addLog('info', 'Add-on started');
   resumeSignIn('startup');
   closeInstallerTabs();
@@ -84,7 +86,25 @@ async function handlePanel(msg, port) {
     case 'openLink':   return openLink(String(msg.url || ''));
     case 'openTab':    return openTab(Number(msg.id));
     case 'openFile':   return openFile(String(msg.id || ''));
-    case 'downloadFile': return downloadFile(String(msg.id || ''), !!msg.saveAs);
+    case 'downloadFile': return downloadFile(String(msg.id || ''), !!msg.saveAs, String(msg.format || ''));
+    case 'snapTab':    return snapTab(port, String(msg.req || ''));
+    case 'setCaveman':
+      try { await browser.storage.local.set({ caveman: !!msg.value }); } catch {}
+      await cizState.set({ caveman: !!msg.value });
+      return cizState.addLog('info', msg.value ? 'Caveman mode on: short replies' : 'Caveman mode off');
+    // Settings > Tools and plugins: the helper does the work (host/lib/toolbox.js)
+    case 'tools':       return sendNative({ type: 'tools' });
+    case 'toolsCheck':  return toolsSend({ type: 'tools_check' }, 'Checking every tool server…');
+    case 'toolSet':     return toolsSend({ type: 'tool_set', kind: msg.kind === 'plugin' ? 'plugin' : 'server', id: String(msg.id || ''), value: !!msg.value },
+      `${msg.value ? 'Turned on' : 'Turned off'} ${String(msg.label || msg.id || 'a tool').slice(0, 60)}`);
+    case 'toolSignIn':  return toolsSend({ type: 'tool_signin', name: String(msg.name || '') });
+    case 'toolCancel':  return sendNative({ type: 'tool_cancel' });
+    case 'toolAdd':     return toolsSend({ type: 'tool_add', name: String(msg.name || '').slice(0, 60), target: String(msg.target || '').slice(0, 2000),
+      header: String(msg.header || '').slice(0, 4100), on: !!msg.on }, `Adding ${String(msg.name || '').slice(0, 40)}…`);
+    case 'toolRemove':  return toolsSend({ type: 'tool_remove', name: String(msg.name || '') }, `Removing ${String(msg.name || '').slice(0, 40)}…`);
+    case 'pluginInstall': return toolsSend({ type: 'plugin_install', spec: String(msg.spec || '').slice(0, 200), source: String(msg.source || '').slice(0, 600) },
+      `Installing ${String(msg.spec || '').slice(0, 60)}…`);
+    case 'pluginUninstall': return toolsSend({ type: 'plugin_uninstall', id: String(msg.id || '') });
     case 'openClaude': return browser.tabs.create({ url: CIZ.CLAUDE_ORIGIN + '/' });
     case 'devCall':    return devCall(msg.tool);
     case 'call':       return panelCall(msg, port);
@@ -134,22 +154,52 @@ async function openTab(id) {
   } catch { await cizState.addLog('error', `Tab ${id} is not open any more.`); }
 }
 
-async function openFile(id) {
+async function openFile(id, pdf) {
   if (!/^f[0-9a-z]+$/.test(id)) return;
-  await browser.tabs.create({ url: browser.runtime.getURL('viewer.html#' + id), active: true });
+  await browser.tabs.create({ url: browser.runtime.getURL(`viewer.html${pdf ? '?pdf=1' : ''}#${id}`), active: true });
 }
 
-async function downloadFile(id, saveAs) {
+// format: '' (the file's own format), or docx, xlsx, html, md, txt, csv, pdf. Word and Excel files are built here
+// from what Claude wrote (lib/docx.js); a PDF opens the file viewer, which saves the page as PDF.
+async function downloadFile(id, saveAs, format) {
   const f = await cizFiles.get(id);
   if (!f) return cizState.addLog('error', 'That file is gone (deleted, or pushed out by newer files).');
-  const url = URL.createObjectURL(new Blob([f.content], { type: `${f.mime};charset=utf-8` }));
+  const ext = ((/\.([a-z0-9]{1,8})$/i.exec(f.name) || [])[1] || '').toLowerCase();
+  const want = String(format || ext).toLowerCase();
+  if (want === 'pdf') return openFile(id, true);
+  let out;
+  try { out = cizExport(f, want); } catch (e) {
+    return cizState.addLog('error', `Could not make ${f.name}${want !== ext ? ` as .${want}` : ''}: ${e.message}`);
+  }
+  const blob = typeof out.data === 'string' ? new Blob([out.data], { type: `${out.mime};charset=utf-8` }) : new Blob([out.data], { type: out.mime });
+  const url = URL.createObjectURL(blob);
   try {
-    const dl = await browser.downloads.download({ url, filename: `Claude in Zen/${f.name}`, conflictAction: 'uniquify', saveAs });
-    await cizState.addLog('info', `Saved ${f.name} to Downloads\\Claude in Zen`);
+    const dl = await browser.downloads.download({ url, filename: `Claude in Zen/${cizSafeFileName(out.name)}`, conflictAction: 'uniquify', saveAs });
+    await cizState.addLog('info', `Saved ${out.name} to Downloads\\Claude in Zen`);
     postToPanels({ type: 'downloaded', id, downloadId: dl });
   } catch (e) {
     if (!/cancel/i.test(e.message)) await cizState.addLog('error', `Download failed: ${e.message}`);
   } finally { setTimeout(() => URL.revokeObjectURL(url), 60000); }
+}
+
+// The + menu's "Screenshot of this tab": a PNG of the current tab, attached to the next message.
+async function snapTab(port, req) {
+  const reply = m => { try { port.postMessage(Object.assign({ type: 'snap', req }, m)); } catch {} };
+  try {
+    const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!tab) return reply({ error: 'No tab to capture.' });
+    const gate = cizUrlBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
+    if (gate.blocked) return reply({ error: `This tab can't be captured: ${gate.reason}.` });
+    const data = await browser.tabs.captureTab(tab.id, { format: 'png' });
+    let host = 'tab';
+    try { host = new URL(tab.url).hostname.replace(/^www\./, '') || 'tab'; } catch {}
+    reply({ data: String(data).replace(/^data:image\/png;base64,/, ''), name: `screenshot ${host}.png`, mime: 'image/png' });
+  } catch (e) { reply({ error: `Screenshot failed: ${e.message}` }); }
+}
+
+function toolsSend(msg, note) {
+  if (!sendNative(msg)) return cizState.addLog('error', 'Tools: the helper is not connected.');
+  if (note) return cizState.addLog('info', note);
 }
 
 // create_file (lib/tools.js) asks which chat turn a new file belongs to, then tells the panels about it.
@@ -161,7 +211,7 @@ function cizOnFileCreated(file) {
 
 // The file viewer page asks for downloads this way.
 browser.runtime.onMessage.addListener(msg => {
-  if (msg && msg.type === 'downloadFile') return downloadFile(String(msg.id || ''), !!msg.saveAs);
+  if (msg && msg.type === 'downloadFile') return downloadFile(String(msg.id || ''), !!msg.saveAs, String(msg.format || ''));
 });
 
 // ---------------------------------------------------------------- sign-in
@@ -316,9 +366,10 @@ async function stopAll(source) {
     pendingActions.delete(id);
   }
   failChats('Stopped.');
+  cizNetReset();                 // forget recorded requests, stop watching consoles
   disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
   await cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, pending: 0 });
-  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, helper disconnected, file tools off, Unsafe mode off.`);
+  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, helper disconnected, file tools off, Unsafe mode off, network log cleared.`);
 }
 
 async function startAgent() {
@@ -366,11 +417,29 @@ async function setUnsafe(value) {
 
 const chatRuns = new Map();   // chat id -> { startedAt }
 
+const CHAT_ATTACH_MAX = 12;
+const CHAT_ATTACH_BYTES = 80 * 1024 * 1024;
+
+// Attachments from the panel: [{ name, type, data (base64) }], checked before they go to the helper.
+function cleanAttachments(list) {
+  if (!Array.isArray(list)) return [];
+  let total = 0;
+  const out = [];
+  for (const a of list.slice(0, CHAT_ATTACH_MAX)) {
+    if (!a || typeof a.data !== 'string' || !a.data || /[^A-Za-z0-9+/=]/.test(a.data.slice(0, 200))) continue;
+    total += a.data.length * 0.75;
+    if (total > CHAT_ATTACH_BYTES) break;
+    out.push({ name: cizSafeFileName(a.name, 'file.bin').slice(0, 120), type: String(a.type || '').slice(0, 100), data: a.data });
+  }
+  return out;
+}
+
 async function startChat(msg) {
   const id = String(msg.id || '').slice(0, 64);
   const text = String(msg.text || '');
+  const attachments = cleanAttachments(msg.attachments);
   const fail = error => postToPanels({ type: 'chatDone', id, ok: false, error });
-  if (!id || !text.trim()) return;
+  if (!id || (!text.trim() && !attachments.length)) return;
   const s = cizState.get();
   if (chatRuns.size) return fail('Claude is still answering. Wait, or press Cancel.');
   if (s.agent !== 'active') return fail('Claude is stopped. Press Start first.');
@@ -386,9 +455,10 @@ async function startChat(msg) {
     const [t] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
     if (t) tab = { id: t.id, title: t.title || '', url: t.url || '' };
   } catch {}
-  const sent = sendNative({ type: 'chat', id, text, model, tab, resume: s.chatSession || '', files, folder: files ? s.filesFolder : '', unsafe: !!s.unsafe });
+  const sent = sendNative({ type: 'chat', id, text, model, tab, resume: s.chatSession || '', files, folder: files ? s.filesFolder : '',
+    unsafe: !!s.unsafe, caveman: !!s.caveman, attachments });
   if (!sent) { chatRuns.delete(id); return fail('Could not reach the helper.'); }
-  await cizState.addLog('action', `chat → Claude Code, ${model}${files ? `, file tools: ${files}` : ''}`);
+  await cizState.addLog('action', `chat → Claude Code, ${model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
 }
 
 function cancelChat(id) {
@@ -606,12 +676,52 @@ async function onNativeMessage(msg) {
       if (chatRuns.has(String(msg.id))) postToPanels({ type: 'chatEvent', id: String(msg.id), event: msg.event || {} });
       return;
 
+    case 'tools':
+      await cizState.set({ tools: cleanTools(msg), toolLogin: msg.login ? { name: String(msg.login.name || ''), label: String(msg.login.label || '') } : null });
+      return;
+
+    case 'tool_result':
+      return onToolResult(msg);
+
     case 'chat_done':
       return onChatDone(msg);
 
     case 'host_error':
       await cizState.addLog('error', `Helper: ${msg.error}`);
       return;
+  }
+}
+
+// ---------------------------------------------------------------- tools and plugins
+
+function cleanTools(m) {
+  const str = (v, n) => String(v == null ? '' : v).slice(0, n || 200);
+  const server = s => ({ name: str(s.name, 120), label: str(s.label, 80), status: str(s.status, 20), detail: str(s.detail, 160), transport: str(s.transport, 10),
+    local: !!s.local, target: str(s.target, 200), on: !!s.on });
+  const list = (v, max) => (Array.isArray(v) ? v.slice(0, max || 300) : []);
+  return {
+    busy: m.busy ? str(m.busy, 20) : null, scanned: Number(m.scanned) || 0, checked: Number(m.checked) || 0,
+    plugins: list(m.plugins).map(p => ({ id: str(p.id, 120), label: str(p.label, 60), version: str(p.version, 20), scope: str(p.scope, 20),
+      description: str(p.description, 220), skills: !!p.skills, local: !!p.local, recommended: !!p.recommended, on: !!p.on, status: str(p.status, 20),
+      servers: list(p.servers, 20).map(server) })),
+    connectors: list(m.connectors).map(server),
+    added: list(m.added).map(server),
+  };
+}
+
+async function onToolResult(msg) {
+  const name = String(msg.label || msg.name || msg.id || '').slice(0, 80);
+  const ok = !!msg.ok;
+  const err = String(msg.error || '').slice(0, 300);
+  postToPanels({ type: 'toolResult', action: String(msg.action || ''), ok, error: err, name: String(msg.name || ''), label: name });
+  switch (msg.action) {
+    case 'signin_started': return cizState.addLog('info', `A sign-in window is open for ${name}. Sign in there; the panel notices when you are done.`);
+    case 'signin': return cizState.addLog(ok ? 'info' : /Cancelled/.test(err) ? 'info' : 'error', ok ? `${name} is signed in. Claude can use it now.` : `${name}: ${err}`);
+    case 'add': return cizState.addLog(ok ? 'info' : 'error', ok ? `Added ${name}.` : `Add: ${err}`);
+    case 'remove': return cizState.addLog(ok ? 'info' : 'error', ok ? `Removed ${name}.` : `Remove: ${err}`);
+    case 'install': return cizState.addLog(ok ? 'info' : 'error', ok ? `Installed ${name}. Switch it on below to use it in the chat.` : `Install: ${err}`);
+    case 'uninstall': return cizState.addLog(ok ? 'info' : 'error', ok ? `Removed plugin ${name}.` : `Remove plugin: ${err}`);
+    default: if (!ok && err) return cizState.addLog('error', `Tools: ${err}`);
   }
 }
 

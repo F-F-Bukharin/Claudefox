@@ -9,19 +9,39 @@ class NativeChannel extends EventEmitter {
   constructor(input, output) {
     super();
     this.out = output;
-    this.buf = Buffer.alloc(0);
+    this.chunks = [];    // received bytes not used yet; joined only once a whole message is in (attachments can be 100 MB)
+    this.size = 0;
+    this.need = null;    // body length of the message being received
     input.on('data', chunk => this._onData(chunk));
     input.on('end', () => this.emit('end'));
     input.on('error', err => this.emit('end', err));
   }
 
+  _take(n) {
+    const out = Buffer.allocUnsafe(n);
+    let off = 0;
+    while (off < n) {
+      const c = this.chunks[0];
+      const k = Math.min(c.length, n - off);
+      c.copy(out, off, 0, k);
+      off += k;
+      if (k === c.length) this.chunks.shift(); else this.chunks[0] = c.subarray(k);
+    }
+    this.size -= n;
+    return out;
+  }
+
   _onData(chunk) {
-    this.buf = this.buf.length ? Buffer.concat([this.buf, chunk]) : chunk;
-    while (this.buf.length >= 4) {
-      const len = this.buf.readUInt32LE(0);
-      if (this.buf.length < 4 + len) break;
-      const body = this.buf.subarray(4, 4 + len);
-      this.buf = this.buf.subarray(4 + len);
+    this.chunks.push(chunk);
+    this.size += chunk.length;
+    for (;;) {
+      if (this.need === null) {
+        if (this.size < 4) return;
+        this.need = this._take(4).readUInt32LE(0);
+      }
+      if (this.size < this.need) return;
+      const body = this._take(this.need);
+      this.need = null;
       let msg;
       try { msg = JSON.parse(body.toString('utf8')); } catch (e) { this.emit('bad', e); continue; }
       this.emit('message', msg);

@@ -27,4 +27,16 @@ a { color: var(--accent); }
 iframe.html { width: 100%; height: calc(100vh - 60px); border: 0; background: #fff; display: block; }
 img.svg { max-width: 100%; display: block; margin: 0 auto; }
 .missing { color: var(--muted); text-align: center; }
+/* Download + the small "Save as" button beside it */
+.saveas { position: relative; display: flex; }
+.saveas #download { border-radius: 8px 0 0 8px; }
+.saveas .more { border-radius: 0 8px 8px 0; padding: 6px 8px; margin-left: 1px; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 210px; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 5px; display: flex; flex-direction: column; z-index: 5;
+  transform-origin: top right; animation: pop .14s ease-out; }
+.menu button { border: 0; text-align: left; border-radius: 6px; padding: 7px 10px; }
+.menu button:hover, .menu button:focus-visible { background: var(--code); outline: none; }
+.menu small { color: var(--muted); margin-left: 6px; }
+@keyframes pop { from { opacity: 0; transform: scale(.96) translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .menu { animation: none; } }
 @media print { .bar { display: none; } .view { border: 0; margin: 0; max-width: none; } body { background: #fff; color: #000; } }

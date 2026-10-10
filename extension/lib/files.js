@@ -18,6 +18,9 @@ const CIZ_FILE_TYPES = {
   lua: 'text/plain', kt: 'text/plain', swift: 'text/plain', tex: 'text/plain', bib: 'text/plain',
   ics: 'text/calendar', vcf: 'text/vcard', rtf: 'application/rtf', doc: 'application/msword',
   srt: 'text/plain', vtt: 'text/vtt',
+  // Stored as the Markdown, HTML or CSV Claude wrote; lib/docx.js builds the real file on download (PDF: the viewer).
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', pdf: 'application/pdf',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 const CIZ_RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i;
 

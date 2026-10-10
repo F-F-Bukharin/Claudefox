@@ -53,11 +53,41 @@
         <span id="ctxTab" class="ctx-tab">…</span>
       </div>
       <form id="composer" class="inputbox">
-        <textarea id="input" rows="1" placeholder="Message Claude…" autocomplete="off"></textarea>
+        <div class="attach">
+          <button type="button" id="attachBtn" class="attach-main" title="Add files: Word, PDF, images, slides, sheets… You can also paste or drop them here." aria-label="Add files">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" id="moreBtn" class="attach-more" title="More options" aria-label="More options" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu">
+            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="field">
+          <div id="attachList" class="attlist" hidden></div>
+          <textarea id="input" rows="1" placeholder="Message Claude…" autocomplete="off"></textarea>
+        </div>
         <button id="sendBtn" type="submit" class="send" aria-label="Send">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
+        <input type="file" id="fileInput" multiple hidden>
       </form>
+      <div id="moreMenu" class="menu" role="menu" aria-label="More options" hidden>
+        <button type="button" role="menuitem" data-act="upload">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5 12.2 19.3a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+          <span class="mtext">Upload files<small>or paste, or drop them in</small></span></button>
+        <button type="button" role="menuitem" data-act="snap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <span class="mtext">Screenshot of this tab</span></button>
+        <button type="button" role="menuitemcheckbox" data-act="caveman" aria-checked="false">
+          <span class="memoji" aria-hidden="true">🪨</span>
+          <span class="mtext">Caveman mode<small>short replies, fewer tokens</small></span><span class="mcheck" aria-hidden="true"></span></button>
+        <div class="sep" role="separator"></div>
+        <button type="button" role="menuitem" data-act="tools">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3a2 2 0 1 0 4 0V4h2v6h-3a2 2 0 1 0 0 4h3v6h-6v-3a2 2 0 1 0-4 0v3H4v-6h3a2 2 0 1 0 0-4H4V4h6z"/></svg>
+          <span class="mtext">Tools and plugins…</span></button>
+        <button type="button" role="menuitem" data-act="new">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="mtext">New chat</span></button>
+      </div>
       <div class="composer-foot">
         <p id="composerHint" class="composer-hint"></p>
         <div class="modelbox">
@@ -166,6 +196,34 @@
         <span>Passwords, 2FA, payment</span>
         <span class="val">never typed</span>
       </div>
+    </section>
+
+    <section class="card" id="toolsCard">
+      <div class="loghead"><h3>Tools and plugins</h3><button id="toolsCheck" class="link" title="Start every tool once to see which ones answer, and list your claude.ai connectors">check</button></div>
+      <p class="muted small toolsnote">Extra tools the chat can use. The essentials (vidIQ, Caveman) are on; everything else stays off until you switch it on.</p>
+      <div id="toolsList" class="tools" aria-live="polite"></div>
+      <div id="toolConfirm" class="confirm" hidden>
+        <p id="toolConfirmText"></p>
+        <div class="confirm-btns">
+          <button id="toolNo" class="ghost">Cancel</button>
+          <button id="toolYes" class="primary">Turn on</button>
+        </div>
+      </div>
+      <details class="addtool" id="addTool">
+        <summary>Add a tool or plugin</summary>
+        <div class="addform">
+          <label class="small muted" for="addName">A tool server (MCP)</label>
+          <input id="addName" class="textin" placeholder="Name, e.g. my-tool" spellcheck="false" autocomplete="off">
+          <input id="addTarget" class="textin mono" placeholder="https://… address, or the command that starts it" spellcheck="false" autocomplete="off">
+          <input id="addHeader" class="textin mono" placeholder="Header, if it needs one: Authorization: Bearer …" spellcheck="false" autocomplete="off">
+          <button id="addBtn" class="primary">Add tool</button>
+          <label class="small muted" for="pluginSpec">A plugin from a marketplace</label>
+          <input id="pluginSpec" class="textin mono" placeholder="name@marketplace, e.g. caveman@anthropic-plugin-directory" spellcheck="false" autocomplete="off">
+          <input id="pluginSource" class="textin mono" placeholder="Marketplace, if it is new: owner/repo or https://…" spellcheck="false" autocomplete="off">
+          <button id="pluginBtn" class="ghost">Install plugin</button>
+          <p class="muted small">Plugins and connectors you add on claude.ai appear here by themselves (press check).</p>
+        </div>
+      </details>
     </section>
 
     <section class="card">

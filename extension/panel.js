@@ -24,6 +24,8 @@ port.onMessage.addListener(msg => {
   if (msg.type === 'chatDone') onChatDone(msg);
   if (msg.type === 'chatRuns') onChatRuns(msg.ids || []);
   if (msg.type === 'fileCreated') onFileCreated(msg.file || {});
+  if (msg.type === 'snap') onSnap(msg);
+  if (msg.type === 'toolResult') onToolResult(msg);
 });
 
 // Links in replies: web pages open in a new tab, zen://tab/<id> switches tab, zen://file/<id> opens a file.
@@ -104,6 +106,37 @@ $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list'
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
 $('modelBtn').addEventListener('click', () => send('setModel', { value: state.chatModel === 'quality' ? 'speed' : 'quality' }));
 $('plusBtn').addEventListener('click', () => send('setPlus', { value: !state.chatPlus }));
+
+// Tools and plugins (Settings). Switches, sign-in, add and remove go to the helper through the background page.
+$('toolsCheck').addEventListener('click', () => send('toolsCheck'));
+$('addBtn').addEventListener('click', () => {
+  const name = $('addName').value.trim(), target = $('addTarget').value.trim();
+  if (!name || !target) { $('addName').focus(); return; }
+  const local = !/^https?:\/\//i.test(target);
+  const go = () => send('toolAdd', { name, target, header: $('addHeader').value.trim(), on: true });
+  if (local) askConfirm(`${name} runs a program on this PC with your permissions. A web page could try to trick Claude into using it. Add it and turn it on?`, go, 'Add and turn on');
+  else go();
+});
+$('pluginBtn').addEventListener('click', () => {
+  const spec = $('pluginSpec').value.trim();
+  if (!spec) { $('pluginSpec').focus(); return; }
+  send('pluginInstall', { spec, source: $('pluginSource').value.trim() });
+});
+let confirmAction = null;
+function askConfirm(text, action, yes) {
+  confirmAction = action;
+  $('toolConfirmText').textContent = text;
+  $('toolYes').textContent = yes || 'Turn on';
+  $('toolConfirm').hidden = false;
+  if ($('toolConfirm').scrollIntoView) $('toolConfirm').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+$('toolYes').addEventListener('click', () => { $('toolConfirm').hidden = true; const a = confirmAction; confirmAction = null; if (a) a(); });
+$('toolNo').addEventListener('click', () => { $('toolConfirm').hidden = true; confirmAction = null; lastToolsSig = ''; render(state, null); });
+
+function onToolResult(m) {
+  if (m.action === 'add' && m.ok) { $('addName').value = ''; $('addTarget').value = ''; $('addHeader').value = ''; }
+  if (m.action === 'install' && m.ok) { $('pluginSpec').value = ''; $('pluginSource').value = ''; }
+}
 
 // Unsafe mode: turning it on asks first (the confirm box). Turning it off needs no question.
 $('unsafeToggle').addEventListener('change', e => {
@@ -242,7 +275,14 @@ function render(s, log) {
     quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort';
   $('composerHint').title = 'Enter to send · Shift+Enter for a new line';
 
-  renderLog(log || []);
+  // caveman mode (the + menu)
+  const cave = document.querySelector('#moreMenu [data-act="caveman"]');
+  cave.setAttribute('aria-checked', String(!!s.caveman));
+  $('moreBtn').classList.toggle('on', !!s.caveman);
+  if (s.caveman && s.agent !== 'stopped' && s.signedIn) $('composerHint').textContent += ' · caveman';
+
+  renderTools(s);
+  if (log) renderLog(log);
   renderSetup(s);
   if (chat.some(m => m.limit)) renderChat();   // the switch button follows state.switching
 }
@@ -295,6 +335,112 @@ function renderSetup(s) {
   });
 }
 
+// ------------------------------------------------------------ tools and plugins (Settings)
+
+let lastToolsSig = '';
+let toolsAsked = false;
+const STATUS_TEXT = {
+  connected: ['ok', 'ready'], 'needs-auth': ['warn', 'needs sign-in'], failed: ['bad', 'not answering'],
+  'not-configured': ['', 'not set up'], pending: ['', 'waiting'], unknown: ['', ''], none: ['', ''],
+};
+
+function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+
+function renderTools(s) {
+  const t = s.tools;
+  const sig = JSON.stringify([t, s.native, s.agent, s.toolLogin]);
+  if (sig === lastToolsSig) return;
+  lastToolsSig = sig;
+  const box = $('toolsList');
+  box.textContent = '';
+  $('toolsCheck').hidden = s.native !== 'connected';
+  if (s.native !== 'connected') { box.appendChild(el('div', 'tempty', 'Connect the helper to see your tools and plugins.')); return; }
+  if (!t) {
+    box.appendChild(el('div', 'tempty', 'Looking for your tools…'));
+    if (!toolsAsked) { toolsAsked = true; send('tools'); }
+    return;
+  }
+  $('toolsCheck').textContent = t.busy === 'checking' ? 'checking…' : 'check';
+  $('toolsCheck').disabled = !!t.busy;
+  const groups = [
+    ['Recommended', t.plugins.filter(p => p.recommended).map(item => ({ kind: 'plugin', item }))],
+    ['Plugins', t.plugins.filter(p => !p.recommended).map(item => ({ kind: 'plugin', item }))],
+    ['claude.ai connectors', t.connectors.map(item => ({ kind: 'server', item }))],
+    ['Added by you', t.added.map(item => ({ kind: 'server', item }))],
+  ];
+  for (const [title, rows] of groups) {
+    if (!rows.length && title !== 'claude.ai connectors') continue;
+    box.appendChild(el('div', 'tgroup', title));
+    if (!rows.length) { box.appendChild(el('div', 'tempty', t.checked ? 'None on this account.' : 'Press check to list them.')); continue; }
+    for (const r of rows) box.appendChild(toolRow(r.kind, r.item, s));
+  }
+  if (t.busy && t.busy !== 'checking') box.appendChild(el('div', 'tempty', `${t.busy[0].toUpperCase()}${t.busy.slice(1)}…`));
+}
+
+function toolRow(kind, item, s) {
+  const row = el('div', 'trow' + (item.on ? ' on' : ''));
+  const sw = el('input');
+  sw.type = 'checkbox'; sw.className = 'switch'; sw.checked = !!item.on; sw.disabled = s.agent === 'stopped';
+  sw.setAttribute('aria-label', `Use ${item.label} in the chat`);
+  const id = kind === 'plugin' ? item.id : item.name;
+  sw.addEventListener('change', () => {
+    if (sw.checked && item.local) {
+      sw.checked = false;
+      askConfirm(`${item.label} runs programs on this PC with your permissions. A web page could try to trick Claude into using it. Turn it on only if you need it.`,
+        () => send('toolSet', { kind, id, value: true, label: item.label }));
+      return;
+    }
+    send('toolSet', { kind, id, value: sw.checked, label: item.label });
+  });
+  const info = el('div', 'tinfo');
+  const name = el('div', 'tname', item.label);
+  if (item.recommended) name.appendChild(el('span', 'tag star', 'essential'));
+  if (item.local) name.appendChild(el('span', 'tag warn', 'runs on this PC'));
+  const sub = [];
+  if (kind === 'plugin') {
+    if (item.version && item.version !== 'unknown') sub.push('v' + item.version);
+    if (item.skills) sub.push('skills');
+    if (item.servers.length) sub.push(`${item.servers.length} tool server${item.servers.length === 1 ? '' : 's'}`);
+    sub.push(item.scope === 'synced' ? 'from claude.ai' : 'installed here');
+  } else sub.push(item.transport === 'stdio' ? `command: ${item.target}` : String(item.target || '').replace(/^https?:\/\//, ''));
+  const subline = el('div', 'tsub', sub.filter(Boolean).join(' · '));
+  info.append(name, subline);
+  info.title = item.description || item.detail || '';
+  const stat = el('div', 'tstat');
+  const [cls, text] = STATUS_TEXT[item.status] || ['', ''];
+  if (text) {
+    const st = el('span', 'st ' + cls);
+    if (cls) st.appendChild(el('span', 'dot ' + cls));
+    st.appendChild(document.createTextNode(text));
+    if (item.detail) st.title = item.detail;
+    stat.appendChild(st);
+  }
+  // Sign in: the server of this row (or the plugin's first server that needs it).
+  const signName = kind === 'plugin' ? ((item.servers.find(x => x.status === 'needs-auth') || {}).name || '') : item.status === 'needs-auth' ? item.name : '';
+  const login = s.toolLogin;
+  if (login && signName && login.name === signName) {
+    stat.appendChild(el('span', 'st warn', 'signing in…'));
+    const c = el('button', 'link', 'cancel'); c.addEventListener('click', () => send('toolCancel')); stat.appendChild(c);
+  } else if (signName) {
+    const b = el('button', 'link', 'sign in');
+    b.addEventListener('click', () => send('toolSignIn', { name: signName }));
+    b.disabled = !!login;
+    stat.appendChild(b);
+  }
+  if (kind === 'server' && item.target && !item.name.startsWith('claude.ai ')) {
+    const rm = el('button', 'link', 'remove');
+    rm.addEventListener('click', () => askConfirm(`Remove ${item.label} from Claude Code on this PC?`, () => send('toolRemove', { name: item.name }), 'Remove'));
+    stat.appendChild(rm);
+  }
+  if (kind === 'plugin' && item.scope === 'user' && !item.recommended) {
+    const rm = el('button', 'link', 'remove');
+    rm.addEventListener('click', () => askConfirm(`Uninstall the ${item.label} plugin from Claude in Zen?`, () => send('pluginUninstall', { id: item.id }), 'Uninstall'));
+    stat.appendChild(rm);
+  }
+  row.append(sw, info, stat);
+  return row;
+}
+
 function renderLog(log) {
   const ol = $('log');
   ol.textContent = '';
@@ -335,6 +481,115 @@ refreshContext();
 
 const input = $('input');
 input.addEventListener('input', autoGrow);
+
+// ------------------------------------------------------------ attachments (+ button, paste, drop, tab screenshot)
+
+const ATTACH_MAX = 12, ATTACH_FILE = 32 * 1024 * 1024, ATTACH_TOTAL = 80 * 1024 * 1024;
+let attachments = [];   // { id, name, size, type, file?: File, data?: base64, url?: preview }
+let attachSeq = 0;
+
+function sizeText(n) { return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`; }
+
+function addFiles(list) {
+  let total = attachments.reduce((n, a) => n + a.size, 0);
+  const problems = [];
+  for (const f of Array.from(list || [])) {
+    if (attachments.length >= ATTACH_MAX) { problems.push(`Up to ${ATTACH_MAX} files per message.`); break; }
+    if (f.size > ATTACH_FILE) { problems.push(`${f.name} is over 32 MB.`); continue; }
+    if (total + f.size > ATTACH_TOTAL) { problems.push('Up to 80 MB per message.'); break; }
+    total += f.size;
+    const a = { id: ++attachSeq, name: f.name || 'pasted file', size: f.size, type: f.type || '', file: f };
+    if (/^image\//.test(a.type) && f.size < 8 * 1024 * 1024) { try { a.url = URL.createObjectURL(f); } catch {} }
+    attachments.push(a);
+  }
+  if (problems.length) $('composerHint').textContent = problems.join(' ');
+  renderAttachments();
+  input.focus();
+}
+
+function renderAttachments() {
+  const box = $('attachList');
+  box.textContent = '';
+  box.hidden = !attachments.length;
+  for (const a of attachments) {
+    const chip = el('span', 'attchip');
+    chip.title = `${a.name} · ${sizeText(a.size)}`;
+    if (a.url) { const img = el('img'); img.src = a.url; img.alt = ''; chip.appendChild(img); }
+    else chip.appendChild(el('span', 'ext', ((/\.([a-z0-9]{1,5})$/i.exec(a.name) || [])[1] || 'file').toUpperCase()));
+    chip.appendChild(el('span', 'an', a.name));
+    chip.appendChild(el('span', 'as', sizeText(a.size)));
+    const x = el('button', 'ax', '×');
+    x.type = 'button'; x.setAttribute('aria-label', `Remove ${a.name}`);
+    x.addEventListener('click', () => { if (a.url) URL.revokeObjectURL(a.url); attachments = attachments.filter(b => b !== a); renderAttachments(); });
+    chip.appendChild(x);
+    box.appendChild(chip);
+  }
+}
+
+function readAttachment(a) {
+  if (a.data) return Promise.resolve({ name: a.name, type: a.type, data: a.data });
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve({ name: a.name, type: a.type, data: String(r.result).replace(/^data:[^,]*,/, '') });
+    r.onerror = () => reject(new Error(`Could not read ${a.name}.`));
+    r.readAsDataURL(a.file);
+  });
+}
+
+function onSnap(m) {
+  if (m.error) { $('composerHint').textContent = m.error; return; }
+  const size = Math.round(String(m.data || '').length * 0.75);
+  const a = { id: ++attachSeq, name: m.name || 'screenshot.png', size, type: m.mime || 'image/png', data: m.data, url: 'data:image/png;base64,' + m.data };
+  attachments.push(a);
+  renderAttachments();
+  input.focus();
+}
+
+$('attachBtn').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+input.addEventListener('paste', e => {
+  const files = e.clipboardData && e.clipboardData.files;
+  if (files && files.length) { addFiles(files); if (!e.clipboardData.getData('text')) e.preventDefault(); }
+});
+const dropZone = $('page-chat');
+let dragDepth = 0;
+const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+dropZone.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('composer').classList.add('dragging'); });
+dropZone.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+dropZone.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('composer').classList.remove('dragging'); } });
+dropZone.addEventListener('drop', e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; $('composer').classList.remove('dragging');
+  addFiles(e.dataTransfer.files);
+});
+
+// The small button beside +: more options.
+const menu = $('moreMenu');
+function openMenu(open) {
+  menu.hidden = !open;
+  $('moreBtn').setAttribute('aria-expanded', String(open));
+  if (open) { const first = menu.querySelector('button'); if (first) first.focus(); }
+}
+$('moreBtn').addEventListener('click', e => { e.stopPropagation(); openMenu(menu.hidden); });
+document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('#moreMenu')) openMenu(false); });
+menu.addEventListener('keydown', e => {
+  const items = Array.from(menu.querySelectorAll('button'));
+  const i = items.indexOf(document.activeElement);
+  if (e.key === 'Escape') { openMenu(false); $('moreBtn').focus(); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+});
+for (const b of menu.querySelectorAll('button')) {
+  b.addEventListener('click', () => {
+    const act = b.dataset.act;
+    openMenu(false);
+    if (act === 'upload') $('fileInput').click();
+    else if (act === 'snap') send('snapTab', { req: String(Date.now()) });
+    else if (act === 'caveman') send('setCaveman', { value: !state.caveman });
+    else if (act === 'tools') { showPage('settings'); setTimeout(() => { const c = $('toolsCard'); if (c.scrollIntoView) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); }
+    else if (act === 'new') { chat = []; saveChat(); send('newChat'); renderChat(); input.focus(); }
+  });
+}
 input.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
 });
@@ -367,18 +622,24 @@ function busyMsg() { return chat.find(m => m.role === 'assistant' && m.pending);
 
 async function submit() {
   const text = input.value.trim();
-  if (!text) return;
+  if (!text && !attachments.length) return;
   if (busyMsg()) { $('composerHint').textContent = 'Claude is still answering. Wait, or press Cancel.'; return; }
+  if (text.startsWith('/') && !attachments.length) { input.value = ''; autoGrow(); addMsg({ role: 'user', text }); return runSlash(text); }
+  if (state.agent === 'stopped') { addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' }); return; }
+  if (!state.signedIn) { addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' }); return; }
+  const files = attachments;
+  attachments = [];
+  renderAttachments();
   input.value = ''; autoGrow();
-  addMsg({ role: 'user', text });
-
-  if (text.startsWith('/')) return runSlash(text);
-
-  if (state.agent === 'stopped') return addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' });
-  if (!state.signedIn) return addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' });
+  addMsg({ role: 'user', text, files: files.map(a => ({ name: a.name, size: a.size })) });
   const id = `p${Date.now().toString(36)}${chatSeq++}`;
   addMsg({ role: 'assistant', id, text: '', steps: [], pending: true, startedAt: Date.now() });
-  send('chat', { id, text });
+  if (!files.length) { send('chat', { id, text }); return; }
+  let payload = [];
+  try { payload = await Promise.all(files.map(readAttachment)); }
+  catch (e) { return onChatDone({ id, ok: false, error: e.message }); }
+  finally { for (const a of files) if (a.url && a.url.startsWith('blob:')) URL.revokeObjectURL(a.url); }
+  send('chat', { id, text, attachments: payload });
 }
 
 async function runSlash(text) {
@@ -408,8 +669,11 @@ function onChatEvent(id, ev) {
     const steps = Array.isArray(ev.steps) && ev.steps.length ? ev.steps : (m.plan && m.plan.steps) || [];
     m.plan = { steps, done: Number(ev.done) || 0, note: String(ev.note || ''), at: m.steps.length };
   }
+  else if (ev.kind === 'notice') {
+    m.notices = (m.notices || []).concat([{ text: String(ev.text || '').slice(0, 300), action: ev.action && typeof ev.action === 'object' ? ev.action : null }]).slice(-5);
+  }
   else if (ev.kind === 'tool') {
-    m.steps.push({ name: String(ev.name || 'tool'), input: String(ev.input || ''), state: 'run' });
+    m.steps.push(Object.assign({ name: String(ev.name || 'tool'), input: String(ev.input || ''), state: 'run' }, ev.server ? { server: String(ev.server).slice(0, 60) } : {}));
     if (m.steps.length > 30) m.steps.splice(0, m.steps.length - 30);
   } else if (ev.kind === 'tool_result') {
     const step = m.steps.find(st => st.state === 'run');
@@ -473,15 +737,18 @@ const VERB = {
   media: 'Controlling the player', screenshot: 'Looking at the page', navigate: 'Opening a page', tab_open: 'Opening a tab',
   tab_activate: 'Switching tabs', tab_close: 'Closing a tab', tabs_list: 'Checking your tabs', create_file: 'Writing a file',
   WebSearch: 'Searching the web', WebFetch: 'Reading a web page', Read: 'Reading a file', Glob: 'Looking for files',
-  Grep: 'Searching files', Edit: 'Editing a file', Write: 'Saving a file',
+  Grep: 'Searching files', Edit: 'Editing a file', Write: 'Saving a file', read_document: 'Reading a document',
+  network_log: 'Reading the network log', console_log: 'Reading the console', Skill: 'Using a skill',
 };
 
 // What the current step is doing, in words: "Searching the web: niche tamagotchi repair".
 function stepLabel(st) {
-  const verb = VERB[st.name] || `Using ${st.name}`;
+  const verb = (!st.server && VERB[st.name])
+    || (st.server ? `${st.server}: ${String(st.name).replace(/^[a-z0-9]+_(?=[a-z])/i, m => (st.server.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(m.slice(0, -1).toLowerCase()) ? '' : m)).replace(/_/g, ' ')}`
+      : `Using ${st.name}`);
   let inp = {};
   try { inp = JSON.parse(st.input || '{}'); } catch {}
-  let what = inp.query || inp.name || inp.text || inp.key || '';
+  let what = inp.query || inp.name || inp.text || inp.key || inp.skill || inp.video_id || inp.videoId || '';
   if (!what && inp.url) { try { what = new URL(inp.url).hostname.replace(/^www\./, ''); } catch { what = inp.url; } }
   if (!what && inp.file_path) what = String(inp.file_path).split(/[\\/]/).pop();
   if (!what && st.result) { const r = /"(?:clicked|hovered)":\s*"[^"]*?\\?"([^"\\]{1,60})/.exec(st.result); if (r) what = r[1]; }
@@ -557,7 +824,7 @@ function progressBlock(m) {
   return box;
 }
 
-const FILE_ICON = { md: 'MD', html: 'HTML', htm: 'HTML', csv: 'CSV', json: 'JSON', svg: 'SVG', txt: 'TXT', doc: 'DOC' };
+const FILE_ICON = { md: 'MD', html: 'HTML', htm: 'HTML', csv: 'CSV', json: 'JSON', svg: 'SVG', txt: 'TXT', doc: 'DOC', docx: 'DOCX', pdf: 'PDF', xlsx: 'XLSX' };
 function fileCard(f) {
   const card = document.createElement('div'); card.className = 'filecard';
   const ext = ((/\.([a-z0-9]+)$/i.exec(f.name) || [])[1] || 'file').toLowerCase();
@@ -631,12 +898,27 @@ function renderChat() {
       const pb = progressBlock(m);
       if (pb) div.appendChild(pb);
     }
+    for (const n of m.notices || []) {
+      const box = el('div', 'notice');
+      box.appendChild(el('span', '', n.text));
+      if (n.action && n.action.type === 'tool_signin' && n.action.name) {
+        const b = el('button', 'primary', n.action.label || 'Sign in');
+        b.addEventListener('click', () => send('toolSignIn', { name: String(n.action.name) }));
+        box.appendChild(b);
+      }
+      div.appendChild(box);
+    }
 
     if (m.text || !m.pending) {
       const body = document.createElement('div');
       body.className = 'body';
       if (m.role === 'assistant') { body.classList.add('md'); cizMarkdown(body, m.text, onLink); } else body.textContent = m.text;
       if (m.text) div.appendChild(body);
+      if (m.role === 'user' && Array.isArray(m.files) && m.files.length) {
+        const sf = el('div', 'sentfiles');
+        for (const f of m.files) { const c = el('span', '', `📎 ${f.name}`); c.title = `${f.name} · ${sizeText(f.size || 0)}`; sf.appendChild(c); }
+        div.appendChild(sf);
+      }
       if (m.text && m.role === 'assistant' && !m.pending) {
         const foot = document.createElement('div');
         foot.className = 'msgfoot';
@@ -656,7 +938,7 @@ function renderChat() {
         foot.appendChild(cp);
       }
     }
-    if (Array.isArray(m.files) && m.files.length) {
+    if (m.role !== 'user' && Array.isArray(m.files) && m.files.length) {
       const files = document.createElement('div'); files.className = 'files-out';
       for (const f of m.files) files.appendChild(fileCard(f));
       div.appendChild(files);

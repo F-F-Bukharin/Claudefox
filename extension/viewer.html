@@ -12,8 +12,12 @@
     <div class="meta"><div id="name" class="name">Loading…</div><div id="info" class="info"></div></div>
     <button id="raw" type="button">Show source</button>
     <button id="copy" type="button">Copy</button>
-    <button id="print" type="button">Print / PDF</button>
-    <button id="download" type="button" class="primary">Download</button>
+    <button id="print" type="button">Print</button>
+    <div class="saveas">
+      <button id="download" type="button" class="primary">Download</button>
+      <button id="saveMore" type="button" class="primary more" aria-haspopup="menu" aria-expanded="false" title="Save in another format">▾</button>
+      <div id="saveMenu" class="menu" role="menu" hidden></div>
+    </div>
   </header>
   <main id="view" class="view"></main>
   <script src="lib/markdown.js"></script>

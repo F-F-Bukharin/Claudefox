@@ -54,7 +54,7 @@ const TOOLS = [
   {
     name: 'get_page_text',
     title: 'Read page',
-    description: 'The whole readable page as Markdown (headings, lists, tables, links), with the title, author, date and word count first. One call reads everything on the page, scrolled into view or not, so prefer it to scrolling and screenshots. Long pages come in parts: pass start_at = next_start to continue. A PDF tab is saved as a file for the Read tool.' + UNTRUSTED,
+    description: 'The whole readable page as Markdown (headings, lists, tables, links), with the title, author, date and word count first. One call reads everything on the page, scrolled into view or not, so prefer it to scrolling and screenshots. Long pages come in parts: pass start_at = next_start to continue. A PDF tab is saved as a file for the Read tool. Google Docs, Slides and Sheets are read through their export, so their full text comes back even though the editor draws it on a canvas.' + UNTRUSTED,
     inputSchema: obj({
       ...TAB,
       scope: { type: 'string', enum: ['main', 'full'], description: '"main" (default): the main content, without menus and footers. "full": everything on the page.' },
@@ -188,13 +188,47 @@ const TOOLS = [
   {
     name: 'create_file',
     title: 'Create file',
-    description: 'Make a file the user can open and download from the panel: a document or report (.md, rendered nicely; or .html), a table (.csv), data (.json), an image (.svg), code, or any other text file. For a Word document, write HTML and name it .doc. Files stay in the panel until the user deletes them. Up to 5 MB of text.',
+    description: 'Make a file the user can open and download from the panel. The extension picks the format: .docx makes a real Word document from Markdown you write (# title, ## sections, lists, tables, bold, italics, links, a line with \\pagebreak for a new page); .pdf is Markdown the user saves as PDF from the viewer; .xlsx is a real Excel file from CSV you write; .html a web page (full page or body); .md notes; .csv a table; .json, .svg, code or any other text file as is. Files stay in the panel until the user deletes them. Up to 5 MB of text.',
     inputSchema: obj({
-      name: { type: 'string', description: 'File name with extension, e.g. "Trip plan.md" or "prices.csv".' },
-      content: { type: 'string', description: 'The full text of the file.' },
+      name: { type: 'string', description: 'File name with extension, e.g. "Relatório de Física.docx", "Trip plan.md" or "prices.csv".' },
+      content: { type: 'string', description: 'The full text of the file: Markdown for .docx, .pdf and .md; CSV for .csv and .xlsx; HTML for .html.' },
       title: { type: 'string', description: 'Optional one-line description shown on the file card.' },
     }, ['name', 'content']),
     timeoutMs: 30000,
+  },
+  {
+    name: 'read_document',
+    title: 'Read document',
+    description: 'The text of a Word (.docx), PowerPoint (.pptx), Excel (.xlsx) or OpenDocument (.odt, .odp, .ods) file, as Markdown: headings, lists, tables, one section per slide or sheet. Works on files in the folder the user opened for file tools and on files attached in this chat. Use Read for PDFs, images and text files. Long files come in parts: pass start_at = next_start.' + UNTRUSTED,
+    inputSchema: obj({
+      path: { type: 'string', description: 'Full path of the file, or a path inside the file-tools folder.' },
+      start_at: { type: 'integer', description: 'Character offset to continue from (next_start of the previous part).' },
+      max_chars: { type: 'integer', description: 'Size of one part (default 60000, max 200000).' },
+    }, ['path']),
+    readOnly: true,
+    timeoutMs: 60000,
+  },
+  {
+    name: 'network_log',
+    title: 'Network log',
+    description: 'For debugging a page: the requests a tab made, newest last, with method, status, redirects (from and to), request type, and the names of cookies sent and set (never their values). Shows redirect chains, such as a sign-in that bounces to an error page. Page loads and frames are always recorded; pass detail "all" to also see scripts, images and XHR (recorded from when you first ask). clear empties the tab\'s log, so you can reload and see a clean run.' + UNTRUSTED,
+    inputSchema: obj({
+      ...TAB,
+      detail: { type: 'string', enum: ['pages', 'all'], description: '"pages" (default): page loads, frames and redirects. "all": every request.' },
+      limit: { type: 'integer', description: 'How many entries, newest last (default 60, max 300).' },
+      clear: { type: 'boolean', description: 'Empty this tab\'s log after reading it.' },
+    }),
+    readOnly: true,
+  },
+  {
+    name: 'console_log',
+    title: 'Console log',
+    description: 'For debugging a page: its console messages (errors, warnings, logs) and uncaught errors. The first call starts listening on the tab (it keeps listening across reloads until Stop); reload and call again to see messages from the page load.' + UNTRUSTED,
+    inputSchema: obj({
+      ...TAB,
+      clear: { type: 'boolean', description: 'Empty the collected messages after reading them.' },
+    }),
+    readOnly: true,
   },
   {
     name: 'progress',
@@ -212,6 +246,6 @@ const TOOLS = [
 ];
 
 // Tools whose results carry page content, which the tool server labels as untrusted.
-const PAGE_CONTENT = new Set(['read_page', 'get_page_text', 'find', 'analyze_page', 'get_selection']);
+const PAGE_CONTENT = new Set(['read_page', 'get_page_text', 'find', 'analyze_page', 'get_selection', 'read_document', 'network_log', 'console_log']);
 
 module.exports = { TOOLS, PAGE_CONTENT };

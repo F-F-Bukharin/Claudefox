@@ -18,8 +18,35 @@ fs.mkdirSync(folder);
 
 fs.writeFileSync(fake, `#!${process.execPath}
 'use strict';
-const fs = require('fs'); const { spawn } = require('child_process');
+const fs = require('fs'); const path = require('path'); const { spawn } = require('child_process');
 const argv = process.argv.slice(2);
+const REC = ${JSON.stringify(record)};
+if (argv[0] === 'plugin' && argv[1] === 'list') {
+  let list = [];
+  try { list = JSON.parse(fs.readFileSync(REC + '.plugins', 'utf8')); } catch {}
+  process.stdout.write(JSON.stringify(list));
+  process.exit(0);
+}
+if (argv[0] === 'plugin' || argv[0] === 'mcp') {
+  fs.appendFileSync(REC + '.cmds', argv.join(' ') + '\\n');
+  const cfgFile = path.join(process.env.CLAUDE_CONFIG_DIR || '', '.claude.json');
+  let cfg = {};
+  try { cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8')); } catch {}
+  cfg.mcpServers = cfg.mcpServers || {};
+  if (argv[1] === 'install') process.stdout.write(JSON.stringify({ command: 'install', outcome: 'ok' }) + '\\n');
+  if (argv[1] === 'get') process.stdout.write(argv[2] + ':\\n  Status: ' + (fs.existsSync(REC + '.connected') ? '\\u2714 Connected' : '! Needs authentication') + '\\n');
+  if (argv[1] === 'list') process.stdout.write('Checking MCP server health\\u2026\\n\\nclaude.ai Gmail: https://gmail.example/mcp - \\u2714 Connected\\nplugin:vidiq:vidiq: https://mcp.vidiq.com/mcp (HTTP) - ! Needs authentication\\n');
+  if (argv[1] === 'login') fs.writeFileSync(REC + '.connected', '1');
+  if (argv[1] === 'add') {
+    const dd = argv.indexOf('--');
+    if (dd !== -1) cfg.mcpServers[argv[dd - 1]] = { command: argv[dd + 1], args: argv.slice(dd + 2) };
+    else cfg.mcpServers[argv[argv.length - 2]] = { type: 'http', url: argv[argv.length - 1] };
+    fs.mkdirSync(path.dirname(cfgFile), { recursive: true });
+    fs.writeFileSync(cfgFile, JSON.stringify(cfg));
+  }
+  if (argv[1] === 'remove') { delete cfg.mcpServers[argv[argv.length - 1]]; fs.writeFileSync(cfgFile, JSON.stringify(cfg)); }
+  process.exit(0);
+}
 if (argv[0] === 'auth') {
   // One fake sign-in per profile folder (CLAUDE_CONFIG_DIR), like real Claude Code.
   const dir = process.env.CLAUDE_CONFIG_DIR || '';
@@ -45,11 +72,15 @@ let prompt = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', d => prompt += d);
 process.stdin.on('end', async () => {
-  fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv, prompt, cwd: process.cwd(),
+  let settings = null;
+  try { settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8')); } catch {}
+  fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv, prompt, cwd: process.cwd(), settings,
     apiKey: process.env.ANTHROPIC_API_KEY || null, config: process.env.CLAUDE_CONFIG_DIR || null }));
   const out = o => process.stdout.write(JSON.stringify(o) + '\\n');
   const sid = '11111111-2222-3333-4444-555555555555';
-  out({ type: 'system', subtype: 'init', session_id: sid });
+  const servers = [{ name: 'claude-in-zen', status: 'connected', source: 'dynamic' }];
+  if (!argv.includes('--strict-mcp-config') && settings && settings.enabledPlugins && settings.enabledPlugins['vidiq@test']) servers.push({ name: 'plugin:vidiq:vidiq', status: 'needs-auth', source: 'plugin' });
+  out({ type: 'system', subtype: 'init', session_id: sid, mcp_servers: servers });
   if (prompt === 'SLEEP') return setTimeout(() => {}, 60000);
   if (prompt === 'LIMIT') { out({ type: 'result', subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1760000000', session_id: sid }); return; }
   process.stdout.write('not json, should be ignored\\n');
@@ -62,8 +93,10 @@ process.stdin.on('end', async () => {
   const rpc = (id, method, params) => new Promise(r => { waits[id] = r; mcp.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\\n'); });
   await rpc(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fake', version: '1' } });
   out({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Let me look. ' } }, session_id: sid });
-  out({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'mcp__claude-in-zen__tabs_list', input: {} }] }, session_id: sid });
-  const r = await rpc(2, 'tools/call', { name: 'tabs_list', arguments: {} });
+  const doc = prompt.includes('READDOC ') ? prompt.split('READDOC ')[1].trim() : '';
+  const tool = doc ? 'read_document' : 'tabs_list';
+  out({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 't1', name: 'mcp__claude-in-zen__' + tool, input: doc ? { path: doc } : {} }] }, session_id: sid });
+  const r = await rpc(2, 'tools/call', { name: tool, arguments: doc ? { path: doc } : {} });
   out({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: !!r.result.isError, content: r.result.content }] }, session_id: sid });
   out({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'You have 1 tab.' } }, session_id: sid });
   out({ type: 'result', subtype: 'success', is_error: false, result: 'Let me look. You have 1 tab.', session_id: sid });
@@ -75,6 +108,31 @@ const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUD
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// A tiny .docx (a zip of two XML parts, stored without compression), like Word saves with a localized heading style.
+function zipStore(files) {
+  const table = [];
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; }
+  const crc = b => { let c = 0xffffffff; for (const x of b) c = table[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const locals = [], centrals = [];
+  let off = 0, count = 0;
+  for (const [name, text] of Object.entries(files)) {
+    const data = Buffer.from(text), nm = Buffer.from(name), c = crc(data);
+    const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt32LE(c, 14); lh.writeUInt32LE(data.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(nm.length, 26);
+    const ch = Buffer.alloc(46); ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt32LE(c, 16); ch.writeUInt32LE(data.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(nm.length, 28); ch.writeUInt32LE(off, 42);
+    locals.push(lh, nm, data); centrals.push(ch, nm); off += 30 + nm.length + data.length; count++;
+  }
+  const cd = Buffer.concat(centrals);
+  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(count, 8); end.writeUInt16LE(count, 10); end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(off, 16);
+  return Buffer.concat([...locals, cd, end]);
+}
+function makeDocx(title, paras) {
+  const p = (t, style) => `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ''}<w:r><w:t>${t}</w:t></w:r></w:p>`;
+  return zipStore({
+    'word/document.xml': `<?xml version="1.0"?><w:document xmlns:w="x"><w:body>${p(title, 'Ttulo1')}${paras.map(t => p(t)).join('')}</w:body></w:document>`,
+    'word/styles.xml': '<w:styles xmlns:w="x"><w:style w:type="paragraph" w:styleId="Ttulo1"><w:name w:val="heading 1"/></w:style></w:styles>',
+  });
+}
 
 const helper = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
 const inbox = []; let waiters = []; let hbuf = Buffer.alloc(0);
@@ -164,6 +222,100 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     const up = ua[ua.indexOf('--append-system-prompt') + 1];
     check('Unsafe mode is in the chat prompt, and only then', /Unsafe mode is on/.test(up) && !/Google sign-in pages are hands-off/.test(up));
     check('Unsafe mode still never types passwords or payment details', /Never type passwords, 2FA codes or payment details, in any mode/.test(up));
+    // Guard, documents and the settings every turn carries
+    const s1 = rec.settings || {};
+    const deny = (s1.permissions && s1.permissions.deny) || [];
+    check('settings: no plugins or connectors unless switched on', s1.disableClaudeAiConnectors === true && s1.enabledPlugins && !Object.keys(s1.enabledPlugins).length);
+    check('guard: Zen profile, Claude sign-ins and key files denied', deny.some(r => /\/zen\/\*\*\)$/.test(r)) && deny.some(r => r.includes('/claude-in-zen/claude/**')) && deny.includes('Read(//**/.env)') && deny.some(r => /\/\.ssh\/\*\*\)$/.test(r)), `${deny.length} rules`);
+    check('prompt explains real Word files and complete coverage', /\.docx makes a real Word document/.test(val('--append-system-prompt')) && /check it against the list/.test(val('--append-system-prompt')));
+    fs.mkdirSync(path.join(tmp, 'claude-in-zen', 'claude'), { recursive: true });
+    toHelper({ type: 'chat', id: 'cg', text: 'x', files: 'read', folder: path.join(tmp, 'claude-in-zen', 'claude') });
+    const guarded = await next(m => m.type === 'chat_done' && m.id === 'cg');
+    check('guard: a protected folder is refused for file tools', !guarded.ok && /can't use/.test(guarded.error), guarded.error);
+
+    toHelper({ type: 'chat', id: 'ca', text: 'what is in the file?', attachments: [
+      { name: 'lista.docx', data: makeDocx('Lista de exercícios', ['Questão 1: calcule a velocidade.']).toString('base64') },
+      { name: 'nota.txt', data: Buffer.from('oi').toString('base64') },
+    ] });
+    await next(m => m.type === 'chat_done' && m.id === 'ca', 15000);
+    const ra = JSON.parse(fs.readFileSync(record, 'utf8'));
+    const mdPath = (/its text is in (.+lista\.docx\.md)/.exec(ra.prompt) || [])[1];
+    check('attachments: listed before the message, Word text extracted', /^\[Attached files/.test(ra.prompt) && mdPath && fs.readFileSync(mdPath, 'utf8').includes('# Lista de exercícios') && /nota\.txt/.test(ra.prompt) && ra.prompt.endsWith('what is in the file?'), ra.prompt.slice(0, 300));
+
+    const docPath = path.join(folder, 'aula.docx');
+    fs.writeFileSync(docPath, makeDocx('Aula 3', ['Ondas e frequência.']));
+    toHelper({ type: 'chat', id: 'cr', text: 'READDOC ' + docPath, files: 'read', folder });
+    await next(m => m.type === 'chat_done' && m.id === 'cr', 15000);
+    const rr = eventsFor('cr').find(e => e.kind === 'tool_result');
+    check('read_document: the helper reads a Word file in the folder', rr && !rr.error && /# Aula 3/.test(rr.text), rr && rr.text);
+    toHelper({ type: 'chat', id: 'cr2', text: 'READDOC ' + docPath });
+    await next(m => m.type === 'chat_done' && m.id === 'cr2', 15000);
+    const rr2 = eventsFor('cr2').find(e => e.kind === 'tool_result');
+    check('read_document: refused outside the allowed folders', rr2 && rr2.error && /Not allowed/.test(rr2.text), rr2 && rr2.text);
+
+    // Tools and plugins: the essentials (vidIQ, caveman) are listed first and on; everything else stays off.
+    const plugDir = n => { const d = path.join(tmp, 'plugins', n); fs.mkdirSync(path.join(d, '.claude-plugin'), { recursive: true }); return d; };
+    const vd = plugDir('vidiq');
+    fs.writeFileSync(path.join(vd, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'vidiq', displayName: 'vidIQ', mcpServers: './.mcp.json', skills: './skills/' }));
+    fs.writeFileSync(path.join(vd, '.mcp.json'), JSON.stringify({ mcpServers: { vidiq: { type: 'http', url: 'https://mcp.vidiq.com/mcp' } } }));
+    const cd = plugDir('caveman');
+    fs.writeFileSync(path.join(cd, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'caveman' }));
+    fs.mkdirSync(path.join(cd, 'skills', 'caveman'), { recursive: true });
+    fs.writeFileSync(path.join(cd, 'skills', 'caveman', 'SKILL.md'), '---\nname: caveman\n---\n# Caveman Mode\nShort word good.');
+    const dc = plugDir('desktop-commander');
+    fs.writeFileSync(path.join(dc, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'desktop-commander', mcpServers: { 'desktop-commander': { command: 'npx', args: ['-y', 'x'] } } }));
+    fs.writeFileSync(record + '.plugins', JSON.stringify([
+      { id: 'desktop-commander@test', version: '0.2.0', scope: 'synced', enabled: true, installPath: dc },
+      { id: 'vidiq@test', version: '0.1.6', scope: 'synced', enabled: true, installPath: vd },
+      { id: 'caveman@test', version: '1.1.2', scope: 'user', enabled: true, installPath: cd },
+    ]));
+    toHelper({ type: 'tools' });
+    const tv = await next(m => m.type === 'tools' && m.plugins.length === 3, 8000);
+    check('tools: essentials first and on, the rest off', tv.plugins[0].recommended && tv.plugins[1].recommended && tv.plugins.filter(p => p.on).map(p => p.id).sort().join() === 'caveman@test,vidiq@test'
+      && tv.plugins[2].id === 'desktop-commander@test' && tv.plugins[2].local && !tv.plugins[2].on, JSON.stringify(tv.plugins.map(p => [p.id, p.on, p.recommended])));
+    toHelper({ type: 'chat', id: 'ct', text: 'transcript please' });
+    await next(m => m.type === 'chat_done' && m.id === 'ct', 15000);
+    const rt = JSON.parse(fs.readFileSync(record, 'utf8'));
+    const at = rt.argv, av = f => at[at.indexOf(f) + 1];
+    check('tools on: not strict, vidIQ and skills allowed, other plugins off', !at.includes('--strict-mcp-config') && av('--allowedTools').split(',').includes('mcp__plugin_vidiq_vidiq')
+      && av('--allowedTools').split(',').includes('Skill') && av('--tools').split(',').includes('Skill') && av('--tools').split(',').includes('ToolSearch') && rt.settings.enabledPlugins['vidiq@test'] === true
+      && rt.settings.enabledPlugins['desktop-commander@test'] === false && rt.settings.disableClaudeAiConnectors === true, av('--allowedTools'));
+    const note = eventsFor('ct').find(e => e.kind === 'notice');
+    check('vidIQ needing sign-in shows a Sign in button in the chat', note && note.action && note.action.type === 'tool_signin' && note.action.name === 'plugin:vidiq:vidiq', JSON.stringify(note));
+    check('prompt names the switched-on tools', /vidIQ \(plugin\)/.test(av('--append-system-prompt')));
+    toHelper({ type: 'chat', id: 'cc', text: 'hi', caveman: true });
+    await next(m => m.type === 'chat_done' && m.id === 'cc', 15000);
+    const cpa = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
+    const cpp = cpa[cpa.indexOf('--append-system-prompt') + 1];
+    check('Caveman mode puts the plugin skill in the prompt', /# Caveman mode \(on\)/.test(cpp) && /Short word good/.test(cpp) && !/name: caveman/.test(cpp));
+    toHelper({ type: 'tool_signin', name: 'plugin:vidiq:vidiq' });
+    const ss = await next(m => m.type === 'tool_result' && m.action === 'signin_started', 8000);
+    const sd = await next(m => m.type === 'tool_result' && m.action === 'signin', 20000);
+    check('tool sign-in: runs claude mcp login and sees it connected', ss.ok && sd.ok && fs.readFileSync(record + '.cmds', 'utf8').includes('mcp login plugin:vidiq:vidiq'), sd.error);
+    toHelper({ type: 'tool_set', kind: 'plugin', id: 'vidiq@test', value: false });
+    await next(m => m.type === 'tools' && m.plugins.some(p => p.id === 'vidiq@test' && !p.on), 8000);
+    toHelper({ type: 'chat', id: 'co', text: 'hi' });
+    await next(m => m.type === 'chat_done' && m.id === 'co', 15000);
+    const ro = JSON.parse(fs.readFileSync(record, 'utf8'));
+    check('vidIQ off: strict again, caveman skills stay', ro.argv.includes('--strict-mcp-config') && !ro.argv.join(' ').includes('mcp__plugin_vidiq') && !ro.argv[ro.argv.indexOf('--tools') + 1].includes('ToolSearch')
+      && ro.settings.enabledPlugins['vidiq@test'] === false && ro.argv[ro.argv.indexOf('--tools') + 1].split(',').includes('Skill'));
+    toHelper({ type: 'tool_add', name: 'my-api', target: 'https://example.com/mcp', on: true });
+    const ad = await next(m => m.type === 'tool_result' && m.action === 'add', 15000);
+    check('add a tool server by address', ad.ok && fs.readFileSync(record + '.cmds', 'utf8').includes('mcp add --scope user --transport http my-api https://example.com/mcp'), ad.error);
+    toHelper({ type: 'tool_add', name: 'bad name!', target: 'https://example.com/mcp' });
+    const bad2 = await next(m => m.type === 'tool_result' && m.action === 'add', 8000);
+    check('bad tool names are refused', !bad2.ok && /Name/.test(bad2.error));
+    toHelper({ type: 'chat', id: 'cs', text: 'hi' });
+    await next(m => m.type === 'chat_done' && m.id === 'cs', 15000);
+    const rs = JSON.parse(fs.readFileSync(record, 'utf8'));
+    check('an added server that is on gets allowed', !rs.argv.includes('--strict-mcp-config') && rs.argv[rs.argv.indexOf('--allowedTools') + 1].split(',').includes('mcp__my-api'));
+    toHelper({ type: 'tool_remove', name: 'my-api' });
+    const rmv = await next(m => m.type === 'tool_result' && m.action === 'remove', 15000);
+    check('remove an added server', rmv.ok && fs.readFileSync(record + '.cmds', 'utf8').includes('mcp remove --scope user my-api'), rmv.error);
+    toHelper({ type: 'tools_check' });
+    const chk = await next(m => m.type === 'tools' && m.connectors.length === 1 && !m.busy, 15000);
+    check('check lists claude.ai connectors, off until switched on', chk.connectors[0].label === 'Gmail' && chk.connectors[0].status === 'connected' && !chk.connectors[0].on);
+
     toHelper({ type: 'chat', id: 'c4', text: 'x', files: 'read', folder: path.join(tmp, 'missing') });
     const bad = await next(m => m.type === 'chat_done' && m.id === 'c4');
     check('missing folder refused before starting', !bad.ok && /not found/.test(bad.error));

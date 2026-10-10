@@ -20,7 +20,9 @@ const tabs = [
   { id: 3, windowId: 1, active: false, title: 'Config', url: 'about:config', status: 'complete' },
   { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/H/Mods/claude-in-zen/claude-in-zen.xpi', status: 'complete' },
   { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/H/notes/claude-in-zen-notes.txt', status: 'complete' },
+  { id: 6, windowId: 1, active: false, title: 'Lista 3 - Google Docs', url: 'https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit', status: 'complete' },
 ];
+const webRequest = { onBeforeRequest: ev(), onSendHeaders: ev(), onHeadersReceived: ev(), onBeforeRedirect: ev(), onCompleted: ev(), onErrorOccurred: ev() };
 const removed = [];
 const injected = [];
 let native = null;   // the fake helper port
@@ -55,18 +57,25 @@ const browser = {
     update: async (id, o) => Object.assign(tabs.find(t => t.id === id), o),
     remove: async ids => { removed.push(...[].concat(ids)); },
     executeScript: async (id, o) => { injected.push(id); return [o.code.includes('"exists"') ? false : { ok: true, from: id }]; },
-    onActivated: ev(), onUpdated: ev(), onCreated: ev(),
+    onActivated: ev(), onUpdated: ev(), onCreated: ev(), onRemoved: ev(),
   },
+  webRequest,
   windows: { update: async () => {} },
 };
+const fetched = [];
 const fetch = async url => {
+  fetched.push(String(url));
   if (String(url).includes('9222')) throw new Error('refused');
+  if (/docs\.google\.com\/document\/d\/[^/]+\/export\?format=md/.test(url)) {
+    return { status: 200, ok: true, headers: { get: () => 'text/markdown; charset=utf-8' }, text: async () => '# Lista 3\n\n1. Calcule a velocidade média.\n2. Explique a segunda lei.' };
+  }
   return { status: 200, ok: true, json: async () => ({ account: { email_address: 'personalworksacc@gmail.com', full_name: 'F', uuid: 'u-1' } }) };
 };
 
-const ctx = vm.createContext({ browser, fetch, console, URL, AbortController, setTimeout, clearTimeout, setInterval: () => 0, Promise });
+const ctx = vm.createContext({ browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, setTimeout, clearTimeout, setInterval: () => 0, Promise });
 ctx.window = ctx;
-for (const f of ['lib/policy.js', 'lib/state.js', 'lib/tools.js', 'background.js']) {
+const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')).background.scripts;   // the real load order
+for (const f of SCRIPTS) {
   vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx, { filename: f });
 }
 
@@ -97,10 +106,10 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     const ctx2 = vm.createContext({ browser: Object.assign({}, browser, { storage: { local: browser.storage.local, session: (() => { const s2 = {}; return {
       get: async keys => Object.fromEntries((Array.isArray(keys) ? keys : [keys]).filter(k => k in s2).map(k => [k, s2[k]])),
       set: async o => Object.assign(s2, JSON.parse(JSON.stringify(o))) }; })() } }),
-      fetch, console, URL, AbortController, setTimeout, clearTimeout, setInterval: () => 0, Promise });
+      fetch, console, URL, URLSearchParams, AbortController, TextEncoder, setTimeout, clearTimeout, setInterval: () => 0, Promise });
     ctx2.window = ctx2;
     const nativeBefore = native;
-    for (const f of ['lib/policy.js', 'lib/state.js', 'lib/tools.js', 'background.js']) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx2, { filename: f });
+    for (const f of SCRIPTS) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx2, { filename: f });
     await tick(80);
     check('restart signs back in from the remembered account', vm.runInContext('cizState', ctx2).get().signedIn === true);
     native = nativeBefore;
@@ -112,7 +121,7 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     check('check link logs what it found', g('cizState').log().some(e => /signed in as personalworksacc@gmail.com \(profile: C:\\x\\claude\)/.test(e.text)));
 
     r = await call('tabs_list');
-    check('tabs_list works', r.ok && r.result.length === 5);
+    check('tabs_list works', r.ok && r.result.length === 6);
     r = await call('read_page', { tab_id: 2 });
     check('Google sign-in tab refused', !r.ok && /Google sign-in/.test(r.error) && !injected.includes(2));
     r = await call('get_page_text', { tab_id: 3 });
@@ -197,6 +206,35 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     r = await call('get_page_text', { tab_id: 3 });
     check('Unsafe mode still refuses about: pages', !r.ok && /off-limits/.test(r.error));
 
+    // Google Docs: read through the export, with the user's session
+    r = await call('get_page_text', { tab_id: 6 });
+    check('Google Docs are read through their export', r.ok && /Google Doc, read through its export/.test(r.result.text) && /Calcule a velocidade/.test(r.result.text) && r.result.title === 'Lista 3'
+      && fetched.some(u => u === 'https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/export?format=md'), r.error || '');
+
+    // Network log: the redirect chain of a sign-in, with cookie names and flags, never values or tokens
+    const wrq = (n, d) => webRequest[n].fire(Object.assign({ tabId: 1, requestId: 'r1', timeStamp: 1000, method: 'GET', type: 'main_frame', frameId: 0 }, d));
+    wrq('onBeforeRequest', { url: 'https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmail.google.com&token=SECRET123&hl=pt-BR' });
+    wrq('onSendHeaders', { requestHeaders: [{ name: 'Cookie', value: 'NID=abc123secret; SID=zzz' }] });
+    wrq('onHeadersReceived', { statusCode: 302, responseHeaders: [{ name: 'Set-Cookie', value: 'GAPS=1:topsecretvalue; Domain=accounts.google.com; Secure; HttpOnly; SameSite=None; Max-Age=63072000' }] });
+    wrq('onBeforeRedirect', { statusCode: 302, redirectUrl: 'https://accounts.google.com/CheckCookie?checkedDomains=youtube&continue=x' });
+    wrq('onBeforeRequest', { timeStamp: 1200, url: 'https://accounts.google.com/CheckCookie?checkedDomains=youtube&continue=x' });
+    wrq('onSendHeaders', { requestHeaders: [{ name: 'Cookie', value: 'NID=abc123secret' }] });
+    wrq('onBeforeRedirect', { statusCode: 302, redirectUrl: 'https://support.google.com/accounts/topic/7189049?hl=pt-BR' });
+    wrq('onBeforeRequest', { timeStamp: 1500, url: 'https://support.google.com/accounts/topic/7189049?hl=pt-BR' });
+    wrq('onCompleted', { statusCode: 200 });
+    webRequest.onBeforeRequest.fire({ tabId: 1, requestId: 'img1', timeStamp: 1600, method: 'GET', type: 'image', url: 'https://support.google.com/logo.png' });
+    r = await call('network_log', { tab_id: 1 });
+    const nl = r.ok ? r.result.text : '';
+    check('network log shows the redirect chain hop by hop', r.ok && r.result.entries === 3 && /302 page https:\/\/accounts\.google\.com\/ServiceLogin.*-> https:\/\/accounts\.google\.com\/CheckCookie/.test(nl)
+      && /-> https:\/\/support\.google\.com\/accounts\/topic\/7189049/.test(nl) && /200 page https:\/\/support\.google\.com/.test(nl), nl);
+    check('network log keeps cookie names and flags, never values or tokens', /cookies sent: NID, SID/.test(nl) && /GAPS \(Domain=accounts\.google\.com, Secure, HttpOnly, SameSite=None, persistent\)/.test(nl)
+      && /token=\[hidden\]/.test(nl) && !/SECRET123|abc123secret|topsecretvalue|zzz/.test(nl));
+    check('pages only by default; images need detail "all"', !/logo\.png/.test(nl));
+    r = await call('console_log', { tab_id: 1 });
+    check('console log starts listening on the tab', r.ok && injected.includes(1) && /listening/i.test(r.result.text));
+    r = await call('console_log', { tab_id: 2 });
+    check('console log follows the Google sign-in rule', r.ok === g('cizState').get().unsafe);
+
     // Stop
     const port = native;
     const waiting = call('wait_for', { tab_id: 1, text: 'never shows', timeout_ms: 60000 });
@@ -208,6 +246,7 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     check('Stop ends the open answer in the panel', panelIn.some(m => m.type === 'chatDone' && m.id === 'p4' && m.error === 'Stopped.'));
     check('Stop disconnects the helper and turns file tools off', port.disconnected && s.agent === 'stopped' && s.filesEnabled === false);
     check('Stop turns Unsafe mode off too', s.unsafe === false);
+    check('Stop forgets the network log', !g('cizNet').size && !g('cizConsoleTabs').size);
     const w = await waiting;
     check('Stop aborts the running page action at once', !w.ok && w.error === 'Stopped' && Date.now() - tStop < 500 && s.pending === 0, `${Date.now() - tStop} ms`);
     r = await call('tabs_list');

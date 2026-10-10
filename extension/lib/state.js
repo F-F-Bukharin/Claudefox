@@ -13,8 +13,11 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   unsafe: false,              // Unsafe mode: Claude may act on Google sign-in pages. Session only (load() clears it)
   accounts: [],               // chat accounts from the helper: { id, email, plan, loggedIn, active }
   accountLogin: null,         // { id, isNew } while a sign-in window is open
-  chatModel: 'speed',
-  chatPlus: false,            // Speed Plus: Haiku 5.5 at max effort (only applies in Speed)         // 'speed' (Haiku 5.5, high effort) | 'quality' (Opus 5.5, high effort)
+  chatModel: 'speed',          // 'speed' (Haiku 5.5, high effort) | 'quality' (Opus 5.5, high effort)
+  chatPlus: false,            // Speed Plus: Haiku 5.5 at max effort (only applies in Speed)
+  caveman: false,             // Caveman mode: short replies (the + menu). Remembered across restarts (storage.local)
+  tools: null,                // Settings > Tools and plugins, as the helper last reported it
+  toolLogin: null,            // { name, label } while a tool's sign-in window is open
   chatSession: '',            // Claude Code session id, so follow-ups keep the conversation
   native: 'unknown',          // 'unknown' | 'connected' | 'missing' | 'error'
   nativeDetail: '',

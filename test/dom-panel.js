@@ -112,5 +112,62 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  ok('turning it off needs no question', sent.some(m=>m.type==='setUnsafe'&&m.value===false) && $('unsafeConfirm').hidden);
  onMsg({type:'state',state:{...ready,unsafe:false},log:[]});
  ok('badge hidden and Google row back to hands-off when off', $('unsafeBadge').hidden && $('googleVal').textContent==='always hands-off');
+ // Tools and plugins card: essentials first, local tools ask first, sign-in from the row
+ const tools={busy:null,scanned:1,checked:0,
+  plugins:[{id:'vidiq@synced',label:'vidIQ',version:'0.1.6',scope:'synced',skills:true,local:false,recommended:true,on:true,status:'needs-auth',servers:[{name:'plugin:vidiq:vidiq',label:'vidiq',status:'needs-auth',transport:'http'}]},
+   {id:'caveman@x',label:'caveman',version:'1.1.2',scope:'user',skills:true,local:false,recommended:true,on:true,status:'none',servers:[]},
+   {id:'desktop-commander@synced',label:'Desktop Commander',version:'0.2.0',scope:'synced',skills:false,local:true,recommended:false,on:false,status:'unknown',servers:[{name:'plugin:desktop-commander:desktop-commander',label:'desktop-commander',status:'unknown',transport:'stdio',local:true}]}],
+  connectors:[],added:[{name:'my-api',label:'my-api',status:'connected',transport:'http',target:'https://example.com/mcp',on:true}]};
+ onMsg({type:'state',state:{...ready,tools},log:[]});
+ const rows=[...$('toolsList').querySelectorAll('.trow')];
+ const groups=[...$('toolsList').querySelectorAll('.tgroup')].map(g=>g.textContent);
+ ok('tools: groups in order, essentials on top', groups.join('|')==='Recommended|Plugins|claude.ai connectors|Added by you' && /vidIQ/.test(rows[0].textContent) && rows[0].querySelector('.switch').checked, groups.join('|'));
+ ok('tools: connectors hint before the first check', /Press check/.test($('toolsList').textContent));
+ const vrow=rows[0]; const signBtn=[...vrow.querySelectorAll('button')].find(b=>b.textContent==='sign in');
+ ok('tools: vidIQ shows needs sign-in with a button', /needs sign-in/.test(vrow.textContent) && !!signBtn);
+ signBtn.click(); ok('tools: sign in asks the helper for that server', sent.some(m=>m.type==='toolSignIn'&&m.name==='plugin:vidiq:vidiq'));
+ const drow=rows.find(r=>/Desktop Commander/.test(r.textContent)); const dsw=drow.querySelector('.switch');
+ const mk=sent.length; dsw.checked=true; dsw.dispatchEvent(new w.Event('change'));
+ ok('tools: a local tool asks before turning on', !$('toolConfirm').hidden && /runs programs on this PC/.test($('toolConfirmText').textContent) && !sent.slice(mk).some(m=>m.type==='toolSet'));
+ $('toolYes').click(); ok('tools: confirm turns it on', sent.slice(mk).some(m=>m.type==='toolSet'&&m.kind==='plugin'&&m.id==='desktop-commander@synced'&&m.value===true));
+ const csw=rows[1].querySelector('.switch'); csw.checked=false; csw.dispatchEvent(new w.Event('change'));
+ ok('tools: switching off needs no question', sent.some(m=>m.type==='toolSet'&&m.id==='caveman@x'&&m.value===false));
+ $('toolsCheck').click(); ok('tools: check asks the helper', sent.some(m=>m.type==='toolsCheck'));
+ $('addName').value='my-mcp'; $('addTarget').value='https://mcp.example.com/mcp'; $('addBtn').click();
+ ok('tools: add by address sends name and target, on', sent.some(m=>m.type==='toolAdd'&&m.name==='my-mcp'&&m.target==='https://mcp.example.com/mcp'&&m.on===true));
+ $('pluginSpec').value='caveman@anthropic-plugin-directory'; $('pluginBtn').click();
+ ok('tools: install plugin sends the spec', sent.some(m=>m.type==='pluginInstall'&&m.spec==='caveman@anthropic-plugin-directory'));
+ // composer: + adds files, the small button opens the menu
+ w.document.querySelector('.tabs button[data-page="chat"]').click();
+ ok('composer: + and the options button sit in the message box', $('composer').querySelector('.attach #attachBtn') && $('composer').querySelector('.attach #moreBtn') && $('composer').firstElementChild.classList.contains('attach'));
+ $('moreBtn').click();
+ ok('menu opens with the options', !$('moreMenu').hidden && $('moreBtn').getAttribute('aria-expanded')==='true' && /Upload files/.test($('moreMenu').textContent) && /Caveman mode/.test($('moreMenu').textContent));
+ $('moreMenu').querySelector('[data-act="caveman"]').click();
+ ok('caveman item toggles caveman mode and closes the menu', sent.some(m=>m.type==='setCaveman'&&m.value===true) && $('moreMenu').hidden);
+ onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:false,caveman:true,tools},log:[]});
+ ok('caveman shows in the menu, on the button and in the hint', $('moreMenu').querySelector('[data-act="caveman"]').getAttribute('aria-checked')==='true' && $('moreBtn').classList.contains('on') && /caveman/.test($('composerHint').textContent));
+ $('moreBtn').click(); $('moreMenu').querySelector('[data-act="snap"]').click();
+ const snapReq=sent.filter(m=>m.type==='snapTab').pop(); ok('screenshot asks the add-on', !!snapReq);
+ onMsg({type:'snap',req:snapReq.req,data:'iVBORw0KGgo=',name:'screenshot example.com.png',mime:'image/png'});
+ ok('screenshot becomes an attachment chip', $('attachList').querySelectorAll('.attchip').length===1 && /screenshot example\.com\.png/.test($('attachList').textContent));
+ const doc=new w.File([new Uint8Array([80,75,3,4,1,2,3])],'Lista 1.docx',{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+ const pasteEv=new w.Event('paste',{bubbles:true,cancelable:true}); pasteEv.clipboardData={files:[doc],getData:()=>''};
+ $('input').dispatchEvent(pasteEv);
+ ok('pasting a file adds a chip', $('attachList').querySelectorAll('.attchip').length===2 && /DOCX/.test($('attachList').textContent));
+ $('attachList').querySelectorAll('.attchip .ax')[1].click();
+ ok('chip × removes the file', $('attachList').querySelectorAll('.attchip').length===1);
+ $('input').dispatchEvent(Object.assign(new w.Event('paste',{bubbles:true,cancelable:true}),{clipboardData:{files:[doc],getData:()=>''}}));
+ $('input').value='summarize these'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
+ await new Promise(r=>setTimeout(r,120));
+ const withFiles=sent.filter(m=>m.type==='chat').pop();
+ ok('message goes with both files as base64', withFiles.text==='summarize these' && withFiles.attachments.length===2 && withFiles.attachments[0].data==='iVBORw0KGgo=' && withFiles.attachments[1].name==='Lista 1.docx' && withFiles.attachments[1].data==='UEsDBAECAw==', JSON.stringify(withFiles.attachments.map(a=>[a.name,a.data])));
+ ok('chips clear after sending; the message lists the files', $('attachList').hidden && /Lista 1\.docx/.test([...$('messages').querySelectorAll('.msg.user')].pop().textContent));
+ onMsg({type:'chatEvent',id:withFiles.id,event:{kind:'notice',text:'vidIQ needs you to sign in before Claude can use it.',action:{type:'tool_signin',name:'plugin:vidiq:vidiq',label:'Sign in to vidIQ'}}});
+ onMsg({type:'chatEvent',id:withFiles.id,event:{kind:'tool',name:'vidiq_video_transcript',server:'vidIQ',input:'{"video_id":"abc"}'}});
+ await new Promise(r=>setTimeout(r,60));
+ const nb=[...$('messages').querySelectorAll('.notice button')].pop();
+ ok('notice in the reply has a Sign in button', nb && nb.textContent==='Sign in to vidIQ');
+ const before2=sent.length; nb.click(); ok('notice button starts the sign-in', sent.slice(before2).some(m=>m.type==='toolSignIn'&&m.name==='plugin:vidiq:vidiq'));
+ ok('other servers\' tools get readable labels', /vidIQ: video transcript/.test($('messages').textContent), $('messages').querySelector('.plabel')?.textContent);
  console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
 })().catch(e=>{console.log('ERROR',e.stack);process.exit(1)});

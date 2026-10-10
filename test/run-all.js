@@ -7,7 +7,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const TESTS = [
   'host/test/smoke.js', 'host/test/mcp-smoke.js', 'host/test/chat-smoke.js',
-  'test/addon-smoke.js', 'test/dom-page-tools.js', 'test/dom-panel.js',
+  'test/addon-smoke.js', 'test/dom-page-tools.js', 'test/dom-panel.js', 'test/docx.js',
 ];
 let failed = 0;
 for (const t of TESTS) {

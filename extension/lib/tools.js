@@ -846,6 +846,37 @@ async function cizPdfOf(tab) {
   return { pdf_base64: cizBase64(buf), title: tab.title || '', url, bytes: buf.byteLength };
 }
 
+// Google Docs, Slides and Sheets draw their text on a canvas, so the page itself has little to read. Their export
+// links give the whole text with the user's own session (docs.google.com is not a sign-in page).
+async function cizGoogleExport(tab, args) {
+  const m = /^https:\/\/docs\.google\.com\/(document|presentation|spreadsheets)\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]{20,})/.exec(tab.url || '');
+  if (!m) return null;
+  const [, kind, id] = m;
+  const base = `https://docs.google.com/${kind}/d/${id}`;
+  let gid = '';
+  try { const u = new URL(tab.url); gid = (/gid=(\d+)/.exec(u.hash) || [])[1] || u.searchParams.get('gid') || ''; } catch {}
+  const tries = kind === 'document' ? [`${base}/export?format=md`, `${base}/export?format=txt`]
+    : kind === 'presentation' ? [`${base}/export/txt`, `${base}/export?format=txt`]
+      : [`${base}/export?format=csv${gid ? `&gid=${gid}` : ''}`];
+  for (const url of tries) {
+    let text;
+    try {
+      const r = await fetch(url, { credentials: 'include', redirect: 'follow', cache: 'no-store' });
+      if (!r.ok || /text\/html/i.test(r.headers.get('content-type') || '')) continue;   // a sign-in page or an error page
+      text = await r.text();
+    } catch { continue; }
+    const title = String(tab.title || '').replace(/\s+-\s+Google (Docs|Slides|Sheets|Documentos|Apresentações|Planilhas)$/i, '');
+    const max = Math.min(Math.max(Math.round(Number(args.max_chars) || 40000), 1000), 200000);
+    const start = Math.max(0, Math.round(Number(args.start_at) || 0));
+    const part = text.slice(start, start + max);
+    const more = start + max < text.length;
+    const what = kind === 'document' ? 'Google Doc' : kind === 'presentation' ? 'Google Slides deck' : 'Google Sheet (this sheet, as CSV)';
+    return { title, url: tab.url, text: `${start ? '' : `${what}, read through its export. ${text.length.toLocaleString('en')} characters.\n\n`}${part}`,
+      truncated: more, next_start: more ? start + max : null, total_chars: text.length };
+  }
+  return null;
+}
+
 const CIZ_TOOLS = {
   async ping() { return { pong: true, version: browser.runtime.getManifest().version }; },
 
@@ -894,6 +925,8 @@ const CIZ_TOOLS = {
 
   async get_page_text(args) {
     const tab = await cizPageTab(args);
+    const google = await cizGoogleExport(tab, args);
+    if (google) return google;
     const pdf = await cizPdfOf(tab);
     if (pdf) return pdf;
     const n = Number(args.scroll_to_load);
@@ -964,6 +997,15 @@ const CIZ_TOOLS = {
     try { vp = await cizInPage(tab, 'viewport', {}); } catch {}
     const note = vp ? `Visible page is ${vp.width}x${vp.height} CSS px; use these image pixels as click x and y.` : '';
     return { data: m[1], mimeType: 'image/png', title: tab.title || '', url: tab.url || '', note };
+  },
+
+  // Debugging: the tab's requests and redirects (metadata only, see lib/netlog.js) and its console messages.
+  async network_log(args) {
+    const tab = await cizTabFor(args);
+    return cizNetLog(tab.id, args);
+  },
+  async console_log(args) {
+    return cizConsoleLog(await cizPageTab(args), args);
   },
 
   // Documents and other text files Claude makes for the user. They live in the add-on (Files in the panel),
