@@ -39,6 +39,9 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   claude: null,               // { installed, loggedIn, email, plan, checkedAt } from the helper
   debugPort: 'unknown',       // 'unknown' | 'off' | 'on'
   pending: 0,
+  grantAsk: null,             // { id, folder } while the panel asks to allow a folder (lib/local.js); one at a time
+  localGrants: [],            // folders Claude may look in (paths on this computer). Remembered across restarts (storage.local localGrants)
+  fileAccess: 'unknown',      // 'yes' | 'no' | 'unknown': whether Zen lets the add-on into file: pages
 });
 
 const cizState = {
