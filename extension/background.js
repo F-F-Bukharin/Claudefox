@@ -17,7 +17,10 @@ const booted = (async function init() {
   cizState.onChange(pushToPanels);
   cizState.onChange(updateBadge);
   await cizState.set({ pending: 0 });
+  cizArmy.install();
   try { const pref = await browser.storage.local.get('caveman'); await cizState.set({ caveman: !!pref.caveman }); } catch {}
+  try { const a = await browser.storage.local.get('armyOn'); await cizState.set(a.armyOn === true ? { chatArmy: true, chatModel: 'quality' } : { chatArmy: false }); } catch {}
+  try { const r = (await browser.storage.local.get('armyRuns')).armyRuns; await cizState.set({ armyToday: r && r.day === localDay() ? Number(r.count) || 0 : 0 }); } catch {}
   try { const o = await browser.storage.local.get('outputMode'); await cizState.set({ outputMode: o.outputMode === 'store' ? 'store' : 'download' }); } catch {}
   cizNetStart();
   await cizState.addLog('info', 'Add-on started');
@@ -140,6 +143,7 @@ async function handlePanel(msg, port) {
     case 'newChat':    return cizState.set({ chatSession: '' });
     case 'setModel':   return cizState.set({ chatModel: msg.value === 'quality' ? 'quality' : 'speed' });
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
+    case 'setArmy':    return setArmy(!!msg.value);
     case 'setUnsafe': return setUnsafe(!!msg.value);
     case 'modUpdate':
       if (!sendNative({ type: 'mod_update', id: String(msg.id || ''), enabled: msg.enabled, broken: msg.broken })) return cizState.addLog('error', 'Mods: the helper is not connected, so the change was not saved.');
@@ -457,11 +461,12 @@ async function stopAll(source) {
     try { a.controller.abort(new Error('Stopped')); } catch {}
     pendingActions.delete(id);
   }
+  await cizArmy.closeAll();      // every army worker's tab goes too
   failChats('Stopped.');
   cizNetReset();                 // forget recorded requests, stop watching consoles
   disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
   await cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, pending: 0 });
-  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, helper disconnected, file tools off, Unsafe mode off, network log cleared.`);
+  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, army tabs closed, helper disconnected, file tools off, Unsafe mode off, network log cleared.`);
 }
 
 async function startAgent() {
@@ -511,6 +516,34 @@ async function setUnsafe(value) {
   await cizState.addLog('warn', 'Unsafe mode on: Claude may act on Google sign-in pages. It still never types passwords, 2FA codes or payment details.');
 }
 
+// The army switch (Quality only): Opus 5.5 at max effort may send up to five Haiku workers to background tabs.
+// Remembered across restarts. Turning it on picks Quality.
+async function setArmy(value) {
+  try { await browser.storage.local.set({ armyOn: value }); } catch {}
+  await cizState.set({ chatArmy: value, ...(value ? { chatModel: 'quality' } : {}) });
+  return cizState.addLog('info', value ? 'Army on: Opus 5.5 may send Haiku workers to background tabs' : 'Army off');
+}
+
+// Today's local date, YYYY-MM-DD: the army run counter starts over each day.
+function localDay() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// A new army run: count it for today. 5 a day is the recommended most; the panel warns past that, nothing blocks.
+async function countArmyRun() {
+  const day = localDay();
+  let count = 0;
+  try {
+    const r = (await browser.storage.local.get('armyRuns')).armyRuns;
+    count = r && r.day === day ? Number(r.count) || 0 : 0;
+  } catch { count = cizState.get().armyToday || 0; }
+  count++;
+  try { await browser.storage.local.set({ armyRuns: { day, count } }); } catch {}
+  await cizState.set({ armyToday: count });
+  return count;
+}
+
 // ---------------------------------------------------------------- chat
 // One Claude Code turn at a time, run by the helper. The panel shows the stream.
 
@@ -549,7 +582,7 @@ async function startChat(msg) {
   if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Double-click "Sign in Claude Code.bat" in the tools folder.');
   const files = !improve && s.filesEnabled ? s.filesMode : '';
   chatRuns.set(id, { startedAt: Date.now() });
-  const model = improve ? 'selfimprove' : s.chatModel === 'quality' ? 'quality' : s.chatPlus ? 'speedplus' : 'speed';
+  const model = improve ? 'selfimprove' : s.chatModel === 'quality' ? (s.chatArmy ? 'army' : 'quality') : s.chatPlus ? 'speedplus' : 'speed';
   let tab = null;
   if (!improve) {
     try {
@@ -561,7 +594,7 @@ async function startChat(msg) {
     unsafe: !improve && !!s.unsafe, caveman: !improve && !!s.caveman, attachments, improve });
   if (!sent) { chatRuns.delete(id); return fail('Could not reach the helper.'); }
   await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
-    : `chat → Claude Code, ${model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
+    : `chat → Claude Code, ${model === 'army' ? 'army (Opus 5.5 at max effort, with Haiku workers)' : model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
 }
 
 function cancelChat(id) {
@@ -617,6 +650,7 @@ function connectNative() {
     if (cizState.get().folderPicking) cizState.set({ folderPicking: false });
     for (const done of [...outputWaiters.values()]) done({ ok: false, error: 'the helper stopped' });
     failChats('The helper stopped, so the answer was cut off.');
+    cizArmy.closeAll().catch(() => {});   // its workers are gone, so their tabs go too
     if (err && /No such native application/i.test(err.message)) {
       cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
       return;
@@ -785,10 +819,16 @@ async function onNativeMessage(msg) {
       return;
 
     case 'call': {
-      const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'));
+      // An army worker's call names its run and worker; lib/army.js holds it to that worker's own tabs.
+      const army = msg.army && typeof msg.army === 'object' ? { run: String(msg.army.run || '').slice(0, 40), worker: String(msg.army.worker || '').slice(0, 40) } : null;
+      const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'), army);
       sendNative({ type: 'result', id: msg.id, ...out });
       return;
     }
+
+    case 'army_end':   // a worker finished (or, without worker, the whole run): close its tabs
+      if (msg.run) await cizArmy.closeRun(String(msg.run), msg.worker ? String(msg.worker) : null);
+      return;
 
     case 'update_result':
       await cizState.set({ updating: false, updateNote: msg.ok
@@ -812,9 +852,14 @@ async function onNativeMessage(msg) {
     case 'account_result':
       return onAccountResult(msg);
 
-    case 'chat_event':
-      if (chatRuns.has(String(msg.id))) postToPanels({ type: 'chatEvent', id: String(msg.id), event: msg.event || {} });
+    case 'chat_event': {
+      const id = String(msg.id);
+      if (!chatRuns.has(id)) return;
+      let event = msg.event || {};
+      if (event.kind === 'army' && event.started) event = Object.assign({}, event, { today: await countArmyRun() });
+      postToPanels({ type: 'chatEvent', id, event });
       return;
+    }
 
     case 'tools':
       await cizState.set({ tools: cleanTools(msg), toolLogin: msg.login ? { name: String(msg.login.name || ''), label: String(msg.login.label || '') } : null });
@@ -893,10 +938,17 @@ async function probeDebugPort() {
 
 // The tools themselves are in lib/tools.js (CIZ_TOOLS).
 
-async function dispatch(tool, args, source) {
+// army: { run, worker } for an army worker's call (lib/army.js), else null.
+async function dispatch(tool, args, source, army) {
   const s = cizState.get();
   if (s.agent !== 'active') return { ok: false, error: 'Agent is stopped. Press Start in the Claude in Zen panel.' };
   if (!s.signedIn) return { ok: false, error: 'Not signed in. Press "Sign in with Claude" in the panel.' };
+  if (army) {
+    try { cizArmy.check(tool, args, army); } catch (e) { return { ok: false, error: e.message }; }
+    // The tools see which worker calls; a worker's new tab always opens in the background.
+    args = Object.assign({}, args, { __army: army }, tool === 'tab_open' ? { active: false } : {});
+    cizArmy.touch(args.tab_id);
+  }
   const fn = CIZ_TOOLS[tool];
   if (!fn) return { ok: false, error: `Unknown tool: ${tool}` };
 
@@ -913,6 +965,11 @@ async function dispatch(tool, args, source) {
     if (result && (result.clicked || result.filled || result.typed)) {
       const what = result.clicked || `${result.filled || result.typed} into the field`;
       await cizState.addLog('action', `${tool}: ${String(what).slice(0, 140)}${result.navigated ? ` → ${String(result.url || '').slice(0, 80)}` : ''}`);
+    }
+    if (army) {
+      if (tool === 'tab_open' && result) cizArmy.register(result.tab_id, army);
+      else if (tool === 'tab_close') cizArmy.unregister(args.tab_id);
+      else cizArmy.touch(args.tab_id);
     }
     return { ok: true, result };
   } catch (e) {
