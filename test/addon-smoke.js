@@ -76,7 +76,7 @@ const fetch = async url => {
   return { status: 200, ok: true, json: async () => ({ account: { email_address: claudeEmail, full_name: 'F', uuid: 'u-1' } }) };
 };
 
-const ctx = vm.createContext({ browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, setTimeout, clearTimeout, setInterval: () => 0, Promise });
+const ctx = vm.createContext({ browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, Blob: require('buffer').Blob, btoa: s => Buffer.from(s, 'binary').toString('base64'), setTimeout, clearTimeout, setInterval: () => 0, Promise });
 ctx.window = ctx;
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')).background.scripts;   // the real load order
 for (const f of SCRIPTS) {
@@ -329,6 +329,43 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     const beforeSecond = native;
     normalWindows.push({ id: 4, type: 'normal' }); winCreated.fire({ id: 4, type: 'normal' }); await tick(30);
     check('a second window does not reconnect the helper', native === beforeSecond && g('cizState').get().agent === 'active');
+    // Settings > Saving files: "Store in output folder" keeps a made file through the helper. Without the helper, or when Save as is asked, the file downloads as before.
+    const downloads = [];
+    browser.downloads = { download: async o => { downloads.push(o); return downloads.length; } };
+    const made = await g('cizFiles').add({ name: 'notes.txt', content: 'Olá, mundo', title: 'Notes', source: 'Claude', conv: 'c-out', msg: 'm-out' });
+    await fromPanel({ type: 'setOutput', value: 'store' });
+    check('the output setting is kept', g('cizState').get().outputMode === 'store' && local.outputMode === 'store');
+    let sentAt = native.sent.length;
+    await fromPanel({ type: 'downloadFile', id: made.id });
+    const saveMsg = native.sent.slice(sentAt).find(m => m.type === 'save_output');
+    check('a stored file goes to the helper with its bytes', !!saveMsg && saveMsg.name === 'notes.txt' && Buffer.from(saveMsg.data, 'base64').toString('utf8') === 'Olá, mundo', saveMsg ? saveMsg.name : 'no save_output sent');
+    check('nothing is downloaded while the helper stores it', downloads.length === 0);
+    await helperSays({ type: 'output_saved', req: saveMsg.req, ok: true, name: 'notes.txt', path: 'C:\\Zen\\extension\\output\\notes.txt' });
+    check('the stored path reaches the panel', panelIn.some(m => m.type === 'outputSaved' && m.name === 'notes.txt' && /output\\notes\.txt$/.test(m.path)));
+    check('a stored file is logged, and not downloaded', g('cizState').log().some(e => /Stored notes\.txt in the output folder/.test(e.text)) && downloads.length === 0);
+    sentAt = native.sent.length;
+    await fromPanel({ type: 'downloadFile', id: made.id });   // the helper takes the file...
+    const inFlight = native.sent.slice(sentAt).some(m => m.type === 'save_output');
+    native.onDisconnect.fire({ error: null });   // ...then stops before it answers
+    await tick();
+    check('a helper that stops before it answers means a download', inFlight && downloads.length === 1 && downloads[0].filename === 'Claude in Zen/notes.txt' && downloads[0].saveAs === false, downloads.map(d => d.filename).join(','));
+    check('the fallback says why', g('cizState').log().some(e => /Could not store notes\.txt \(the helper stopped\), so it was downloaded instead/.test(e.text)));
+    const realConnect = browser.runtime.connectNative;
+    browser.runtime.connectNative = () => { throw new Error('No such native application claude_in_zen'); };
+    await fromPanel({ type: 'downloadFile', id: made.id });
+    await tick();
+    browser.runtime.connectNative = realConnect;
+    check('with no helper installed the file is downloaded', downloads.length === 2 && downloads[1].filename === 'Claude in Zen/notes.txt');
+    await fromPanel({ type: 'setOutput', value: 'download' });
+    await fromPanel({ type: 'downloadFile', id: made.id });
+    await tick();
+    check('download now (the default) saves to Claude in Zen, as before', downloads.length === 3 && downloads[2].filename === 'Claude in Zen/notes.txt' && downloads[2].saveAs === false && local.outputMode === 'download');
+    await fromPanel({ type: 'setOutput', value: 'store' });
+    const savesBefore = native.sent.filter(m => m.type === 'save_output').length;
+    await fromPanel({ type: 'downloadFile', id: made.id, saveAs: true });
+    await tick();
+    check('Save as asks where to put the file, even in store mode', downloads.length === 4 && downloads[3].saveAs === true && native.sent.filter(m => m.type === 'save_output').length === savesBefore);
+    await fromPanel({ type: 'setOutput', value: 'download' });
     await fromPanel({ type: 'signOut' });
     check('signing out forgets the remembered account', !local.rememberedAccount && !g('cizState').get().signedIn);
   } catch (e) {

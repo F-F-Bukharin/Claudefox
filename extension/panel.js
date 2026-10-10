@@ -27,6 +27,7 @@ port.onMessage.addListener(msg => {
   if (msg.type === 'snap') onSnap(msg);
   if (msg.type === 'toolResult') onToolResult(msg);
   if (msg.type === 'selfResult') onSelfResult(msg);
+  if (msg.type === 'outputSaved') onOutputSaved(msg);
 });
 
 // Links in replies: web pages open in a new tab, zen://tab/<id> switches tab, zen://file/<id> opens a file.
@@ -104,7 +105,7 @@ $('filesToggle').addEventListener('change', e => send('setFiles', { value: e.tar
 $('filesFolder').addEventListener('change', e => send('setFiles', { value: !!state.filesEnabled, mode: filesMode(), folder: e.target.value }));
 $('filesFolder').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
 $('chooseFolder').addEventListener('click', () => send('pickFolder'));
-for (const b of document.querySelectorAll('.seg button')) {
+for (const b of document.querySelectorAll('#fileSeg button')) {
   b.addEventListener('click', () => send('setFiles', { value: !!state.filesEnabled, mode: b.dataset.mode, folder: $('filesFolder').value }));
 }
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
@@ -359,7 +360,7 @@ function render(s, log) {
   $('folderNow').classList.toggle('muted', !s.filesFolder);
   $('chooseFolder').textContent = s.folderPicking ? 'Choosing…' : 'Choose folder…';
   $('chooseFolder').disabled = !!s.folderPicking || s.agent === 'stopped';
-  for (const b of document.querySelectorAll('.seg button')) {
+  for (const b of document.querySelectorAll('#fileSeg button')) {
     b.setAttribute('aria-checked', String(b.dataset.mode === (s.filesMode === 'write' ? 'write' : 'read')));
     b.disabled = s.agent === 'stopped';
   }
@@ -399,6 +400,7 @@ function render(s, log) {
   renderSetup(s);
   renderAccounts(s);
   renderMods(s);
+  renderOutput(s);
   if (chat.some(m => m.limit)) renderChat();   // the switch button follows state.switching
 }
 
@@ -1474,6 +1476,24 @@ function loadMod(m) {
     js.onerror = () => { modMark(''); modStop(m.id, 'panel.js could not be loaded.'); done(); };
     document.head.appendChild(js);
   });
+}
+
+// Settings > Saving files: a made file is downloaded now (the default), or kept in the output folder beside the mods folder.
+const OUTPUT_NOTES = {
+  download: 'Downloads go to Downloads\\Claude in Zen, as before.',
+  store: 'Made files are kept in the output folder, beside the mods folder. A name that is already taken gets (2), (3) and so on, so nothing is overwritten. If the helper is not running, the file is downloaded instead.',
+};
+function renderOutput(s) {
+  const mode = s.outputMode === 'store' ? 'store' : 'download';
+  for (const b of document.querySelectorAll('#outputSeg button')) b.setAttribute('aria-checked', String(b.dataset.value === mode));
+  $('outputNote').textContent = OUTPUT_NOTES[mode];
+}
+for (const b of document.querySelectorAll('#outputSeg button')) {
+  b.addEventListener('click', () => send('setOutput', { value: b.dataset.value }));
+}
+// The helper stored a made file: say where it went, in the chat.
+function onOutputSaved(m) {
+  addMsg({ role: 'system', text: `Stored ${m.name} in the output folder: ${m.path}` });
 }
 
 // The Mods card: one row per mod, with its state and a switch. Rebuilt only when the list changes.

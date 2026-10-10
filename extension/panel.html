@@ -168,7 +168,7 @@
           <input id="filesFolder" class="textin mono" type="text" spellcheck="false" autocomplete="off"
             placeholder="Folder, e.g. C:\Users\you\Documents\notes" aria-label="Folder Claude may use">
         </details>
-        <div class="seg" role="radiogroup" aria-label="File access">
+        <div class="seg" id="fileSeg" role="radiogroup" aria-label="File access">
           <button type="button" role="radio" data-mode="read">Read only</button>
           <button type="button" role="radio" data-mode="write">Read and write</button>
         </div>
@@ -230,6 +230,15 @@
       <p class="note" id="wallNote" hidden></p>
       <input type="file" id="wallFile" accept="image/*" hidden>
       <p class="note">Cards keep their own colour. The text on the page turns black or white to suit the wallpaper. Kept in this browser only.</p>
+    </section>
+
+    <section class="card">
+      <h3>Saving files</h3>
+      <div class="seg" id="outputSeg" role="radiogroup" aria-label="Where a made file goes">
+        <button type="button" role="radio" data-value="download" aria-checked="true">Download now</button>
+        <button type="button" role="radio" data-value="store" aria-checked="false">Store in output folder</button>
+      </div>
+      <p class="note" id="outputNote"></p>
     </section>
 
     <section class="card conns">

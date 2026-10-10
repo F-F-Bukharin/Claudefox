@@ -56,6 +56,18 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  ok('toggle sends folder and mode', sent.some(m=>m.type==='setFiles'&&m.value&&m.folder==='C:\\notes'&&m.mode==='read'));
  onMsg({type:'state',state:{...ready,filesEnabled:true,filesMode:'write',filesFolder:'C:\\notes'},log:[]});
  ok('write note warns', $('filesNote').classList.contains('warnnote') && /no undo/.test($('filesNote').textContent));
+ // Settings > Saving files: Download now is the default; a click asks the add-on to store, and a stored file is named in the chat
+ const outBtn=v=>w.document.querySelector('#outputSeg button[data-value="'+v+'"]');
+ ok('saving files: Download now is checked first', [...w.document.querySelectorAll('#outputSeg button')].map(b=>b.dataset.value).join('|')==='download|store' && outBtn('download').getAttribute('aria-checked')==='true' && outBtn('store').getAttribute('aria-checked')==='false');
+ const filesBefore=sent.filter(m=>m.type==='setFiles').length;
+ outBtn('store').click();
+ ok('saving files: a click asks the add-on to store, and leaves file access alone', sent.some(m=>m.type==='setOutput'&&m.value==='store') && sent.filter(m=>m.type==='setFiles').length===filesBefore);
+ onMsg({type:'state',state:{...ready,outputMode:'store'},log:[]});
+ ok('saving files: store is checked and explained', outBtn('store').getAttribute('aria-checked')==='true' && outBtn('download').getAttribute('aria-checked')==='false' && /beside the mods folder/.test($('outputNote').textContent));
+ onMsg({type:'outputSaved',name:'chart.png',path:'C:\\Zen\\extension\\output\\chart.png'});
+ ok('saving files: the chat names the stored file', /Stored chart\.png in the output folder/.test($('messages').textContent));
+ onMsg({type:'state',state:ready,log:[]});
+ ok('saving files: back to Download now', outBtn('download').getAttribute('aria-checked')==='true');
  // chat
  $('input').value='hi'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
  const chatMsg=sent.find(m=>m.type==='chat'); ok('chat sent', chatMsg && chatMsg.text==='hi');

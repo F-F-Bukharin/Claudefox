@@ -4,6 +4,9 @@
 // action log, and the tool router every call goes through.
 
 let nativePort = null;
+// Settings > Saving files: a request to the helper to store a file, by request number -> its resolve (storeOutput).
+const outputWaiters = new Map();
+let outputSeq = 0;
 const pendingActions = new Map();   // id -> { cmd, controller, startedAt }
 let nextActionId = 1;
 
@@ -15,6 +18,7 @@ const booted = (async function init() {
   cizState.onChange(updateBadge);
   await cizState.set({ pending: 0 });
   try { const pref = await browser.storage.local.get('caveman'); await cizState.set({ caveman: !!pref.caveman }); } catch {}
+  try { const o = await browser.storage.local.get('outputMode'); await cizState.set({ outputMode: o.outputMode === 'store' ? 'store' : 'download' }); } catch {}
   cizNetStart();
   await cizState.addLog('info', 'Add-on started');
   resumeSignIn('startup');
@@ -103,6 +107,12 @@ async function handlePanel(msg, port) {
     case 'openFile':   return openFile(String(msg.id || ''));
     case 'downloadFile': return downloadFile(String(msg.id || ''), !!msg.saveAs, String(msg.format || ''));
     case 'snapTab':    return snapTab(port, String(msg.req || ''));
+    case 'setOutput': {
+      const value = msg.value === 'store' ? 'store' : 'download';
+      try { await browser.storage.local.set({ outputMode: value }); } catch {}
+      await cizState.set({ outputMode: value });
+      return cizState.addLog('info', value === 'store' ? 'Files: stored in the output folder' : 'Files: downloaded, as before');
+    }
     case 'setCaveman':
       try { await browser.storage.local.set({ caveman: !!msg.value }); } catch {}
       await cizState.set({ caveman: !!msg.value });
@@ -197,6 +207,15 @@ async function downloadFile(id, saveAs, format) {
   try { out = cizExport(f, want); } catch (e) {
     return cizState.addLog('error', `Could not make ${f.name}${want !== ext ? ` as .${want}` : ''}: ${e.message}`);
   }
+  // Settings > Saving files: "Store in output folder" keeps a made file beside the mods folder; Save as always asks.
+  if (!saveAs && cizState.get().outputMode === 'store') {
+    const r = await storeOutput(out);
+    if (r.ok) {
+      await cizState.addLog('action', `Stored ${r.name} in the output folder`);
+      return postToPanels({ type: 'outputSaved', id, name: r.name, path: r.path });
+    }
+    await cizState.addLog('warn', `Could not store ${out.name} (${r.error}), so it was downloaded instead`);
+  }
   const blob = typeof out.data === 'string' ? new Blob([out.data], { type: `${out.mime};charset=utf-8` }) : new Blob([out.data], { type: out.mime });
   const url = URL.createObjectURL(blob);
   try {
@@ -206,6 +225,27 @@ async function downloadFile(id, saveAs, format) {
   } catch (e) {
     if (!/cancel/i.test(e.message)) await cizState.addLog('error', `Download failed: ${e.message}`);
   } finally { setTimeout(() => URL.revokeObjectURL(url), 60000); }
+}
+
+// Settings > Saving files: the helper writes the file into the output folder beside the mods folder. Resolves
+// { ok: true, name, path } or { ok: false, error }; a helper that is missing, stops or is slow means a download instead.
+function storeOutput(out) {
+  if (!nativePort) connectNative();
+  if (!nativePort) return Promise.resolve({ ok: false, error: 'the helper is not connected' });
+  return new Promise(resolve => {
+    const req = ++outputSeq;
+    const done = r => { clearTimeout(timer); outputWaiters.delete(req); resolve(r); };
+    const timer = setTimeout(() => done({ ok: false, error: 'the helper did not answer' }), 60000);
+    let data;
+    try {
+      const bytes = typeof out.data === 'string' ? new TextEncoder().encode(out.data) : new Uint8Array(out.data);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      data = btoa(bin);
+    } catch (e) { return done({ ok: false, error: `could not read the file (${e.message})` }); }
+    outputWaiters.set(req, done);
+    if (!sendNative({ type: 'save_output', req, name: out.name, data })) done({ ok: false, error: 'the helper is not connected' });
+  });
 }
 
 // The + menu's "Screenshot of this tab": a PNG of the current tab, attached to the next message.
@@ -575,6 +615,7 @@ function connectNative() {
     if (cizState.get().accountLogin) cizState.set({ accountLogin: null });
     if (cizState.get().accountBusy) cizState.set({ accountBusy: '' });
     if (cizState.get().folderPicking) cizState.set({ folderPicking: false });
+    for (const done of [...outputWaiters.values()]) done({ ok: false, error: 'the helper stopped' });
     failChats('The helper stopped, so the answer was cut off.');
     if (err && /No such native application/i.test(err.message)) {
       cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
@@ -693,6 +734,11 @@ function requestClaudeStatus(fromPanel) {
 async function onNativeMessage(msg) {
   if (!msg || typeof msg !== 'object') return;
   switch (msg.type) {
+    case 'output_saved': {
+      const done = outputWaiters.get(msg.req);
+      if (done) done(msg.ok ? { ok: true, name: String(msg.name || ''), path: String(msg.path || '') } : { ok: false, error: String(msg.error || 'unknown error') });
+      return;
+    }
     case 'mods': return cizState.set({ mods: Array.isArray(msg.mods) ? msg.mods : [], modsKnown: true });
     case 'hello':
       nativeRetries = 0;

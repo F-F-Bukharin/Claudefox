@@ -11,3 +11,7 @@ web-ext-artifacts/
 
 # Mods the AI writes for itself: local to this computer, unless added on purpose (git add -f)
 extension/mods/*/
+
+# The output folder: the files Claude stores there (Settings, Saving files). Its README is kept.
+extension/output/*
+!extension/output/README.txt

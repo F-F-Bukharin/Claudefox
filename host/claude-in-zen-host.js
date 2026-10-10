@@ -24,6 +24,7 @@ const { onLines, sendLine } = require('./lib/lines');
 const { createToolbox, norm } = require('./lib/toolbox');
 const guard = require('./lib/guard');
 const uploads = require('./lib/uploads');
+const OUTPUT = require('./lib/output');
 const { extractText, kindOf: docKind } = require('./lib/doctext');
 
 log.open('host.log');
@@ -56,8 +57,18 @@ nm.on('end', () => shutdown('add-on disconnected'));
 // Mods (extension/mods/<id>/): listed here, switched here, loaded by the panel. See host/lib/mods.js.
 const MODS = require('./lib/mods');
 const MODS_DIR = path.join(__dirname, '..', 'extension', 'mods');
+const OUTPUT_DIR = path.join(__dirname, '..', 'extension', 'output');   // Settings > Saving files: beside the mods folder
 const MODS_STATE = path.join(P.BASE, 'mods.json');
 function sendMods() { sendAddon({ type: 'mods', mods: MODS.scanMods(MODS_DIR, MODS_STATE) }); }
+// Settings > Saving files: the add-on sends a made file (base64) and the helper writes it into the output folder.
+function saveOutput(msg) {
+  try {
+    const p = OUTPUT.save(OUTPUT_DIR, msg.name, msg.data);
+    sendAddon({ type: 'output_saved', req: msg.req, ok: true, name: path.basename(p), path: p });
+  } catch (e) {
+    sendAddon({ type: 'output_saved', req: msg.req, ok: false, error: e.message });
+  }
+}
 function modUpdate(msg) {
   const patch = {};
   if (typeof msg.enabled === 'boolean') patch.enabled = msg.enabled;
@@ -121,6 +132,7 @@ function onAddon(msg) {
       return;
 
     case 'mods':          return sendMods();
+    case 'save_output':   return saveOutput(msg);
     case 'mod_update':    return modUpdate(msg);
     case 'mods_all_off':  MODS.allModsOff(MODS_DIR, MODS_STATE); return sendMods();
     case 'pick_folder':  return pickFolder();

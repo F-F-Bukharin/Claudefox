@@ -21,6 +21,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   chatModel: 'speed',          // 'speed' (Haiku 5.5, high effort) | 'quality' (Opus 5.5, high effort)
   chatPlus: false,            // Speed Plus: Haiku 5.5 at max effort (only applies in Speed)
   caveman: false,             // Caveman mode: short replies (the + menu). Remembered across restarts (storage.local)
+  outputMode: 'download',     // Files: 'download' (Downloads, as before) or 'store' (the output folder beside the mods folder). Remembered across restarts (storage.local)
   tools: null,                // Settings > Tools and plugins, as the helper last reported it
   toolLogin: null,            // { name, label } while a tool's sign-in window is open
   chatSession: '',            // Claude Code session id, so follow-ups keep the conversation
