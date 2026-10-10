@@ -21,6 +21,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   sourceVersion: '',          // add-on version in the project folder the helper runs from
   canUpdate: false,           // the helper can rebuild and reinstall the add-on (source present)
   updating: false,
+  updateNote: '',             // what the last update did, shown under the Add-on row
   linked: false,              // Zen loads the add-on straight from the project folder (link.ps1)
   clients: [],                // names of local clients connected through the helper
   claude: null,               // { installed, loggedIn, email, plan, checkedAt } from the helper

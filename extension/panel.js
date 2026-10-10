@@ -148,7 +148,13 @@ function render(s, log) {
   $('addonVal').textContent = `v${installed}` + (s.linked && s.native === 'connected' ? ' · linked to project folder'
     : src ? (newer ? ` · v${src} ready` : ' · up to date') : '');
   $('addonVal').parentElement.classList.toggle('warn', !!newer);
-  $('updateBtn').hidden = !(s.native === 'connected' && s.canUpdate);
+  // Up to date and not linked: a reinstall would change nothing, so there is no button, just the way to
+  // get one-click updates. Linked: "update" reloads from the folder. Newer source: install it.
+  $('updateBtn').hidden = !(s.native === 'connected' && s.canUpdate && (s.linked || newer));
+  const note = s.updateNote || (s.native === 'connected' && s.canUpdate && !s.linked
+    ? 'For one-click updates: close Zen, run "Link add-on to Zen.bat" once, start Zen. After that, update just reloads.' : '');
+  $('updateNote').textContent = note;
+  $('updateNote').hidden = !note;
   $('updateBtn').disabled = !!s.updating;
   $('updateBtn').textContent = s.updating ? 'building…' : s.linked ? 'update' : newer ? `update to v${src}` : 'reinstall';
   $('updateBtn').title = s.linked ? 'Reload the add-on and helper from your project folder (no install, no restart)'
