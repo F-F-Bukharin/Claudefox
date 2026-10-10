@@ -42,7 +42,8 @@ Using it
     and use Download, or Save as for PDF, a web page or Markdown.
   - Settings -> Tools and plugins lists your Claude plugins and connectors. Switch on the
     ones you want in the chat; "sign in" connects tools that need their own account.
-  - Stop (top right) cuts everything off at once. Start brings it back.
+  - Stop (top right) cuts everything off at once. Start brings it back. Opening Zen turns the
+    agent on again by itself.
   - File tools (Profile) are off by default. Turn them on for one folder, read only or read
     and write. Read and write can change and delete files there with no undo.
   - If your plan runs out, the panel offers "Log out and add another account".

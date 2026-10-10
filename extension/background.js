@@ -9,7 +9,7 @@ let nextActionId = 1;
 
 // ---------------------------------------------------------------- startup
 
-(async function init() {
+const booted = (async function init() {
   await cizState.load();
   cizState.onChange(pushToPanels);
   cizState.onChange(updateBadge);
@@ -24,6 +24,20 @@ let nextActionId = 1;
   if (cizState.get().agent === 'active') connectNative();
   updateBadge(cizState.get());
 })();
+
+// Opening Zen turns the agent on. A window counts as "Zen opened" when it is the only normal window, so
+// a Stop lasts while Zen stays open, and a second window does not undo it or reconnect the helper.
+browser.windows.onCreated.addListener(win => {
+  if (!win || win.type !== 'normal') return;
+  booted.then(async () => {
+    const normal = await browser.windows.getAll({ windowTypes: ['normal'] });
+    if (normal.length !== 1) return;
+    if (cizState.get().agent === 'active') return connectNative();
+    await cizState.set({ agent: 'active' });
+    await cizState.addLog('info', 'Zen opened: the agent is on.');
+    connectNative();
+  }).catch(e => cizState.addLog('error', `Auto-start failed: ${e.message || e}`));
+});
 
 browser.browserAction.onClicked.addListener(() => {
   browser.sidebarAction.toggle().catch(() => browser.sidebarAction.open().catch(() => {}));

@@ -27,6 +27,8 @@ const removed = [];
 const injected = [];
 let native = null;   // the fake helper port
 const connectEv = ev();
+const winCreated = ev();
+let normalWindows = [{ id: 1, type: 'normal' }];   // the Zen windows open now
 const browser = {
   storage: { local: {
     get: async k => (k in local ? { [k]: JSON.parse(JSON.stringify(local[k])) } : {}),
@@ -60,7 +62,8 @@ const browser = {
     onActivated: ev(), onUpdated: ev(), onCreated: ev(), onRemoved: ev(),
   },
   webRequest,
-  windows: { update: async () => {} },
+  windows: { update: async () => {}, onCreated: winCreated,
+    getAll: async o => normalWindows.filter(w => !o || !o.windowTypes || o.windowTypes.includes(w.type)) },
 };
 const fetched = [];
 let claudeEmail = 'personalworksacc@gmail.com';   // the claude.ai session the add-on reads
@@ -296,6 +299,21 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     check('file tools cannot be turned on while stopped', g('cizState').get().filesEnabled === false);
     await fromPanel({ type: 'start' });
     check('Start reconnects the helper', g('cizState').get().agent === 'active' && native !== port);
+    // Opening Zen turns the agent on; a Stop lasts while Zen stays open
+    await fromPanel({ type: 'stop' });
+    normalWindows.push({ id: 2, type: 'normal' }); winCreated.fire({ id: 2, type: 'normal' }); await tick(30);
+    check('a second window keeps a Stop', g('cizState').get().agent === 'stopped');
+    normalWindows = normalWindows.filter(w => w.id !== 2);
+    winCreated.fire({ id: 7, type: 'popup' }); await tick(30);
+    check('a popup window does not turn the agent on', g('cizState').get().agent === 'stopped');
+    const beforeOpen = native;
+    normalWindows = [{ id: 3, type: 'normal' }];   // Zen was closed and is opened again
+    winCreated.fire({ id: 3, type: 'normal' }); await tick(30);
+    check('opening Zen again turns the agent on by itself', g('cizState').get().agent === 'active' && native !== beforeOpen && !native.disconnected);
+    check('opening Zen is logged', g('cizState').log().some(e => /Zen opened: the agent is on/.test(e.text)));
+    const beforeSecond = native;
+    normalWindows.push({ id: 4, type: 'normal' }); winCreated.fire({ id: 4, type: 'normal' }); await tick(30);
+    check('a second window does not reconnect the helper', native === beforeSecond && g('cizState').get().agent === 'active');
     await fromPanel({ type: 'signOut' });
     check('signing out forgets the remembered account', !local.rememberedAccount && !g('cizState').get().signedIn);
   } catch (e) {
