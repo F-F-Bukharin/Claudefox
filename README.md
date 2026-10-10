@@ -99,10 +99,12 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `test/`, `host/test/` | Tests; `tools\Run tests.bat` or `node test/run-all.js` runs them all. `node test/injection-live.js` is the live prompt-injection test (uses your plan, run it by hand). |
 | `Set up Claude in Zen.bat` (root) | The friends' one-double-click setup. The friends zip ships it with `host\`, `zen-profile\`, `tools\Sign in Claude Code.bat` and `tools\Apply Zen settings.bat`. |
 | `tools\` | The scripts you run while developing (`.bat` and `.ps1`), listed in the next table. |
+| `tools\menu.ps1` | The menu window (Windows PowerShell 5.1, Windows Forms). It runs the ticked steps in the background, one after another, and writes their output to its log. |
 | `build\` | Build output, kept out of git except `build\README.txt`: `claude-in-zen.xpi`, `signed\` (signed builds) and `friends\` (the zip to send). |
 
 | Script | What it does |
 | :- | :- |
+| `tools\Claude in Zen menu.bat` | **Start here** while developing. One window with every step. **Recommended** ticks the set-up steps: the helper, the Claude Code sign-in, a read-only check of the Zen profile, linking and the Zen settings, and the tests. **Custom** starts with nothing ticked, so nothing is installed, changed or created until you tick a step and press **Run**. Ticked steps run in list order; click a step to read what it does and what it makes. |
 | `Set up Claude in Zen.bat` (root) | The friends' one-double-click setup: installs the helper, signs Claude Code in, and opens Zen's add-ons page with the `.xpi` path copied (only when `claude-in-zen.xpi` sits next to it, as in the friends zip). |
 | `tools\Install helper.bat` | Installs only the helper. Run it yourself: installs made from the Claude desktop app land in its private copy of AppData, which Zen can't see. |
 | `tools\Sign in Claude Code.bat` | Signs the add-on's Claude Code profile (`%LOCALAPPDATA%\claude-in-zen\claude`) in. Separate from Claude Code in VS Code or a terminal. |
