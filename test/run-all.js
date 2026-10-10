@@ -6,7 +6,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const TESTS = [
-  'host/test/smoke.js', 'host/test/mcp-smoke.js', 'host/test/chat-smoke.js', 'host/test/selfimprove-smoke.js',
+  'host/test/smoke.js', 'host/test/mcp-smoke.js', 'host/test/chat-smoke.js', 'host/test/selfimprove-smoke.js', 'host/test/mods-smoke.js',
   'test/addon-smoke.js', 'test/dom-page-tools.js', 'test/dom-panel.js', 'test/docx.js',
   'test/menu-static.js',
 ];

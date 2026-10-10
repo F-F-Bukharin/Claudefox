@@ -53,6 +53,19 @@ nm.on('message', msg => {
 nm.on('bad', e => log.warn('unreadable message from the add-on', e.message));
 nm.on('end', () => shutdown('add-on disconnected'));
 
+// Mods (extension/mods/<id>/): listed here, switched here, loaded by the panel. See host/lib/mods.js.
+const MODS = require('./lib/mods');
+const MODS_DIR = path.join(__dirname, '..', 'extension', 'mods');
+const MODS_STATE = path.join(P.BASE, 'mods.json');
+function sendMods() { sendAddon({ type: 'mods', mods: MODS.scanMods(MODS_DIR, MODS_STATE) }); }
+function modUpdate(msg) {
+  const patch = {};
+  if (typeof msg.enabled === 'boolean') patch.enabled = msg.enabled;
+  if (typeof msg.broken === 'string') patch.broken = msg.broken;
+  MODS.setModState(MODS_DIR, MODS_STATE, String(msg.id || ''), patch);
+  return sendMods();
+}
+
 function sendAddon(msg) {
   try { nm.send(msg); return true; } catch (e) { log.error('send to add-on failed', e.message); return false; }
 }
@@ -82,6 +95,7 @@ function onAddon(msg) {
       addonVersion = String(msg.version || '?');
       log.info(`add-on ${addonVersion} connected`);
       sendAddon({ type: 'hello', version: VERSION, server: `host ${VERSION}`, clients: clientNames(), ...sourceInfo() });
+      sendMods();
       toolbox.push(activeId());
       toolbox.ensureFresh(activeId()).then(() => toolbox.push(activeId())).catch(e => log.warn('tools scan', e.message));
       return;
@@ -106,6 +120,9 @@ function onAddon(msg) {
       updateAddon();
       return;
 
+    case 'mods':          return sendMods();
+    case 'mod_update':    return modUpdate(msg);
+    case 'mods_all_off':  MODS.allModsOff(MODS_DIR, MODS_STATE); return sendMods();
     case 'pick_folder':  return pickFolder();
     case 'accounts':
       sendAccounts();

@@ -8,3 +8,6 @@ _restore.tgz
 node_modules/
 *.log
 web-ext-artifacts/
+
+# Mods the AI writes for itself: local to this computer, unless added on purpose (git add -f)
+extension/mods/*/

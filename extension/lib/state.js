@@ -3,6 +3,7 @@
 // startup from a remembered marker in storage.local (see background.js, "Remembered sign-in").
 
 const CIZ_DEFAULT_STATE = Object.freeze({
+  mods: [],                   // from the helper: { id, name, description, panel, style, enabled, broken }
   agent: 'active',            // 'active' | 'stopped'
   signedIn: false,
   account: null,              // { email, name, uuid, via }
