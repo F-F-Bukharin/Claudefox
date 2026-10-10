@@ -239,7 +239,11 @@ textarea:focus-visible { outline: none; }
 .composer-row { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; min-width: 0; padding: 0 4px; }
 .composer-row .context { flex: 1 1 0; min-width: 0; min-height: 32px; }
 .modebox { flex: none; margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.model-line { margin: 0; font-size: 11.5px; color: var(--muted); padding-right: 4px; }
+/* The model line hangs under the switch and may run left under Current tab (which is one 32 px row), so a long line
+   such as the army one does not squeeze the tab name. The mode box keeps its room with padding. */
+.modebox { padding-bottom: 20px; }
+.model-line { position: absolute; right: 0; bottom: 0; margin: 0; font-size: 11.5px; line-height: 16px; color: var(--muted); padding-right: 4px;
+  white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
 /* One control: the + (Speed Plus) on the left, then one button that flips between Speed and Quality. */
 .modeseg { display: inline-flex; align-items: stretch; height: 32px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); overflow: hidden; }
 .modeseg button { appearance: none; margin: 0; border: 0; border-radius: 0; padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 650; line-height: 1; white-space: nowrap; cursor: pointer; transition: background .15s, color .15s; }
@@ -255,7 +259,8 @@ textarea:focus-visible { outline: none; }
 /* The octopus takes the +'s slot in Quality. On, it is a deeper shade of the Quality colour with a light seam, so it reads apart from the label. */
 #armyBtn { width: 34px; color: var(--muted); box-shadow: inset -1px 0 0 var(--line); }
 #armyBtn:hover { color: var(--accent-text); }
-#armyBtn svg { width: 14px; height: 14px; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* 1.86 at 14 px draws the same 1.6 px line as the + at 13 px */
+#armyBtn svg { width: 14px; height: 14px; display: block; fill: none; stroke: currentColor; stroke-width: 1.86; stroke-linecap: round; stroke-linejoin: round; }
 #armyBtn[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 58%, #000); color: #fff; box-shadow: inset -1px 0 0 rgb(255 255 255 / .4); }
 #armyBtn[aria-expanded="true"]:not([aria-pressed="true"]) { background: color-mix(in srgb, var(--accent) 12%, var(--card)); color: var(--accent-text); }
 #armyBtn[hidden] { display: none; }
@@ -621,7 +626,8 @@ html[data-wall="picture"] body {
 
 /* ---------- Army: the card above the mode box, and the trail in a reply ---------- */
 .modebox { position: relative; }
-.army-card { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 20; width: min(300px, calc(100vw - 24px));
+/* The card lines up with the text bar's edges and covers it whole, so no sliver of the bar shows beside it. */
+.army-card { position: absolute; right: -4px; bottom: calc(100% + 8px); z-index: 20; width: min(560px, calc(100vw - 24px));
   display: flex; flex-direction: column; gap: 7px; padding: 10px 12px 12px; text-align: left;
   background: var(--card); border: 1px solid var(--outline); border-radius: var(--radius);
   box-shadow: 0 12px 32px rgb(0 0 0 / .18), 0 2px 6px rgb(0 0 0 / .08);
@@ -646,10 +652,13 @@ html[data-wall="picture"] body {
 .arow.failed .amark, .arow.failed .awhat { color: var(--stop); }
 .arow.stopped .amark { color: var(--muted); }
 .aid { flex: none; font: 650 11px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--ink); }
-.ahost { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
-.awhat { flex: 1 1 80px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ahost { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+/* The action takes what is left of the line, so Show never drops to a line of its own; an error wraps so it can be read whole. */
+.awhat { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arow.failed .awhat { white-space: normal; overflow-wrap: anywhere; }
 .ashow { flex: none; font-size: 11.5px; }
 .asrc { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 2px 10px; padding-left: 19px; min-width: 0; }
 .asrc a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; cursor: pointer; }
 .asum { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11.5px; }
+@media (max-width: 340px) { .army-card { width: calc(100vw - 16px); } }   /* the composer's narrow padding */
 @media (prefers-reduced-motion: reduce) { .army-card { animation: none; } }
