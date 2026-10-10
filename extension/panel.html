@@ -54,6 +54,17 @@
         <button class="chip" data-fill="/tabs">/tabs</button>
         <button class="chip" data-fill="/help">/help</button>
       </div>
+      <!-- Claude asks to look in a folder on this computer (lib/local.js): one question at a time -->
+      <div id="grantAsk" class="confirm grant-ask" role="alertdialog" aria-labelledby="grantTitle" aria-describedby="grantFolder" hidden>
+        <p id="grantTitle"><b>Claude asks to look in this folder</b></p>
+        <p id="grantFolder" class="mono grant-folder"></p>
+        <p class="muted small">Allowing covers the folder and its subfolders until you remove it in Profile, Permissions. Army workers never look there.</p>
+        <p id="grantAccess" class="warnnote small" hidden></p>
+        <div class="confirm-btns">
+          <button type="button" id="grantDeny" class="ghost">Deny</button>
+          <button type="button" id="grantAllow" class="primary">Allow this folder</button>
+        </div>
+      </div>
       <form id="composer" class="inputbox">
         <div class="attach">
           <button type="button" id="attachBtn" class="attach-main" title="Add files: Word, PDF, images, slides, sheets… You can also paste or drop them here." aria-label="Add files">
@@ -202,6 +213,12 @@
           <button id="unsafeYes" class="primary">Turn on</button>
         </div>
       </div>
+      <div class="row">
+        <span>Local folders</span>
+        <span class="val" id="localCount">none allowed</span>
+      </div>
+      <ul id="localList" class="locallist" aria-label="Folders Claude may look in"></ul>
+      <p id="localNote" class="muted small local-note"></p>
       <div class="row">
         <span>Google sign-in pages</span>
         <span class="val" id="googleVal">always hands-off</span>

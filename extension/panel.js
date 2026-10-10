@@ -219,6 +219,53 @@ function togglePlus() {
 $('modeBtn').addEventListener('click', toggleMode);
 $('plusBtn').addEventListener('click', togglePlus);
 
+// Local pages: Claude's question about a folder (one at a time), and the allowed folders in Profile > Permissions.
+const FILE_ACCESS_OFF = "Zen keeps add-ons out of files on this computer. Turn on 'Access local files on your computer' for Claude in Zen: about:addons, Claude in Zen, Permissions and data.";
+function answerGrant(allow) {
+  const id = $('grantAsk').dataset.id;
+  if (!id) return;
+  $('grantAsk').hidden = true;
+  delete $('grantAsk').dataset.id;
+  send('grantAnswer', { id, allow });
+}
+$('grantAllow').addEventListener('click', () => answerGrant(true));
+$('grantDeny').addEventListener('click', () => answerGrant(false));
+function renderLocal(s) {
+  const ask = s.grantAsk && s.grantAsk.id ? s.grantAsk : null;
+  const box = $('grantAsk');
+  if (ask && box.dataset.id !== ask.id) {
+    box.dataset.id = ask.id;
+    $('grantFolder').textContent = ask.folder;
+    showPage('chat');   // the question waits on the chat page, where Claude's answer will show
+  }
+  if (!ask) delete box.dataset.id;
+  box.hidden = !ask;
+  $('grantAccess').textContent = FILE_ACCESS_OFF;
+  $('grantAccess').hidden = s.fileAccess !== 'no';
+  const grants = Array.isArray(s.localGrants) ? s.localGrants.map(String) : [];
+  $('localCount').textContent = grants.length ? `${grants.length} allowed` : 'none allowed';
+  const list = $('localList');
+  const sig = JSON.stringify(grants);
+  if (list.dataset.sig !== sig) {   // rebuilt only when the list changes, so a focused Remove button keeps its focus
+    list.dataset.sig = sig;
+    list.textContent = '';
+    for (const f of grants) {
+      const li = el('li');
+      const name = el('span', 'mono', f);
+      name.title = f;
+      const rm = el('button', 'link', 'Remove');
+      rm.type = 'button';
+      rm.setAttribute('aria-label', `Remove ${f}`);
+      rm.addEventListener('click', () => send('localGrantRemove', { folder: f }));
+      li.append(name, rm);
+      list.appendChild(li);
+    }
+  }
+  $('localNote').textContent = s.fileAccess === 'no' ? FILE_ACCESS_OFF
+    : 'Claude asks before it looks at a page or file on this computer, one folder at a time. Remove a folder to be asked again.';
+  $('localNote').classList.toggle('warnnote', s.fileAccess === 'no');
+}
+
 // The octopus (Quality mode only) opens the army card. The switch inside the card turns the army on; the octopus itself only shows it.
 const ARMY_RECOMMENDED = 5;
 function openArmy(open) {
@@ -394,6 +441,7 @@ function render(s, log) {
   $('filesNote').classList.toggle('warnnote', !!s.filesEnabled && s.filesMode === 'write');
   $('filesToggle').disabled = s.agent === 'stopped';
   $('pendingVal').textContent = String(s.pending || 0);
+  renderLocal(s);
 
   // model choice: one button shows Speed or Quality (a click flips it), and the + (Speed mode only) turns Speed Plus on
   const quality = s.chatModel === 'quality';

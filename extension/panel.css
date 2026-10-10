@@ -662,3 +662,13 @@ html[data-wall="picture"] body {
 .asum { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11.5px; }
 @media (max-width: 340px) { .army-card { width: calc(100vw - 16px); } }   /* the composer's narrow padding */
 @media (prefers-reduced-motion: reduce) { .army-card { animation: none; } }
+
+/* ---------- Local pages: the folder question above the text bar, and the allowed folders in Profile > Permissions ---------- */
+.grant-ask { margin: 0 0 8px; }
+.grant-folder { margin: 0; padding: 6px 8px; border-radius: 7px; background: var(--card); border: 1px solid var(--line); overflow-wrap: anywhere; font-size: 12px; }
+.locallist { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.locallist:empty { display: none; }
+.locallist li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.locallist .mono { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.locallist button { flex: none; font-size: 12px; }
+.local-note { margin: 0 0 10px; }

@@ -395,5 +395,31 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
   fin2.querySelector('.army-trail .asum button').click();
   ok('army: and closes them', [...$('messages').querySelectorAll('.msg.assistant')].pop().querySelectorAll('.army-trail .arow').length===0);
  }
+ {
+  // Local pages: Claude's question about a folder, above the text bar, and the allowed folders in Profile > Permissions
+  const folder='C:\\Users\\H\\Downloads\\game';
+  onMsg({type:'state',state:{...ready,grantAsk:null,localGrants:[],fileAccess:'yes'},log:[]});
+  ok('local: no question, no folders: the card is hidden and the list says none', $('grantAsk').hidden && $('localCount').textContent==='none allowed' && $('localList').children.length===0);
+  w.document.querySelector('.tabs button[data-page="profile"]').click();
+  onMsg({type:'state',state:{...ready,grantAsk:{id:'g1',folder},localGrants:[],fileAccess:'yes'},log:[]});
+  ok('local: a question shows the folder and brings the chat page up', !$('grantAsk').hidden && $('grantFolder').textContent===folder && !$('page-chat').hidden && $('grantAccess').hidden);
+  const nAns=sent.filter(m=>m.type==='grantAnswer').length;
+  $('grantAllow').click();
+  const ans=sent.filter(m=>m.type==='grantAnswer');
+  ok('local: Allow this folder answers yes for that question and hides the card', ans.length===nAns+1 && ans[ans.length-1].id==='g1' && ans[ans.length-1].allow===true && $('grantAsk').hidden);
+  onMsg({type:'state',state:{...ready,grantAsk:{id:'g2',folder:'D:\\x'},localGrants:[folder],fileAccess:'no'},log:[]});
+  ok('local: with Zen\'s file switch off, the question says how to turn it on', !$('grantAsk').hidden && !$('grantAccess').hidden && /Access local files on your computer/.test($('grantAccess').textContent));
+  $('grantDeny').click();
+  ok('local: Deny answers no', sent.filter(m=>m.type==='grantAnswer').pop().allow===false && sent.filter(m=>m.type==='grantAnswer').pop().id==='g2');
+  ok('local: Profile lists the allowed folder with Remove, and the note warns about the file switch', $('localCount').textContent==='1 allowed' && $('localList').children.length===1
+    && $('localList').querySelector('.mono').textContent===folder && /Access local files/.test($('localNote').textContent) && $('localNote').classList.contains('warnnote'));
+  const rmBtn=$('localList').querySelector('button');
+  rmBtn.focus();
+  onMsg({type:'state',state:{...ready,grantAsk:null,localGrants:[folder],fileAccess:'yes'},log:[]});
+  ok('local: a render with the same folders keeps the Remove button (and its focus)', $('localList').querySelector('button')===rmBtn && w.document.activeElement===rmBtn);
+  rmBtn.click();
+  const rmMsg=sent.filter(m=>m.type==='localGrantRemove').pop();
+  ok('local: Remove sends the folder to forget', rmMsg && rmMsg.folder===folder);
+ }
  console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
 })().catch(e=>{console.log('ERROR',e.stack);process.exit(1)});
