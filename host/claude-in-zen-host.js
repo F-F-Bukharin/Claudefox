@@ -381,7 +381,11 @@ const LIMIT_RE = /usage limit|limit reached|rate.?limit|reached your|limit will 
 let chat = null;   // the running turn: { id, child, sessionId, finished, stderr, resultError, timer, files, key }
 function isDir(p) { try { return fs.statSync(p).isDirectory(); } catch { return false; } }
 
-function emitChat(run, event) { sendAddon({ type: 'chat_event', id: run.id, event }); }
+// An improve run keeps the first 2,000 characters of what Claude says, for its note (lib/selfimprove.js).
+function emitChat(run, event) {
+  if (run.improve && event.kind === 'text' && (run.said || '').length < 2000) run.said = (run.said || '') + String(event.text || '');
+  sendAddon({ type: 'chat_event', id: run.id, event });
+}
 
 // mcp__claude-in-zen__click -> { name: 'click' }; mcp__plugin_vidiq_vidiq__vidiq_video_transcript -> { name: 'vidiq_video_transcript', server: 'vidIQ' }.
 function toolName(run, raw) {
@@ -474,7 +478,10 @@ function finishChat(run, ok, error) {
   run.finished = true;
   clearTimeout(run.timer);
   if (chat === run) chat = null;
-  if (run.improve && !ok) selfimprove.drop(run.sandbox);
+  if (run.improve && !ok) {
+    selfimprove.recordEnd(run.sandbox.id, { outcome: `failed or stopped without a change: ${String(error || 'stopped').slice(0, 200)}`, said: run.said || '' });
+    selfimprove.drop(run.sandbox);
+  }
   const err = ok ? '' : String(error || 'Claude Code stopped without an answer.').slice(0, 1500);
   if (!ok) log.warn(`chat ${run.id} failed: ${err.slice(0, 200)}`); else log.info(`chat ${run.id} done ${Date.now() - run.started} ms`);
   sendAddon({ type: 'chat_done', id: run.id, ok: !!ok, error: err, limit: !ok && LIMIT_RE.test(err), sessionId: run.sessionId || '' });
@@ -547,7 +554,7 @@ function startChat(msg) {
 
     child.stdin.on('error', () => {});
     let prompt;
-    if (improve) prompt = selfimprove.request(text);
+    if (improve) { prompt = selfimprove.request(text); selfimprove.recordStart(run.sandbox, text); }
     else {
       const ctx = msg.tab && typeof msg.tab === 'object'
         ? `[Current tab: id ${Number(msg.tab.id)}, "${String(msg.tab.title || '').slice(0, 200)}", ${String(msg.tab.url || '').slice(0, 500)}]\n\n`
@@ -582,6 +589,7 @@ async function finishImprove(run) {
     emitChat(run, { kind: 'notice', text: 'Checking the change: running the tests on the copy…' });
     const p = await selfimprove.propose(run.sandbox);
     if (run.finished) return selfimprove.drop(run.sandbox);   // stopped while the tests ran
+    selfimprove.recordProposal(run.sandbox.id, p, run.said || '');
     emitChat(run, Object.assign({ kind: 'proposal' }, p));
     finishChat(run, true);
   } catch (e) {
@@ -594,11 +602,13 @@ function selfApply(msg) {
   const id = String(msg.id || '');
   let r;
   try { r = selfimprove.apply(id, ROOT); } catch (e) { r = { ok: false, text: `Apply failed: ${e.message}`, files: [] }; }
+  selfimprove.recordLater(id, r.ok ? `applied: ${(r.files || []).join(', ')}` : `not applied: ${r.text}`);
   sendAddon({ type: 'self_result', id, ok: !!r.ok, text: r.text, files: r.files || [] });
 }
 function selfDiscard(msg) {
   const id = String(msg.id || '');
   const r = selfimprove.discard(id);
+  selfimprove.recordLater(id, 'discarded');
   sendAddon({ type: 'self_result', id, ok: true, text: r.text, files: [] });
 }
 

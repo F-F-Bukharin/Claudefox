@@ -1,6 +1,7 @@
 'use strict';
-// Improve Claude in Zen, helper side: the diff, the checks, the copy, the proposal, Apply and Discard. Uses temp
-// folders only (the copies go under a temp LOCALAPPDATA); no Claude Code and no Zen are needed.
+// Improve Claude in Zen, helper side: the diff, the checks (a mod's files only), the copy, the proposal, Apply and
+// Discard, the notes on earlier runs, and the run's flags and master prompt. Uses temp folders only (the copies and the
+// notes go under a temp LOCALAPPDATA); no Claude Code and no Zen are needed.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -15,13 +16,15 @@ const check = (name, cond, detail) => {
   console.log(`${cond ? 'PASS' : 'FAIL'} ${name}${!cond && detail ? `  (${detail})` : ''}`);
 };
 
-// A small add-on: the folders the copy holds, and a test runner that passes or fails.
+// A small add-on: the folders the copy holds, one mod, and a test runner that passes or fails.
 function fakeAddon(dir, runnerExit) {
   const files = {
     'extension/panel.js': 'const a = 1;\nconst b = 2;\nconsole.log(a + b);\n',
     'extension/lib/tools.js': 'module.exports = { x: 1 };\n',
     'extension/manifest.json': '{ "version": "0.9.0" }\n',
     'extension/lib/policy.js': 'module.exports = {};\n',
+    'extension/mods/wider-composer/mod.json': '{ "name": "Wider composer", "description": "Gives the text bar room." }\n',
+    'extension/mods/wider-composer/panel.js': 'window.widerComposer = true;\n',
     'host/claude-in-zen-host.js': 'module.exports = 1;\n',
     'host/lib/guard.js': 'module.exports = {};\n',
     'host/lib/extra.js': 'module.exports = "extra";\n',
@@ -35,6 +38,18 @@ function fakeAddon(dir, runnerExit) {
 }
 
 const mk = (p, status, ops, extra) => Object.assign({ path: p, status, binary: false, size: 10, added: 0, removed: 0, ops: ops || [], diff: '' }, extra || {});
+const notMod = list => list.some(p => /not a mod file/.test(p));
+
+// A folder of mods, for the checks that read a mod folder the way the panel will load it.
+const modWork = path.join(tmp, 'mods-work');
+const putFile = (rel, text) => { fs.mkdirSync(path.dirname(path.join(modWork, rel)), { recursive: true }); fs.writeFileSync(path.join(modWork, rel), text); };
+putFile('extension/mods/ok-mod/panel.js', 'window.okMod = 1;\n');
+putFile('extension/mods/ok-mod/mod.json', '{ "name": "OK" }\n');
+putFile('extension/mods/style-only/style.css', 'body { color: red; }\n');
+putFile('extension/mods/broken-json/panel.js', 'window.x = 1;\n');
+putFile('extension/mods/broken-json/mod.json', '{ not json\n');
+putFile('extension/mods/no-files/mod.json', '{ "name": "Nothing" }\n');
+putFile('extension/mods/syntax/panel.js', 'const a = ;\n');
 
 (async () => {
   // Diff: rebuilds both sides exactly, on random small inputs.
@@ -54,70 +69,104 @@ const mk = (p, status, ops, extra) => Object.assign({ path: p, status, binary: f
   const u = S.unified('extension/new.js', 'added', S.lineDiff([], ['one', 'two']));
   check('an added file diffs against /dev/null with the right hunk header', u.startsWith('--- /dev/null\n+++ b/extension/new.js') && u.includes('@@ -0,0 +1,2 @@') && u.includes('+one'), u);
 
-  // Checks: what may and may not be applied.
-  check('a normal edit in extension/ passes the checks', S.checkChanges([mk('extension/panel.js', 'modified', [['+', 'const c = 3;']])]).length === 0);
-  check('protected files are refused', S.checkChanges([mk('host/lib/guard.js', 'modified')]).some(p => /protected/.test(p))
-    && S.checkChanges([mk('test/run-all.js', 'modified')]).some(p => /protected/.test(p))
-    && S.checkChanges([mk('extension/manifest.json', 'modified')]).some(p => /protected/.test(p))
-    && S.checkChanges([mk('host/test/smoke.js', 'modified')]).some(p => /protected/.test(p)));
-  check('files outside extension/ and host/ are refused', S.checkChanges([mk('tools/menu.ps1', 'added')]).some(p => /outside/.test(p)));
-  check('deleting a file is refused', S.checkChanges([mk('extension/lib/tools.js', 'removed', [['-', 'x']])]).some(p => /removes a file/.test(p)));
-  check('adding cookie access is refused', S.checkChanges([mk('extension/lib/tools.js', 'modified', [['+', 'const c = await browser.cookies.getAll({});']])]).some(p => /cookie/.test(p)));
-  check('reading document.cookie is refused too', S.checkChanges([mk('extension/panel.js', 'modified', [['+', 'const c = document.cookie;']])]).some(p => /cookie/.test(p)));
-  check('adding a key or secret is refused', S.checkChanges([mk('host/lib/extra.js', 'modified', [['+', 'const k = "sk-ant-api03-abcdefgh";']])]).some(p => /key or secret/.test(p)));
-  check('binary files are refused', S.checkChanges([mk('extension/icons/a.png', 'added', [], { binary: true })]).some(p => /binary/.test(p)));
+  // Only a mod's own files may change.
+  check('a mod file is editable: mod.json, panel.js and style.css in extension/mods/<id>/', ['mod.json', 'panel.js', 'style.css'].every(f => S.isEditable(`extension/mods/wider-composer/${f}`)));
+  check('everything else is not: core files, other names, deeper paths, bad ids, the helper, the manifest', ['extension/panel.js', 'extension/mods/wider-composer/other.js', 'extension/mods/wider-composer/sub/panel.js', 'extension/mods/Bad_Name/panel.js', 'extension/mods/a/panel.js', 'host/lib/guard.js', 'extension/manifest.json', 'extension/mods/../panel.js'].every(p => !S.isEditable(p)));
+  check('a normal edit to a mod passes the checks', S.checkChanges([mk('extension/mods/wider-composer/panel.js', 'modified', [['+', 'window.widerComposer = 2;']])]).length === 0);
+  check('a core file is refused, whatever the edit', notMod(S.checkChanges([mk('extension/panel.js', 'modified', [['+', 'const c = 3;']])])));
+  check('the helper, the tests, the manifest and every other file are refused', ['host/lib/guard.js', 'test/run-all.js', 'extension/manifest.json', 'host/test/smoke.js', 'tools/menu.ps1'].every(p => notMod(S.checkChanges([mk(p, 'modified')]))));
+  check('deleting a file is refused', S.checkChanges([mk('extension/mods/wider-composer/style.css', 'removed', [['-', 'x']])]).some(p => /removes a file/.test(p)));
+  check('adding cookie access is refused', S.checkChanges([mk('extension/mods/wider-composer/panel.js', 'modified', [['+', 'const c = await browser.cookies.getAll({});']])]).some(p => /cookie/.test(p)));
+  check('reading document.cookie is refused too', S.checkChanges([mk('extension/mods/wider-composer/panel.js', 'modified', [['+', 'const c = document.cookie;']])]).some(p => /cookie/.test(p)));
+  check('adding a key or secret is refused', S.checkChanges([mk('extension/mods/wider-composer/panel.js', 'modified', [['+', 'const k = "sk-ant-api03-abcdefgh";']])]).some(p => /key or secret/.test(p)));
+  check('binary files are refused', S.checkChanges([mk('extension/mods/wider-composer/icon.png', 'added', [], { binary: true })]).some(p => /binary/.test(p)));
+
+  // A mod folder is checked the way the panel will load it.
+  check('a valid mod passes the folder checks', S.checkChanges([mk('extension/mods/ok-mod/panel.js', 'added'), mk('extension/mods/ok-mod/mod.json', 'added')], modWork).length === 0);
+  check('a style-only mod passes', S.checkChanges([mk('extension/mods/style-only/style.css', 'added')], modWork).length === 0);
+  check('a mod whose mod.json does not parse is refused', S.checkChanges([mk('extension/mods/broken-json/mod.json', 'added')], modWork).some(p => /not valid JSON/.test(p)));
+  check('a mod with neither panel.js nor style.css is refused', S.checkChanges([mk('extension/mods/no-files/mod.json', 'added')], modWork).some(p => /neither/.test(p)));
+  check('a panel.js that does not compile is refused, with the reason', S.checkChanges([mk('extension/mods/syntax/panel.js', 'added')], modWork).some(p => /does not compile/.test(p)));
 
   // The copy, the proposal and Apply.
   const rootOk = fakeAddon(path.join(tmp, 'addon-ok'), 0);
   const sb = S.prepare(rootOk);
-  check('the copy holds the add-on in base and work', fs.existsSync(path.join(sb.work, 'extension/panel.js')) && fs.existsSync(path.join(sb.base, 'host/lib/guard.js')));
-  fs.writeFileSync(path.join(sb.work, 'extension/panel.js'), 'const a = 1;\nconst b = 2;\nconsole.log(a + b, "hi");\n');
-  fs.writeFileSync(path.join(sb.work, 'host/lib/new-helper.js'), 'module.exports = 42;\n');
+  check('the copy holds the add-on in base and work, mods included', fs.existsSync(path.join(sb.work, 'extension/panel.js')) && fs.existsSync(path.join(sb.base, 'host/lib/guard.js')) && fs.existsSync(path.join(sb.work, 'extension/mods/wider-composer/mod.json')));
+  fs.writeFileSync(path.join(sb.work, 'extension/mods/wider-composer/panel.js'), 'window.widerComposer = true;\nconsole.log("wider");\n');
+  fs.mkdirSync(path.join(sb.work, 'extension/mods/quiet-tip'), { recursive: true });
+  fs.writeFileSync(path.join(sb.work, 'extension/mods/quiet-tip/mod.json'), '{ "name": "Quiet tip" }\n');
+  fs.writeFileSync(path.join(sb.work, 'extension/mods/quiet-tip/style.css'), '.tip { opacity: .8; }\n');
   const p = await S.propose(sb);
-  check('the change lists the edited and the new file', p.changed === 2 && p.files.some(f => f.path === 'extension/panel.js' && f.status === 'modified') && p.files.some(f => f.path === 'host/lib/new-helper.js' && f.status === 'added'), JSON.stringify(p.files));
+  check('the change lists the edited mod file and the new mod folder', p.changed === 3 && p.files.some(f => f.path === 'extension/mods/wider-composer/panel.js' && f.status === 'modified') && p.files.some(f => f.path === 'extension/mods/quiet-tip/style.css' && f.status === 'added'), JSON.stringify(p.files));
   check('the tests run on the copy and pass, so the change can be applied', !!p.tests && p.tests.ok && p.canApply === true, JSON.stringify(p.tests));
-  check('the whole diff is kept in changes.diff', fs.readFileSync(p.diffFile, 'utf8').includes('--- a/extension/panel.js'));
-  check('the real add-on is untouched before Apply', fs.readFileSync(path.join(rootOk, 'extension/panel.js'), 'utf8').includes('console.log(a + b);'));
+  check('the whole diff is kept in changes.diff', fs.readFileSync(p.diffFile, 'utf8').includes('--- a/extension/mods/wider-composer/panel.js'));
+  check('the real add-on is untouched before Apply', fs.readFileSync(path.join(rootOk, 'extension/mods/wider-composer/panel.js'), 'utf8') === 'window.widerComposer = true;\n');
   const applied = S.apply(sb.id, rootOk);
-  check('Apply writes the change into the add-on', applied.ok && fs.readFileSync(path.join(rootOk, 'extension/panel.js'), 'utf8').includes('"hi"') && fs.existsSync(path.join(rootOk, 'host/lib/new-helper.js')), applied.text);
-  check('Apply says to reload, and that helper changes need Zen restarted', /Reload/.test(applied.text) && /restarted/.test(applied.text), applied.text);
+  check('Apply writes the mod changes into the add-on, the new folder included', applied.ok && fs.readFileSync(path.join(rootOk, 'extension/mods/wider-composer/panel.js'), 'utf8').includes('console.log("wider")') && fs.existsSync(path.join(rootOk, 'extension/mods/quiet-tip/style.css')), applied.text);
+  check('Apply says to reload, and asks for no restart for mod changes', /Reload/.test(applied.text) && !/restart/.test(applied.text), applied.text);
   check('after Apply the proposal and its copy are gone', !S.proposals.has(sb.id) && !fs.existsSync(sb.dir));
   check('applying the same change twice does nothing', !S.apply(sb.id, rootOk).ok);
 
-  // A file that changed after the copy was made: nothing is written.
+  // A mod file that changed after the copy was made: nothing is written.
   const sb2 = S.prepare(rootOk);
-  fs.writeFileSync(path.join(sb2.work, 'extension/lib/tools.js'), 'module.exports = { x: 2 };\n');
+  fs.writeFileSync(path.join(sb2.work, 'extension/mods/wider-composer/panel.js'), 'window.widerComposer = 2;\n');
   await S.propose(sb2);
-  fs.writeFileSync(path.join(rootOk, 'extension/lib/tools.js'), 'module.exports = { x: 9 };\n');
+  fs.writeFileSync(path.join(rootOk, 'extension/mods/wider-composer/panel.js'), 'window.widerComposer = 9;\n');
   const conflict = S.apply(sb2.id, rootOk);
-  check('Apply refuses when a file changed since the copy, and writes nothing', !conflict.ok && /changed since/.test(conflict.text) && fs.readFileSync(path.join(rootOk, 'extension/lib/tools.js'), 'utf8') === 'module.exports = { x: 9 };\n', conflict.text);
+  check('Apply refuses when a file changed since the copy, and writes nothing', !conflict.ok && /changed since/.test(conflict.text) && fs.readFileSync(path.join(rootOk, 'extension/mods/wider-composer/panel.js'), 'utf8') === 'window.widerComposer = 9;\n', conflict.text);
   S.discard(sb2.id);
   check('Discard removes the copy', !fs.existsSync(sb2.dir));
 
   // A change that fails the tests cannot be applied.
   const rootBad = fakeAddon(path.join(tmp, 'addon-bad'), 1);
   const sb3 = S.prepare(rootBad);
-  fs.writeFileSync(path.join(sb3.work, 'extension/lib/tools.js'), 'module.exports = { x: 3 };\n');
+  fs.writeFileSync(path.join(sb3.work, 'extension/mods/wider-composer/panel.js'), 'window.widerComposer = 3;\n');
   const p3 = await S.propose(sb3);
   check('a change that fails the tests cannot be applied', !!p3.tests && !p3.tests.ok && p3.canApply === false && !S.apply(sb3.id, rootBad).ok, JSON.stringify(p3.tests));
   S.discard(sb3.id);
 
-  // A protected edit is blocked before any test runs, and Discard leaves the add-on as it was.
+  // A core edit is blocked before any test runs, and Discard leaves the add-on as it was.
   const sb4 = S.prepare(rootOk);
   fs.writeFileSync(path.join(sb4.work, 'host/lib/guard.js'), 'module.exports = { hacked: true };\n');
   const p4 = await S.propose(sb4);
-  check('a protected edit is blocked before the tests run', p4.tests === null && p4.canApply === false && p4.blocked.some(b => /protected/.test(b)));
+  check('a core edit is blocked before the tests run', p4.tests === null && p4.canApply === false && notMod(p4.blocked));
   S.discard(sb4.id);
-  check('Discard leaves the protected file as it was', fs.readFileSync(path.join(rootOk, 'host/lib/guard.js'), 'utf8') === 'module.exports = {};\n');
+  check('Discard leaves the core file as it was', fs.readFileSync(path.join(rootOk, 'host/lib/guard.js'), 'utf8') === 'module.exports = {};\n');
 
-  // The run's flags.
+  // Notes on earlier runs: in memory/ under the helper folder, scrubbed, kept to the newest 50, and capped for a prompt.
+  check('the notes live in memory/ under the helper folder', S.MEMORY_DIR === path.join(process.env.LOCALAPPDATA, 'claude-in-zen', 'memory'), S.MEMORY_DIR);
+  const idA = 'aaaaaaaaaaaa';
+  S.recordStart({ id: idA }, 'make the panel nicer');
+  S.recordProposal(idA, { changed: 2, blocked: [], canApply: true, tests: { ok: true, summary: 'All test files passed' }, files: [{ path: 'extension/mods/quiet-tip/mod.json', status: 'added' }] }, 'I added a quiet tip.');
+  S.recordLater(idA, 'applied: extension/mods/quiet-tip/mod.json');
+  const note = S.memoryText();
+  check('the next run is given what an earlier run asked, found, and what the user did', note.includes('make the panel nicer') && note.includes('ready for Apply') && note.includes('I added a quiet tip.') && note.includes('applied: extension/mods/quiet-tip/mod.json'), note.slice(0, 300));
+  const idB = 'bbbbbbbbbbbb';
+  S.recordStart({ id: idB }, 'change the core');
+  S.recordProposal(idB, { changed: 1, blocked: ['extension/panel.js: not a mod file. A change may only touch extension/mods/<id>/.'], canApply: false, tests: null, files: [{ path: 'extension/panel.js', status: 'modified' }] }, 'Tried the core.');
+  S.recordLater(idB, 'discarded');
+  check('a refused change says so, and a discard is noted', S.memoryText().includes('refused by the checks') && S.memoryText().includes('Later') && S.memoryText().includes('discarded'));
+  const idC = 'cccccccccccc';
+  S.recordStart({ id: idC }, 'use my key');
+  S.recordEnd(idC, { outcome: 'x', said: 'Here is sk-ant-api03-abcdefghijk in the reply' });
+  const onDisk = S.memoryFiles().map(n => fs.readFileSync(path.join(S.MEMORY_DIR, n), 'utf8')).join('\n');
+  check('a key in a note is removed before the note is written, and the next run sees [removed]', !onDisk.includes('sk-ant-api03') && S.memoryText().includes('[removed]'));
+  for (let i = 1; i <= 55; i++) S.recordStart({ id: i.toString(16).padStart(12, '0') }, `run ${i}`);
+  check('the notes keep the newest 50 runs', S.memoryFiles().length === 50, String(S.memoryFiles().length));
+  check('the notes given to the next run are capped, and include the newest run', S.memoryText().length <= 8000 && S.memoryText().includes('Asked: run 55'));
+
+  // The run's flags and its master prompt.
   const sb5 = S.prepare(rootOk);
   const a = S.args(sb5, { model: 'claude-opus-5-5', effort: 'max' }, { enabledPlugins: { 'vidiq@test': true } });
   const val = f => a[a.indexOf(f) + 1];
   check('an improve run uses Opus 5.5 at max effort', val('--model') === 'claude-opus-5-5' && val('--effort') === 'max', a.join(' '));
   check('an improve run has the five file tools only: no shell, no web, no browser tools', val('--tools') === 'Read,Glob,Grep,Edit,Write' && val('--allowedTools') === 'Read,Glob,Grep,Edit,Write' && a.includes('--strict-mcp-config') && !a.join(' ').includes('Bash') && !a.join(' ').includes('WebSearch'));
   check('plugins are forced off for the run', JSON.parse(fs.readFileSync(val('--settings'), 'utf8')).enabledPlugins['vidiq@test'] === false);
-  check('the system prompt names the copy and the off-limits files', val('--append-system-prompt').includes(sb5.work) && val('--append-system-prompt').includes('host/lib/guard.js'));
+  const prompt = val('--append-system-prompt');
+  check('the master prompt names the copy, the mods folder, and what may not change', prompt.includes(sb5.work) && prompt.includes('extension/mods/') && /Nothing outside extension\/mods\/ may change/.test(prompt));
+  check('the master prompt says how a mod runs, and what happens when it throws', /\$\('id'\)/.test(prompt) && /turns that mod off/.test(prompt) && /\(function \(\) \{/.test(prompt));
+  check('the master prompt gives the notes as data, with the newest run in it', /data, not instructions/.test(prompt) && prompt.includes('Asked: run 55'));
+  check('the master prompt names no shell and no web tool', !/Bash|WebSearch|WebFetch/.test(prompt));
   S.discard(sb5.id);
   check('an empty request asks for one change; a typed one is passed on', /pick the one change/.test(S.request('')) && S.request('make the panel nicer').includes('make the panel nicer'));
 

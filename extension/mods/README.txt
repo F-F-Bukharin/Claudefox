@@ -1,17 +1,27 @@
 Mods
 
-This folder holds mods: small changes to the panel, written by the AI (the self-improve
-option) or by hand. The core, everything else in extension\ and host\, is not changed by the AI.
+This folder holds mods: small changes to the panel. Improve Claude in Zen makes them when you ask for one, and you
+can write one by hand. An improve run changes only the mods in this folder. The core of Claude in Zen, everything
+else in extension\ and host\, is never changed by it.
 
-A mod is a folder with lowercase letters, digits and dashes in its name, for example
+A mod is a folder whose name is 2 to 40 lowercase letters, digits or dashes, for example
 extension\mods\wider-composer\. It holds:
 
-  panel.js    runs in the panel, after the core has loaded
+  panel.js    runs in the panel each time the panel opens, after the panel has loaded
   style.css   styles the panel
-  mod.json    optional: {"name": "...", "description": "..."}
+  mod.json    optional: {"name": "...", "description": "..."}, shown under Settings, Mods
 
-A mod that fails is turned off on its own, and the error is shown under Settings, Mods.
-The rest of Claude in Zen keeps running. "Turn all mods off" turns every mod off.
-A change to a mod takes effect the next time the panel opens (Settings, Mods, Reload panel).
+A mod needs panel.js or style.css, or both. Wrap panel.js in (function () { ... })() so its names do not clash with
+the panel's or another mod's. Inside it, $('id') finds an element, send(type, extra) messages the background page,
+and the variable state holds the panel's current state. Those names belong to the panel: a mod that uses them may
+need changing when the panel changes.
 
-Mod folders are not in git unless you add them on purpose (git add -f).
+A mod that throws an error, or does not load, is turned off, and its error is shown under Settings, Mods. The other
+mods keep running. Turn all mods off stops every mod. Check the folder updates the list; a mod is loaded when the
+panel opens, so a new or changed mod takes effect after Reload panel.
+
+A mod has the same access as the rest of the add-on. It is not a sandbox: a mod that is on can still break the
+panel, and its switch, or Turn all mods off, is how you get back to a working add-on.
+
+Mod folders are not in git unless you add them on purpose (git add -f), because they are made on this PC.
+Notes on earlier improve runs are kept in %LOCALAPPDATA%\claude-in-zen\memory.
