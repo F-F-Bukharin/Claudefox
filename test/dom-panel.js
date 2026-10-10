@@ -97,5 +97,20 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  ok('tab highlight moves under Settings', $('tabThumb').style.transform==='translateX(200px)' && $('tabThumb').style.width==='100px', $('tabThumb').style.transform);
  w.document.querySelector('.tabs button[data-page="chat"]').click();
  ok('tab highlight slides back to Claude', $('tabThumb').style.transform==='translateX(0px)' && $('tabThumb').classList.contains('animate'));
-console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
+// Unsafe mode: turning it on asks first; the badge and the Google row follow the state
+ onMsg({type:'state',state:{...ready,unsafe:false},log:[]});
+ const mark=sent.length;
+ $('unsafeToggle').checked=true; $('unsafeToggle').dispatchEvent(new w.Event('change'));
+ ok('unsafe asks before turning on', !$('unsafeConfirm').hidden && !$('unsafeToggle').checked && !sent.slice(mark).some(m=>m.type==='setUnsafe'));
+ $('unsafeNo').click();
+ ok('unsafe cancel sends nothing', $('unsafeConfirm').hidden && !$('unsafeToggle').checked && !sent.slice(mark).some(m=>m.type==='setUnsafe'));
+ $('unsafeToggle').checked=true; $('unsafeToggle').dispatchEvent(new w.Event('change')); $('unsafeYes').click();
+ ok('unsafe confirm sends setUnsafe on', sent.slice(mark).some(m=>m.type==='setUnsafe'&&m.value===true));
+ onMsg({type:'state',state:{...ready,unsafe:true},log:[]});
+ ok('badge and Google row show Unsafe mode', !$('unsafeBadge').hidden && $('googleVal').textContent==='allowed (Unsafe mode)' && $('unsafeToggle').checked===true);
+ $('unsafeToggle').checked=false; $('unsafeToggle').dispatchEvent(new w.Event('change'));
+ ok('turning it off needs no question', sent.some(m=>m.type==='setUnsafe'&&m.value===false) && $('unsafeConfirm').hidden);
+ onMsg({type:'state',state:{...ready,unsafe:false},log:[]});
+ ok('badge hidden and Google row back to hands-off when off', $('unsafeBadge').hidden && $('googleVal').textContent==='always hands-off');
+ console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
 })().catch(e=>{console.log('ERROR',e.stack);process.exit(1)});

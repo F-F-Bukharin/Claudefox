@@ -93,6 +93,7 @@ async function handlePanel(msg, port) {
     case 'newChat':    return cizState.set({ chatSession: '' });
     case 'setModel':   return cizState.set({ chatModel: msg.value === 'quality' ? 'quality' : 'speed' });
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
+    case 'setUnsafe': return setUnsafe(!!msg.value);
   }
 }
 
@@ -316,8 +317,8 @@ async function stopAll(source) {
   }
   failChats('Stopped.');
   disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
-  await cizState.set({ agent: 'stopped', filesEnabled: false, pending: 0 });
-  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, helper disconnected, file tools off.`);
+  await cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, pending: 0 });
+  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, helper disconnected, file tools off, Unsafe mode off.`);
 }
 
 async function startAgent() {
@@ -342,6 +343,22 @@ async function setFiles(value, mode, folder) {
   }
   await cizState.set({ filesEnabled: true, filesMode: m, filesFolder: f });
   await cizState.addLog('info', `File tools on (${m === 'write' ? 'read and write' : 'read only'}) for ${f}`);
+}
+
+// Unsafe mode lets Claude act on Google sign-in pages, to debug the sign-in bug. It lasts for this
+// session only: Stop, an add-on restart or a Zen restart turns it off. Passwords, 2FA codes and
+// payment details are refused in every mode.
+async function setUnsafe(value) {
+  if (!value) {
+    if (cizState.get().unsafe) {
+      await cizState.set({ unsafe: false });
+      await cizState.addLog('info', 'Unsafe mode off');
+    }
+    return;
+  }
+  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on Unsafe mode.');
+  await cizState.set({ unsafe: true });
+  await cizState.addLog('warn', 'Unsafe mode on: Claude may act on Google sign-in pages. It still never types passwords, 2FA codes or payment details.');
 }
 
 // ---------------------------------------------------------------- chat
@@ -369,7 +386,7 @@ async function startChat(msg) {
     const [t] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
     if (t) tab = { id: t.id, title: t.title || '', url: t.url || '' };
   } catch {}
-  const sent = sendNative({ type: 'chat', id, text, model, tab, resume: s.chatSession || '', files, folder: files ? s.filesFolder : '' });
+  const sent = sendNative({ type: 'chat', id, text, model, tab, resume: s.chatSession || '', files, folder: files ? s.filesFolder : '', unsafe: !!s.unsafe });
   if (!sent) { chatRuns.delete(id); return fail('Could not reach the helper.'); }
   await cizState.addLog('action', `chat → Claude Code, ${model}${files ? `, file tools: ${files}` : ''}`);
 }

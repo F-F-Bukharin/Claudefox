@@ -189,6 +189,14 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     const withFiles = native.sent.find(m => m.type === 'chat' && m.id === 'p4');
     check('chat carries the file mode, folder and Quality', withFiles.files === 'write' && withFiles.folder === 'C:\\Users\\F\\notes' && withFiles.model === 'quality');
 
+    // Unsafe mode: Claude may read the Google sign-in tab only while it is on
+    await fromPanel({ type: 'setUnsafe', value: true });
+    check('Unsafe mode turns on from the panel', g('cizState').get().unsafe === true);
+    r = await call('read_page', { tab_id: 2 });
+    check('Unsafe mode lets Claude read the Google sign-in tab', r.ok && injected.includes(2));
+    r = await call('get_page_text', { tab_id: 3 });
+    check('Unsafe mode still refuses about: pages', !r.ok && /off-limits/.test(r.error));
+
     // Stop
     const port = native;
     const waiting = call('wait_for', { tab_id: 1, text: 'never shows', timeout_ms: 60000 });
@@ -199,6 +207,7 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     const s = g('cizState').get();
     check('Stop ends the open answer in the panel', panelIn.some(m => m.type === 'chatDone' && m.id === 'p4' && m.error === 'Stopped.'));
     check('Stop disconnects the helper and turns file tools off', port.disconnected && s.agent === 'stopped' && s.filesEnabled === false);
+    check('Stop turns Unsafe mode off too', s.unsafe === false);
     const w = await waiting;
     check('Stop aborts the running page action at once', !w.ok && w.error === 'Stopped' && Date.now() - tStop < 500 && s.pending === 0, `${Date.now() - tStop} ms`);
     r = await call('tabs_list');

@@ -105,6 +105,14 @@ $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().ver
 $('modelBtn').addEventListener('click', () => send('setModel', { value: state.chatModel === 'quality' ? 'speed' : 'quality' }));
 $('plusBtn').addEventListener('click', () => send('setPlus', { value: !state.chatPlus }));
 
+// Unsafe mode: turning it on asks first (the confirm box). Turning it off needs no question.
+$('unsafeToggle').addEventListener('change', e => {
+  if (e.target.checked) { e.target.checked = false; $('unsafeConfirm').hidden = false; }
+  else send('setUnsafe', { value: false });
+});
+$('unsafeYes').addEventListener('click', () => { $('unsafeConfirm').hidden = true; send('setUnsafe', { value: true }); });
+$('unsafeNo').addEventListener('click', () => { $('unsafeConfirm').hidden = true; $('unsafeToggle').checked = !!state.unsafe; });
+
 // ------------------------------------------------------------ render state
 
 const NATIVE_LABEL = {
@@ -189,6 +197,16 @@ function render(s, log) {
   $('debugDot').className = 'dot ' + (on ? 'warn' : '');
   $('debugVal').textContent = on ? 'OPEN' : s.debugPort === 'off' ? 'closed' : '…';
   $('debugVal').parentElement.classList.toggle('warn', on);
+  // unsafe mode (session only; Stop and a restart turn it off)
+  $('unsafeBadge').hidden = !s.unsafe;
+  $('unsafeToggle').checked = !!s.unsafe;
+  $('unsafeToggle').disabled = s.agent === 'stopped';
+  if (s.unsafe) $('unsafeConfirm').hidden = true;
+  $('unsafeNote').textContent = s.unsafe
+    ? 'On. Claude may act on Google sign-in pages until you press Stop or restart Zen.'
+    : 'Off. Claude does not act on Google sign-in pages.';
+  $('googleVal').textContent = s.unsafe ? 'allowed (Unsafe mode)' : 'always hands-off';
+  $('googleVal').classList.toggle('warn', !!s.unsafe);
   $('filesToggle').checked = !!s.filesEnabled;
   if (document.activeElement !== $('filesFolder')) $('filesFolder').value = s.filesFolder || '';
   $('filesFolder').disabled = s.agent === 'stopped';

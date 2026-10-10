@@ -12,6 +12,7 @@
       <img src="icons/icon.svg" alt="" width="20" height="20">
       <h1>Claude</h1>
       <span id="agentPill" class="pill">…</span>
+      <span id="unsafeBadge" class="pill unsafe" hidden title="Unsafe mode is on: Claude may act on Google sign-in pages">Unsafe</span>
     </div>
     <button id="stopBtn" class="stopchip" title="Stop: cancel actions, cut the connection, turn file tools off">Stop</button>
     <button id="startBtn" class="startchip" hidden>Start</button>
@@ -146,8 +147,20 @@
         <p id="filesNote" class="muted small"></p>
       </div>
       <div class="row">
+        <label for="unsafeToggle">Unsafe mode</label>
+        <span class="val"><input type="checkbox" id="unsafeToggle" class="switch"></span>
+      </div>
+      <p id="unsafeNote" class="muted small unsafe-note"></p>
+      <div id="unsafeConfirm" class="confirm" hidden>
+        <p>Claude will open and click through Google sign-in and account pages like any other site, so you can debug the sign-in bug. It still never types passwords, 2FA codes or payment details. Unsafe mode turns off when you press Stop or restart Zen.</p>
+        <div class="confirm-btns">
+          <button id="unsafeNo" class="ghost">Cancel</button>
+          <button id="unsafeYes" class="primary">Turn on</button>
+        </div>
+      </div>
+      <div class="row">
         <span>Google sign-in pages</span>
-        <span class="val">always hands-off</span>
+        <span class="val" id="googleVal">always hands-off</span>
       </div>
       <div class="row">
         <span>Passwords, 2FA, payment</span>

@@ -4,7 +4,8 @@
 // content-script world: the page's own scripts cannot see or change it.
 //
 // Fixed rules enforced here, whatever Claude asks:
-//   - Google sign-in pages and non-web pages (about:, file:, moz-extension:) are never read or touched.
+//   - Non-web pages (about:, file:, moz-extension:) are never read or touched.
+//   - Google sign-in pages are not read or touched unless Unsafe mode is on (Settings).
 //   - Password, 2FA and payment fields are never filled or typed into.
 
 const cizSleep = ms => new Promise(r => setTimeout(r, ms));
@@ -758,10 +759,10 @@ async function cizTabFor(args) {
   return t;
 }
 
-// A tab Claude may read or act on: not a Google sign-in page, not a non-web page.
+// A tab Claude may read or act on: not a non-web page, and not a Google sign-in page unless Unsafe mode is on.
 async function cizPageTab(args) {
   const tab = await cizTabFor(args);
-  const gate = cizUrlBlocked(tab.url || '');
+  const gate = cizUrlBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
   if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
   return tab;
 }
@@ -820,7 +821,7 @@ async function cizAfterAction(tab, run) {
 }
 
 function cizRefuseUrl(url) {
-  const gate = cizUrlBlocked(url);
+  const gate = cizUrlBlocked(url, { unsafe: !!cizState.get().unsafe });
   if (gate.blocked) throw new Error(`Refused: ${gate.reason}.`);
 }
 

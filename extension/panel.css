@@ -388,3 +388,10 @@ textarea:focus-visible { outline: none; }
 .fbtn { padding: 5px 10px; font-size: 12px; }
 
 .rownote { margin: 0 0 8px; text-align: right; }
+
+/* ---------- Unsafe mode ---------- */
+.pill.unsafe { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.unsafe-note { margin: -4px 0 10px; }
+.confirm { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--warn) 9%, var(--card)); }
+.confirm p { font-size: 12.5px; line-height: 1.45; }
+.confirm-btns { display: flex; gap: 8px; justify-content: flex-end; }

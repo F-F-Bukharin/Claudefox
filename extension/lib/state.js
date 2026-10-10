@@ -10,6 +10,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   filesEnabled: false,        // Stop always forces it off
   filesMode: 'read',          // 'read' | 'write' when file tools are on
   filesFolder: '',            // the one folder file tools may use
+  unsafe: false,              // Unsafe mode: Claude may act on Google sign-in pages. Session only (load() clears it)
   accounts: [],               // chat accounts from the helper: { id, email, plan, loggedIn, active }
   accountLogin: null,         // { id, isNew } while a sign-in window is open
   chatModel: 'speed',
@@ -35,7 +36,7 @@ const cizState = {
 
   async load() {
     const got = await browser.storage.session.get(['state', 'log']);
-    this._cache = Object.assign({}, CIZ_DEFAULT_STATE, got.state || {});
+    this._cache = Object.assign({}, CIZ_DEFAULT_STATE, got.state || {}, { unsafe: false });   // never survives a restart
     this._log = Array.isArray(got.log) ? got.log : [];
     return this._cache;
   },

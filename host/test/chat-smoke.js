@@ -138,6 +138,7 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     check('runs on the add-on profile', rec.config === path.join(tmp, 'claude-in-zen', 'claude'));
     check('Speed is Haiku 5.5 on high by default', val('--model') === 'claude-haiku-5-5' && val('--effort') === 'high');
     check('chat prompt has no ask-before rule', /no confirmation step/.test(val('--append-system-prompt')));
+    check('default prompt keeps Google sign-in pages hands-off', /Google sign-in pages are hands-off/.test(val('--append-system-prompt')) && !/Unsafe mode is on/.test(val('--append-system-prompt')));
 
     toHelper({ type: 'chat', id: 'c2', text: 'again', resume: done.sessionId, files: 'read', folder });
     await next(m => m.type === 'chat_done' && m.id === 'c2', 15000);
@@ -157,6 +158,12 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     check('reply says which model and effort ran', eventsFor('c3b').some(e => e.kind === 'meta' && e.model === 'claude-haiku-5-5' && e.effort === 'max'));
     check('Speed Plus is Haiku 5.5 on max', sp[sp.indexOf('--model') + 1] === 'claude-haiku-5-5' && sp[sp.indexOf('--effort') + 1] === 'max');
 
+    toHelper({ type: 'chat', id: 'c3u', text: 'unsafe', unsafe: true });
+    await next(m => m.type === 'chat_done' && m.id === 'c3u', 15000);
+    const ua = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
+    const up = ua[ua.indexOf('--append-system-prompt') + 1];
+    check('Unsafe mode is in the chat prompt, and only then', /Unsafe mode is on/.test(up) && !/Google sign-in pages are hands-off/.test(up));
+    check('Unsafe mode still never types passwords or payment details', /Never type passwords, 2FA codes or payment details, in any mode/.test(up));
     toHelper({ type: 'chat', id: 'c4', text: 'x', files: 'read', folder: path.join(tmp, 'missing') });
     const bad = await next(m => m.type === 'chat_done' && m.id === 'c4');
     check('missing folder refused before starting', !bad.ok && /not found/.test(bad.error));

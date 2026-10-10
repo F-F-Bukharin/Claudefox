@@ -48,6 +48,10 @@ ok('bad selector message', /valid CSS/.test(err('click',{selector:'##'})||''));
 // policy gate used by cizPageTab / navigate / tab_open
 for (const [u,b] of [['https://accounts.google.com/signin','y'],['https://www.google.com/ServiceLogin','y'],['https://myaccount.google.com/','y'],['about:config','y'],['file:///C:/x','y'],['https://mail.google.com/mail/u/0/','n'],['https://shop.example/','n']])
   ok('url gate '+u, ctx.cizUrlBlocked(u).blocked===(b==='y'));
+// Unsafe mode lifts only the Google rule; non-web pages stay refused
+ok('unsafe allows Google sign-in', ctx.cizUrlBlocked('https://accounts.google.com/signin',{unsafe:true}).blocked===false);
+ok('unsafe still refuses about:config', ctx.cizUrlBlocked('about:config',{unsafe:true}).blocked===true);
+ok('unsafe still refuses file: pages', ctx.cizUrlBlocked('file:///C:/x',{unsafe:true}).blocked===true);
 // real-click sequence, coordinates, display:contents, media
 const seen=[]; const go2=w.document.getElementById('go');
 for (const e of ['pointerdown','mousedown','mouseup','click']) go2.addEventListener(e,()=>seen.push(e));

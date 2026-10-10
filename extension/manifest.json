@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Claude in Zen",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Personal-use agent bridge that lets a Claude session read and act on pages in Zen. Not affiliated with or endorsed by Anthropic or Zen.",
   "browser_specific_settings": {
     "gecko": {

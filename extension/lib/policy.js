@@ -10,7 +10,9 @@ const CIZ = {
   LOG_LIMIT: 200,
 };
 
-// Rule 3: no content scripts or actions on Google sign-in.
+// Rule 3: no content scripts or actions on Google sign-in, unless the user turned on Unsafe mode
+// (Settings, Permissions). Unsafe mode lifts this rule only: rule 1 (no non-web pages) and rule 2
+// (no passwords, 2FA codes or payment details typed) still hold.
 const BLOCKED_HOSTS = [
   'accounts.google.com',
   'accounts.youtube.com',
@@ -21,19 +23,22 @@ const BLOCKED_PATH_PATTERNS = [
   { host: /(^|\.)google\.[a-z.]+$/, path: /^\/(signin|ServiceLogin|accounts)\b/i },
 ];
 
-function cizUrlBlocked(rawUrl) {
+const GOOGLE_HANDS_OFF = 'Google sign-in pages are hands-off (the user can turn on Unsafe mode in Settings)';
+
+function cizUrlBlocked(rawUrl, opts) {
   let u;
   try { u = new URL(rawUrl); } catch { return { blocked: true, reason: 'unparseable URL' }; }
   if (!/^https?:$/.test(u.protocol)) {
     return { blocked: true, reason: `${u.protocol} pages are off-limits` };
   }
+  if (opts && opts.unsafe) return { blocked: false };
   const host = u.hostname.toLowerCase();
   if (BLOCKED_HOSTS.some(h => host === h || host.endsWith('.' + h))) {
-    return { blocked: true, reason: 'Google sign-in pages are hands-off' };
+    return { blocked: true, reason: GOOGLE_HANDS_OFF };
   }
   for (const p of BLOCKED_PATH_PATTERNS) {
     if (p.host.test(host) && p.path.test(u.pathname)) {
-      return { blocked: true, reason: 'Google sign-in pages are hands-off' };
+      return { blocked: true, reason: GOOGLE_HANDS_OFF };
     }
   }
   return { blocked: false };

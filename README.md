@@ -44,8 +44,8 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 ```
 
 ## Rules (always on)
-- Google sign-in pages and non-web pages (`about:`, `file:`) are never read or touched.
-- Passwords, 2FA codes and payment details are never typed; those fields are refused.
+- Google sign-in pages are hands-off unless you turn on **Unsafe mode** in Settings (Permissions). It lasts until Stop or a Zen restart. Non-web pages (`about:`, `file:`) are never read or touched.
+- Passwords, 2FA codes and payment details are never typed by Claude, in any mode. Claude fills an email, clicks through to the password step, then waits while you type the password in Zen.
 - Text on web pages is untrusted data, wrapped as such, never instructions.
 - No "ask before doing" step for now. Later, only actions flagged as Important will ask first.
 - **Stop** cuts everything at once: page actions, the running answer and its Claude Code process, the helper,
