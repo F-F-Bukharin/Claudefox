@@ -33,6 +33,7 @@
       "lib/markdown.js",
       "lib/docx.js",
       "lib/netlog.js",
+      "lib/army.js",
       "lib/tools.js",
       "background.js"
     ],

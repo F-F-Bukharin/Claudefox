@@ -759,9 +759,16 @@ async function cizTabFor(args) {
   return t;
 }
 
+// Army workers (lib/army.js) stay on web pages, and Google sign-in is hands-off for them even in Unsafe mode.
+function cizArmyRefuse(url) {
+  if (!/^https?:\/\//i.test(String(url || ''))) throw new Error('Army workers only work on web pages.');
+  if (cizUrlBlocked(url, { unsafe: false }).blocked) throw new Error('Army workers can\'t use Google sign-in pages, even in Unsafe mode.');
+}
+
 // A tab Claude may read or act on: not a non-web page, and not a Google sign-in page unless Unsafe mode is on.
 async function cizPageTab(args) {
   const tab = await cizTabFor(args);
+  if (args && args.__army) { cizArmyRefuse(tab.url); return tab; }
   const gate = cizUrlBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
   if (gate.blocked) {
     if (/^about:/i.test(tab.url || '') && !cizViewBlocked(tab.url).blocked) {
@@ -773,8 +780,9 @@ async function cizPageTab(args) {
 }
 
 async function cizInPage(tab, op, args) {
+  const { __army, ...pageArgs } = args || {};   // which worker is calling is the add-on's business, not the page's
   const code = '(function () { var sensitiveField = ' + cizSensitiveField.toString() + ';\n'
-    + 'return (' + cizPageOp.toString() + ')(' + JSON.stringify(op) + ', ' + JSON.stringify(args || {}) + ', sensitiveField);\n})();';
+    + 'return (' + cizPageOp.toString() + ')(' + JSON.stringify(op) + ', ' + JSON.stringify(pageArgs) + ', sensitiveField);\n})();';
   let res;
   try {
     res = await browser.tabs.executeScript(tab.id, { code, runAt: 'document_idle' });
@@ -825,7 +833,11 @@ async function cizAfterAction(tab, run) {
   }
 }
 
-function cizRefuseUrl(url) {
+function cizRefuseUrl(url, army) {
+  if (army) {
+    try { cizArmyRefuse(url); } catch (e) { throw new Error(`Refused: ${e.message}`); }
+    return;
+  }
   const gate = cizUrlBlocked(url, { unsafe: !!cizState.get().unsafe });
   if (gate.blocked) throw new Error(`Refused: ${gate.reason}.`);
 }
@@ -887,13 +899,18 @@ const CIZ_TOOLS = {
 
   async tabs_list() {
     const tabs = await browser.tabs.query({});
-    return tabs.map(t => ({ id: t.id, windowId: t.windowId, active: t.active, title: t.title, url: t.url, audible: !!t.audible }));
+    return tabs.map(t => {
+      const army = cizArmy.owner(t.id);   // a tab an army worker is using, so Claude leaves it to that worker
+      return Object.assign({ id: t.id, windowId: t.windowId, active: t.active, title: t.title, url: t.url, audible: !!t.audible }, army ? { army: army.worker } : {});
+    });
   },
 
   async tab_open(args) {
     const url = String(args.url || '').trim();
-    cizRefuseUrl(url);
+    cizRefuseUrl(url, args.__army);
     const tab = await browser.tabs.create({ url, active: args.active !== false });
+    // Registered before the page loads, so Stop or the worker's end closes it even mid-load.
+    if (args.__army) cizArmy.register(tab.id, args.__army);
     if (args.wait === false) return { tab_id: tab.id, url };
     const done = await cizWaitLoaded(tab.id, 30000);
     return { tab_id: tab.id, url: done.url || url, title: done.title, loaded: done.loaded };
@@ -922,7 +939,7 @@ const CIZ_TOOLS = {
     if (word === 'back') await browser.tabs.goBack(tab.id);
     else if (word === 'forward') await browser.tabs.goForward(tab.id);
     else if (word === 'reload') await browser.tabs.reload(tab.id);
-    else { cizRefuseUrl(want); await browser.tabs.update(tab.id, { url: want }); }
+    else { cizRefuseUrl(want, args.__army); await browser.tabs.update(tab.id, { url: want }); }
     return cizWaitLoaded(tab.id, 30000);
   },
 
@@ -978,7 +995,7 @@ const CIZ_TOOLS = {
       // Re-check the tab each round: it may have navigated somewhere off-limits.
       let found = false;
       try { found = await cizInPage(await cizPageTab(args), 'exists', probe); }
-      catch (e) { if (/Cannot use tab|No tab|selector/.test(e.message)) throw e; }
+      catch (e) { if (/Cannot use tab|No tab|selector|Army workers/.test(e.message)) throw e; }
       if (found) return { found: true, waited_ms: Date.now() - t0 };
       if (Date.now() - t0 >= timeout) return { found: false, waited_ms: Date.now() - t0 };
       await cizSleep(250);
@@ -988,23 +1005,20 @@ const CIZ_TOOLS = {
   async screenshot(args) {
     // Looking is allowed on more pages than acting: about: pages too (see cizViewBlocked).
     const tab = await cizTabFor(args);
+    if (args.__army) cizArmyRefuse(tab.url);
     const gate = cizViewBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
     if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
-    let dataUrl;
+    // captureTab only: bringing the tab to the front to capture it would take the user's tab away from them.
     // scale 1: one image pixel per CSS pixel, so click x/y can be read straight off the picture.
+    let dataUrl, why = 'Zen returned no image';
     try {
       dataUrl = await browser.tabs.captureTab(tab.id, { format: 'png', scale: 1 });
-    } catch {
-      try {
-        await browser.tabs.update(tab.id, { active: true });
-        await cizSleep(300);
-        dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png', scale: 1 });
-      } catch (e) {
-        throw new Error(gate.about ? 'Zen did not let the add-on capture this browser page.' : `Could not capture the tab: ${e.message}`);
-      }
-    }
+    } catch (e) { why = String((e && e.message) || e).replace(/^Error:\s*/, '').replace(/\.$/, '') || why; }
     const m = /^data:image\/png;base64,(.+)$/.exec(dataUrl || '');
-    if (!m) throw new Error(gate.about ? 'Zen did not let the add-on capture this browser page.' : 'Could not capture the tab.');
+    if (!m) {
+      if (gate.about) throw new Error('Zen did not let the add-on capture this browser page.');
+      throw new Error(`Could not capture tab ${tab.id}: ${why}. Zen draws a tab only while it is in front. If you need this picture, ask the user, or bring the tab to the front with tab_activate first.`);
+    }
     let vp = null;
     try { vp = await cizInPage(tab, 'viewport', {}); } catch {}
     const note = vp ? `Visible page is ${vp.width}x${vp.height} CSS px; use these image pixels as click x and y.` : '';
