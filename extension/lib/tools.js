@@ -763,7 +763,12 @@ async function cizTabFor(args) {
 async function cizPageTab(args) {
   const tab = await cizTabFor(args);
   const gate = cizUrlBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
-  if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
+  if (gate.blocked) {
+    if (/^about:/i.test(tab.url || '') && !cizViewBlocked(tab.url).blocked) {
+      throw new Error(`Tab ${tab.id} is a browser page (${String(tab.url).split(/[?#]/)[0]}): add-ons can't read or click inside those, but screenshot shows it.`);
+    }
+    throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
+  }
   return tab;
 }
 
@@ -981,18 +986,25 @@ const CIZ_TOOLS = {
   },
 
   async screenshot(args) {
-    const tab = await cizPageTab(args);
+    // Looking is allowed on more pages than acting: about: pages too (see cizViewBlocked).
+    const tab = await cizTabFor(args);
+    const gate = cizViewBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
+    if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
     let dataUrl;
     // scale 1: one image pixel per CSS pixel, so click x/y can be read straight off the picture.
     try {
       dataUrl = await browser.tabs.captureTab(tab.id, { format: 'png', scale: 1 });
     } catch {
-      await browser.tabs.update(tab.id, { active: true });
-      await cizSleep(300);
-      dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png', scale: 1 });
+      try {
+        await browser.tabs.update(tab.id, { active: true });
+        await cizSleep(300);
+        dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png', scale: 1 });
+      } catch (e) {
+        throw new Error(gate.about ? 'Zen did not let the add-on capture this browser page.' : `Could not capture the tab: ${e.message}`);
+      }
     }
     const m = /^data:image\/png;base64,(.+)$/.exec(dataUrl || '');
-    if (!m) throw new Error('Could not capture the tab.');
+    if (!m) throw new Error(gate.about ? 'Zen did not let the add-on capture this browser page.' : 'Could not capture the tab.');
     let vp = null;
     try { vp = await cizInPage(tab, 'viewport', {}); } catch {}
     const note = vp ? `Visible page is ${vp.width}x${vp.height} CSS px; use these image pixels as click x and y.` : '';

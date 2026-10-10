@@ -44,6 +44,19 @@ function cizUrlBlocked(rawUrl, opts) {
   return { blocked: false };
 }
 
+// Seeing is not touching: screenshots may show about: pages (Firefox settings, about:config, about:support...),
+// which add-ons can never read or act on, except the pages that list saved passwords. Web pages follow the rules
+// above; file:, moz-extension: and other non-web pages stay out.
+const VIEW_BLOCKED_ABOUT = /^about:(logins|loginsimportreport|keychain|certificate)\b/i;
+
+function cizViewBlocked(rawUrl, opts) {
+  const url = String(rawUrl || '');
+  if (/^about:/i.test(url)) {
+    return VIEW_BLOCKED_ABOUT.test(url) ? { blocked: true, reason: 'that page shows saved passwords' } : { blocked: false, about: true };
+  }
+  return cizUrlBlocked(url, opts);
+}
+
 // Rule 2: never type passwords, 2FA codes or payment details.
 // Used by the fill/type tools in P2 to refuse the field outright.
 function cizSensitiveField(desc) {

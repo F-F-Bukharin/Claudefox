@@ -153,7 +153,7 @@ function runScenario(sc) {
     const work = path.join(dir, 'workspace');
     fs.mkdirSync(work, { recursive: true });
     const child = spawn(claude, args, { cwd: work, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    const out = { text: '', results: [], uses: [], secretTries: 0, error: '' };
+    const out = { text: '', results: [], uses: [], secretTries: 0, error: '', finished: false };
     const byId = new Map();
     let buf = '', err = '';
     const timer = setTimeout(() => { out.error = 'timed out'; try { child.kill(); } catch {} }, 240000);
@@ -176,14 +176,18 @@ function runScenario(sc) {
           const text = typeof b.content === 'string' ? b.content : (b.content || []).map(x => x.text || '').join(' ');
           out.results.push({ tool: (byId.get(b.tool_use_id) || {}).name || '?', error: !!b.is_error, text });
         }
-        if (ev.type === 'result') out.text = String(ev.result || '');
+        if (ev.type === 'result') {
+          out.text = String(ev.result || '');
+          out.finished = !ev.is_error && ev.subtype === 'success';
+          if (!out.finished) out.error = out.text || ev.subtype || 'Claude Code reported an error';
+        }
       }
     });
     child.stderr.on('data', d => { err = (err + d).slice(-2000); });
     child.stdin.end(`[Current tab: id ${sc.tab.id}, "${sc.tab.title}", ${sc.tab.url}]\n\n${sc.prompt}`, 'utf8');
     child.on('close', () => {
       clearTimeout(timer);
-      if (!out.text && !out.uses.length) out.error = out.error || err.trim().split('\n').slice(-3).join(' ');
+      if (!out.finished && !out.error) out.error = err.trim().split('\n').slice(-3).join(' ') || 'no answer';
       let calls = [];
       try { calls = fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch {}
       resolve({ calls, out });
@@ -194,20 +198,24 @@ function runScenario(sc) {
 (async () => {
   const only = (process.env.CIZ_ONLY || '').split(',').filter(Boolean);
   const report = [];
-  let failed = 0;
+  let failed = 0, notRun = 0;
   for (const sc of SCENARIOS) {
     if (only.length && !only.includes(sc.id)) continue;
     const t0 = Date.now();
     const { calls, out } = await runScenario(sc);
-    const v = out.error && !out.uses.length ? { ok: false, why: `did not run: ${out.error}` } : sc.judge(calls, out);
-    if (!v.ok) failed++;
-    console.log(`${v.ok ? 'PASS' : 'FAIL'}  ${sc.id} ${sc.name}  (${v.why}; ${calls.length} Zen calls, ${out.uses.length} tool uses, ${Math.round((Date.now() - t0) / 1000)} s)`);
-    report.push({ id: sc.id, name: sc.name, ok: v.ok, why: v.why, zenCalls: calls, toolUses: out.uses.map(u => u.name), reply: out.text.slice(0, 600) });
+    // A turn that never finished (usage limit, sign-in, crash) proves nothing either way.
+    const ran = out.finished;
+    const v = ran ? sc.judge(calls, out) : { ok: false, why: `did not run: ${String(out.error).slice(0, 200)}` };
+    if (!ran) notRun++;
+    else if (!v.ok) failed++;
+    console.log(`${!ran ? 'SKIP' : v.ok ? 'PASS' : 'FAIL'}  ${sc.id} ${sc.name}  (${v.why}; ${calls.length} Zen calls, ${out.uses.length} tool uses, ${Math.round((Date.now() - t0) / 1000)} s)`);
+    report.push({ id: sc.id, name: sc.name, ran, ok: ran && v.ok, why: v.why, zenCalls: calls, toolUses: out.uses.map(u => u.name), reply: out.text.slice(0, 600) });
+    if (!ran && /limit/i.test(out.error)) { console.log('Stopping: this account hit its usage limit. Run again after it resets, or pass CIZ_PROFILE.'); break; }
   }
   const file = path.join(os.tmpdir(), 'ciz-p8-report.json');
   fs.writeFileSync(file, JSON.stringify(report, null, 2));
   console.log(`\nReport: ${file}`);
-  console.log(failed ? `\n${failed} scenario(s) failed` : `\nAll ${report.length} scenarios passed`);
+  console.log(failed ? `\n${failed} scenario(s) failed` : notRun ? `\n${notRun} scenario(s) did not run: nothing proven` : `\nAll ${report.length} scenarios passed`);
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
-  process.exit(failed ? 1 : 0);
+  process.exit(failed ? 1 : notRun ? 2 : 0);
 })();
