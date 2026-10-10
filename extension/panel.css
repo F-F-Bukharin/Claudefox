@@ -333,7 +333,7 @@ textarea:focus-visible { outline: none; }
 }
 
 /* ---------- progress bar (replaces the tool chips) ---------- */
-.progress { display: flex; flex-direction: column; gap: 5px; margin: 2px 0 4px; animation: rise .25s ease-out; }
+.progress { display: flex; flex-direction: column; gap: 5px; margin: 2px 0 4px; }
 .ptrack { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, var(--line)); overflow: hidden; position: relative; }
 .pfill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent)); transition: width .8s cubic-bezier(.2,.7,.2,1); position: relative; overflow: hidden; }
 .pfill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgb(255 255 255 / .45), transparent); transform: translateX(-100%); animation: sweep 1.6s ease-in-out infinite; }
@@ -348,8 +348,9 @@ textarea:focus-visible { outline: none; }
 .actlist li.bad { color: var(--stop); }
 @keyframes sweep { to { transform: translateX(100%); } }
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.msg { animation: rise .22s ease-out; }
-@media (prefers-reduced-motion: reduce) { .msg, .progress { animation: none; } .pfill::after { animation: none; } .pfill { transition: none; } }
+/* A message fades in once, when it first appears (panel.js adds .enter). Rebuilding it does not replay that. */
+.msg.enter { animation: rise .22s ease-out; }
+@media (prefers-reduced-motion: reduce) { .msg.enter { animation: none; } .pfill::after { animation: none; } .pfill { transition: none; } }
 
 /* ---------- Markdown replies ---------- */
 .msg .body.md { white-space: normal; }
@@ -379,7 +380,7 @@ textarea:focus-visible { outline: none; }
 
 /* ---------- files Claude made ---------- */
 .files-out { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-.filecard { display: grid; grid-template-columns: 38px 1fr auto auto; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); animation: rise .25s ease-out; }
+.filecard { display: grid; grid-template-columns: 38px 1fr auto auto; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
 .ficon { width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; font-size: 10px; font-weight: 800; letter-spacing: .3px; background: color-mix(in srgb, var(--accent) 16%, var(--card)); color: var(--accent); }
 .finfo { min-width: 0; }
 .fname { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -411,7 +412,7 @@ textarea:focus-visible { outline: none; }
 .field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .attlist { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 2px; }
 .attchip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 4px 3px 4px; border: 1px solid var(--line); border-radius: 9px;
-  background: var(--bg); font-size: 11.5px; animation: rise .18s ease-out; }
+  background: var(--bg); font-size: 11.5px; }
 .attchip .ext { flex: none; min-width: 26px; height: 22px; border-radius: 6px; display: grid; place-items: center; padding: 0 4px; font-size: 9.5px; font-weight: 800;
   letter-spacing: .3px; background: color-mix(in srgb, var(--accent) 16%, var(--card)); color: var(--accent); }
 .attchip img { flex: none; width: 22px; height: 22px; border-radius: 5px; object-fit: cover; }
@@ -446,7 +447,7 @@ textarea:focus-visible { outline: none; }
 
 /* notices in a reply (a tool needs sign-in) */
 .notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 4px; padding: 7px 10px; border-radius: 10px; font-size: 12.5px;
-  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn) 8%, var(--card)); animation: rise .2s ease-out; }
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn) 8%, var(--card)); }
 .notice span { flex: 1; min-width: 160px; }
 .notice button { padding: 5px 10px; font-size: 12px; }
 
@@ -476,7 +477,7 @@ textarea:focus-visible { outline: none; }
 .addform { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
 .addform label { margin-top: 4px; }
 .addform button { align-self: flex-start; }
-@media (prefers-reduced-motion: reduce) { .menu, .attchip, .notice { animation: none; } .attach-more svg { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .menu { animation: none; } .attach-more svg { transition: none; } }
 
 /* ---------- Profile: accounts ---------- */
 .acctlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

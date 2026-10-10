@@ -204,5 +204,27 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  ok('notice in the reply has a Sign in button', nb && nb.textContent==='Sign in to vidIQ');
  const before2=sent.length; nb.click(); ok('notice button starts the sign-in', sent.slice(before2).some(m=>m.type==='toolSignIn'&&m.name==='plugin:vidiq:vidiq'));
  ok('other servers\' tools get readable labels', /vidIQ: video transcript/.test($('messages').textContent), $('messages').querySelector('.plabel')?.textContent);
+// Streaming: each token rebuilds only the reply being written. The messages before it keep their nodes, and a rebuilt
+// message does not play its entrance again (the .enter class is set only when a message first appears).
+{
+  const frame = () => new Promise(r => w.requestAnimationFrame(() => r()));
+  if ($('sendBtn').disabled) { const last=sent.filter(m=>m.type==='chat').pop(); onMsg({type:'chatDone',id:last.id,ok:true}); }
+  $('input').value='stream check'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
+  const sm=sent.filter(m=>m.type==='chat').pop();
+  await frame();
+  const before=[...$('messages').querySelectorAll('.msg')];
+  const replyNode=before[before.length-1];
+  ok('a new message is marked to enter once', before[before.length-2].classList.contains('enter') && replyNode.classList.contains('enter'));
+  onMsg({type:'chatEvent',id:sm.id,event:{kind:'text',text:'Streaming'}});
+  onMsg({type:'chatEvent',id:sm.id,event:{kind:'text',text:' on'}});
+  await frame();
+  const after=[...$('messages').querySelectorAll('.msg')];
+  ok('a streamed token keeps the nodes of the messages before it', after.length===before.length && after.slice(0,-1).every((n,i)=>n===before[i]));
+  const rebuilt=after[after.length-1];
+  ok('the reply being written shows its new text without entering again', rebuilt!==replyNode && /Streaming on/.test(rebuilt.textContent) && !rebuilt.classList.contains('enter'));
+  onMsg({type:'chatDone',id:sm.id,ok:true});
+  const done=[...$('messages').querySelectorAll('.msg')];
+  ok('finishing the reply leaves the messages before it in place', done.length===before.length && done.slice(0,-1).every((n,i)=>n===before[i]));
+}
  console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
 })().catch(e=>{console.log('ERROR',e.stack);process.exit(1)});

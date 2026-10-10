@@ -904,7 +904,7 @@ function progressBlock(m) {
     const t = document.createElement('button'); t.className = 'link dsteps';
     const open = expandedSteps.has(m.id);
     t.textContent = `${n} action${n === 1 ? '' : 's'} ${open ? '▴' : '▾'}`;
-    t.addEventListener('click', () => { if (open) expandedSteps.delete(m.id); else expandedSteps.add(m.id); lastChatSig = ''; renderChat(); });
+    t.addEventListener('click', () => { if (open) expandedSteps.delete(m.id); else expandedSteps.add(m.id); renderChat(); });
     box.appendChild(t);
     if (open) {
       const ul = document.createElement('ol'); ul.className = 'actlist';
@@ -971,118 +971,145 @@ async function copyText(text, btn) {
   setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
 }
 
-let lastChatSig = '';
+// Each message keeps its own node and is rebuilt only when its own content changes. A streamed token changes the reply
+// being written and nothing else, so the rest of the chat is not redrawn: it keeps its text selection and focus, and it
+// does not replay its entrance.
+const msgNodes = new WeakMap();   // message -> { sig, el }
+let chatPainted = false;          // the chat as first drawn (on open) does not animate
+
+function msgSig(m) {
+  return JSON.stringify(m) + '|' + (m.limit && state.switching ? 1 : 0) + '|' + (expandedSteps.has(m.id) ? 1 : 0);
+}
+
+function buildMsg(m) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + m.role + (m.pending ? ' pending' : '');
+  const who = document.createElement('div');
+  who.className = 'who';
+  who.textContent = WHO[m.role] || '';
+  div.appendChild(who);
+
+  if (m.role === 'assistant' && Array.isArray(m.steps)) {
+    const pb = progressBlock(m);
+    if (pb) div.appendChild(pb);
+  }
+  for (const n of m.notices || []) {
+    const box = el('div', 'notice');
+    box.appendChild(el('span', '', n.text));
+    if (n.action && n.action.type === 'tool_signin' && n.action.name) {
+      const b = el('button', 'primary', n.action.label || 'Sign in');
+      b.addEventListener('click', () => send('toolSignIn', { name: String(n.action.name) }));
+      box.appendChild(b);
+    }
+    div.appendChild(box);
+  }
+
+  if (m.text || !m.pending) {
+    const body = document.createElement('div');
+    body.className = 'body';
+    if (m.role === 'assistant') { body.classList.add('md'); cizMarkdown(body, m.text, onLink); } else body.textContent = m.text;
+    if (m.text) div.appendChild(body);
+    if (m.role === 'user' && Array.isArray(m.files) && m.files.length) {
+      const sf = el('div', 'sentfiles');
+      for (const f of m.files) { const c = el('span', '', `📎 ${f.name}`); c.title = `${f.name} · ${sizeText(f.size || 0)}`; sf.appendChild(c); }
+      div.appendChild(sf);
+    }
+    if (m.text && m.role === 'assistant' && !m.pending) {
+      const foot = document.createElement('div');
+      foot.className = 'msgfoot';
+      if (m.meta && m.meta.model) {
+        const tag = document.createElement('span');
+        tag.className = 'ran' + (m.meta.effort === 'max' && /haiku/.test(m.meta.model) ? ' plus' : '');
+        tag.textContent = `${modelName(m.meta.model)} · ${m.meta.effort} effort`;
+        tag.title = `Ran on ${m.meta.model}, ${m.meta.effort} effort`;
+        foot.appendChild(tag);
+      }
+      div.appendChild(foot);
+      const cp = document.createElement('button');
+      cp.className = 'link copy';
+      cp.textContent = 'Copy';
+      cp.title = 'Copy this reply';
+      cp.addEventListener('click', () => copyText(m.text, cp));
+      foot.appendChild(cp);
+    }
+  }
+  if (m.role !== 'user' && Array.isArray(m.files) && m.files.length) {
+    const files = document.createElement('div'); files.className = 'files-out';
+    for (const f of m.files) files.appendChild(fileCard(f));
+    div.appendChild(files);
+  }
+  if (m.pending) {
+    const row = document.createElement('div');
+    row.className = 'working';
+    const dots = document.createElement('span'); dots.className = 'dots'; dots.textContent = '';
+    const cancel = document.createElement('button'); cancel.className = 'link'; cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', () => send('chatCancel', { id: m.id }));
+    row.append(dots, cancel);
+    div.appendChild(row);
+  }
+  if (m.error) {
+    const err = document.createElement('div');
+    err.className = 'body errline';
+    err.textContent = m.error;
+    div.appendChild(err);
+    if (m.limit) {
+      const hint = document.createElement('div');
+      hint.className = 'limit';
+      hint.textContent = 'This Claude account hit its usage limit.';
+      const sw = document.createElement('button');
+      sw.className = 'primary limitbtn';
+      sw.textContent = 'Log out and add another account';
+      sw.disabled = !!state.switching;
+      sw.addEventListener('click', () => send('switchAccount'));
+      div.append(hint, sw);
+    }
+  }
+
+  if (Array.isArray(m.tabs)) {
+    const ul = document.createElement('ul');
+    ul.className = 'tablist';
+    for (const t of m.tabs) {
+      const li = document.createElement('li');
+      if (t.active) li.className = 'active';
+      const id = document.createElement('span'); id.className = 'tid'; id.textContent = '#' + t.id;
+      const tt = document.createElement('span'); tt.className = 'tt'; tt.textContent = t.title || 'Untitled';
+      const tu = document.createElement('span'); tu.className = 'tu'; tu.textContent = t.url || '';
+      li.append(id, tt, tu);
+      ul.appendChild(li);
+    }
+    div.appendChild(ul);
+  }
+  return div;
+}
 
 function renderChat() {
-  // Rebuilding the list clears any text the user has selected, so only rebuild when something changed.
-  const sig = JSON.stringify(chat) + '|' + (state.switching ? 1 : 0);
-  if (sig === lastChatSig) return;
-  lastChatSig = sig;
   const box = $('messages');
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-  for (const el of box.querySelectorAll('.msg')) el.remove();
+  // Nodes of messages that are gone (cleared, or trimmed to the last 200) go; the rest stay where they are.
+  const live = new Set();
+  for (const m of chat) { const h = msgNodes.get(m); if (h) live.add(h.el); }
+  for (const node of box.querySelectorAll('.msg')) if (!live.has(node)) node.remove();
+  let prev = $('emptyState');
+  for (const m of chat) {
+    const sig = msgSig(m);
+    let hit = msgNodes.get(m);
+    if (!hit || hit.sig !== sig) {
+      if (hit) hit.el.remove();
+      const node = buildMsg(m);
+      // Only a message's first appearance animates. Rebuilding it on a streamed token must not replay that.
+      if (!hit && chatPainted) {
+        node.classList.add('enter');
+        node.addEventListener('animationend', e => { if (e.target === node) node.classList.remove('enter'); });
+      }
+      hit = { sig, el: node };
+      msgNodes.set(m, hit);
+    }
+    if (prev.nextElementSibling !== hit.el) prev.after(hit.el);
+    prev = hit.el;
+  }
+  chatPainted = true;
   $('emptyState').hidden = chat.length > 0;
   $('page-chat').classList.toggle('is-empty', chat.length === 0);
-  for (const m of chat) {
-    const div = document.createElement('div');
-    div.className = 'msg ' + m.role + (m.pending ? ' pending' : '');
-    const who = document.createElement('div');
-    who.className = 'who';
-    who.textContent = WHO[m.role] || '';
-    div.appendChild(who);
-
-    if (m.role === 'assistant' && Array.isArray(m.steps)) {
-      const pb = progressBlock(m);
-      if (pb) div.appendChild(pb);
-    }
-    for (const n of m.notices || []) {
-      const box = el('div', 'notice');
-      box.appendChild(el('span', '', n.text));
-      if (n.action && n.action.type === 'tool_signin' && n.action.name) {
-        const b = el('button', 'primary', n.action.label || 'Sign in');
-        b.addEventListener('click', () => send('toolSignIn', { name: String(n.action.name) }));
-        box.appendChild(b);
-      }
-      div.appendChild(box);
-    }
-
-    if (m.text || !m.pending) {
-      const body = document.createElement('div');
-      body.className = 'body';
-      if (m.role === 'assistant') { body.classList.add('md'); cizMarkdown(body, m.text, onLink); } else body.textContent = m.text;
-      if (m.text) div.appendChild(body);
-      if (m.role === 'user' && Array.isArray(m.files) && m.files.length) {
-        const sf = el('div', 'sentfiles');
-        for (const f of m.files) { const c = el('span', '', `📎 ${f.name}`); c.title = `${f.name} · ${sizeText(f.size || 0)}`; sf.appendChild(c); }
-        div.appendChild(sf);
-      }
-      if (m.text && m.role === 'assistant' && !m.pending) {
-        const foot = document.createElement('div');
-        foot.className = 'msgfoot';
-        if (m.meta && m.meta.model) {
-          const tag = document.createElement('span');
-          tag.className = 'ran' + (m.meta.effort === 'max' && /haiku/.test(m.meta.model) ? ' plus' : '');
-          tag.textContent = `${modelName(m.meta.model)} · ${m.meta.effort} effort`;
-          tag.title = `Ran on ${m.meta.model}, ${m.meta.effort} effort`;
-          foot.appendChild(tag);
-        }
-        div.appendChild(foot);
-        const cp = document.createElement('button');
-        cp.className = 'link copy';
-        cp.textContent = 'Copy';
-        cp.title = 'Copy this reply';
-        cp.addEventListener('click', () => copyText(m.text, cp));
-        foot.appendChild(cp);
-      }
-    }
-    if (m.role !== 'user' && Array.isArray(m.files) && m.files.length) {
-      const files = document.createElement('div'); files.className = 'files-out';
-      for (const f of m.files) files.appendChild(fileCard(f));
-      div.appendChild(files);
-    }
-    if (m.pending) {
-      const row = document.createElement('div');
-      row.className = 'working';
-      const dots = document.createElement('span'); dots.className = 'dots'; dots.textContent = '';
-      const cancel = document.createElement('button'); cancel.className = 'link'; cancel.textContent = 'Cancel';
-      cancel.addEventListener('click', () => send('chatCancel', { id: m.id }));
-      row.append(dots, cancel);
-      div.appendChild(row);
-    }
-    if (m.error) {
-      const err = document.createElement('div');
-      err.className = 'body errline';
-      err.textContent = m.error;
-      div.appendChild(err);
-      if (m.limit) {
-        const hint = document.createElement('div');
-        hint.className = 'limit';
-        hint.textContent = 'This Claude account hit its usage limit.';
-        const sw = document.createElement('button');
-        sw.className = 'primary limitbtn';
-        sw.textContent = 'Log out and add another account';
-        sw.disabled = !!state.switching;
-        sw.addEventListener('click', () => send('switchAccount'));
-        div.append(hint, sw);
-      }
-    }
-
-    if (Array.isArray(m.tabs)) {
-      const ul = document.createElement('ul');
-      ul.className = 'tablist';
-      for (const t of m.tabs) {
-        const li = document.createElement('li');
-        if (t.active) li.className = 'active';
-        const id = document.createElement('span'); id.className = 'tid'; id.textContent = '#' + t.id;
-        const tt = document.createElement('span'); tt.className = 'tt'; tt.textContent = t.title || 'Untitled';
-        const tu = document.createElement('span'); tu.className = 'tu'; tu.textContent = t.url || '';
-        li.append(id, tt, tu);
-        ul.appendChild(li);
-      }
-      div.appendChild(ul);
-    }
-    box.appendChild(div);
-  }
   if (atBottom || busyMsg()) box.scrollTop = box.scrollHeight;
   $('sendBtn').disabled = !!busyMsg();
 }
