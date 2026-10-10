@@ -13,6 +13,8 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   unsafe: false,              // Unsafe mode: Claude may act on Google sign-in pages. Session only (load() clears it)
   accounts: [],               // chat accounts from the helper: { id, email, plan, loggedIn, active }
   accountLogin: null,         // { id, isNew } while a sign-in window is open
+  accountBusy: '',            // the account id whose switch is waiting for the helper
+  accountNote: null,          // { ok, text } about the last switch, shown in Profile
   chatModel: 'speed',          // 'speed' (Haiku 5.5, high effort) | 'quality' (Opus 5.5, high effort)
   chatPlus: false,            // Speed Plus: Haiku 5.5 at max effort (only applies in Speed)
   caveman: false,             // Caveman mode: short replies (the + menu). Remembered across restarts (storage.local)

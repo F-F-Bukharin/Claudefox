@@ -321,7 +321,7 @@ function accountCard(a, s) {
   const stopped = s.agent === 'stopped';
   const acts = el('div', 'aacts');
   if (a.active) acts.appendChild(el('span', 'pill active', 'In use'));
-  else acts.appendChild(actBtn(a.loggedIn ? 'Use' : 'Sign in', 'primary', () => send(a.loggedIn ? 'accountUse' : 'accountSignIn', { id: a.id }), stopped));
+  else acts.appendChild(actBtn(a.id === s.accountBusy ? 'Switching…' : a.loggedIn ? 'Use' : 'Sign in', 'primary', () => send(a.loggedIn ? 'accountUse' : 'accountSignIn', { id: a.id }), stopped || !!s.accountBusy));
   const confirm = el('div', 'confirm');
   confirm.hidden = true;
   const answers = el('div', 'confirm-btns');
@@ -329,13 +329,26 @@ function accountCard(a, s) {
     actBtn('Cancel', 'ghost', () => { confirm.hidden = true; }),
     actBtn('Remove', 'primary', () => { confirm.hidden = true; send('accountRemove', { id: a.id }); }));
   confirm.append(el('p', '', `Remove ${who} from Claude in Zen? You can add it again later.`), answers);
-  if (!a.active) acts.appendChild(actBtn('Remove', 'ghost', () => { confirm.hidden = false; }, stopped));
+  if (!a.active) acts.appendChild(actBtn('Remove', 'ghost', () => { confirm.hidden = false; }, stopped || !!s.accountBusy));
   card.append(head, acts, confirm);
   return card;
 }
 function renderAccounts(s) {
   const accts = Array.isArray(s.accounts) ? s.accounts : [];
   const busy = !!s.accountLogin;
+  const moving = accts.find(a => a.id === s.accountBusy);
+  const inUse = accts.find(a => a.active);
+  const line = $('acctChat');
+  const addon = s.account && s.account.email;
+  const differs = !!(inUse && inUse.email && addon && addon.toLowerCase() !== inUse.email.toLowerCase());
+  line.textContent = moving ? `Switching the chat to ${moving.email || 'that account'}…`
+    : differs ? `The chat uses ${inUse.email}. The add-on is still signed in to claude.ai as ${addon}; sign out of claude.ai and back in as ${inUse.email}, and the add-on follows.`
+    : inUse ? `The chat uses ${inUse.email || 'this account'}.` : '';
+  line.hidden = !line.textContent;
+  const result = s.accountNote;
+  $('acctNote').textContent = result ? result.text : '';
+  $('acctNote').className = 'note ' + (result && result.ok ? 'good' : 'bad');
+  $('acctNote').hidden = !result;
   const list = $('acctList');
   list.textContent = '';
   for (const a of accts) list.appendChild(accountCard(a, s));
@@ -343,7 +356,7 @@ function renderAccounts(s) {
   $('acctEmpty').textContent = note;
   $('acctEmpty').hidden = !note;
   $('acctLogin').hidden = !busy;
-  $('accountAdd').disabled = s.native !== 'connected' || s.agent === 'stopped' || busy;
+  $('accountAdd').disabled = s.native !== 'connected' || s.agent === 'stopped' || busy || !!s.accountBusy;
   $('accountAdd').textContent = busy ? 'Waiting for the sign-in window…' : 'Add account';
 }
 

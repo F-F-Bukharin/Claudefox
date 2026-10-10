@@ -63,13 +63,14 @@ const browser = {
   windows: { update: async () => {} },
 };
 const fetched = [];
+let claudeEmail = 'personalworksacc@gmail.com';   // the claude.ai session the add-on reads
 const fetch = async url => {
   fetched.push(String(url));
   if (String(url).includes('9222')) throw new Error('refused');
   if (/docs\.google\.com\/document\/d\/[^/]+\/export\?format=md/.test(url)) {
     return { status: 200, ok: true, headers: { get: () => 'text/markdown; charset=utf-8' }, text: async () => '# Lista 3\n\n1. Calcule a velocidade média.\n2. Explique a segunda lei.' };
   }
-  return { status: 200, ok: true, json: async () => ({ account: { email_address: 'personalworksacc@gmail.com', full_name: 'F', uuid: 'u-1' } }) };
+  return { status: 200, ok: true, json: async () => ({ account: { email_address: claudeEmail, full_name: 'F', uuid: 'u-1' } }) };
 };
 
 const ctx = vm.createContext({ browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, setTimeout, clearTimeout, setInterval: () => 0, Promise });
@@ -173,10 +174,38 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     check('the accounts list is kept for the panel', g('cizState').get().accounts.length === 2 && g('cizState').get().accounts[1].email === 'other@example.com');
     await fromPanel({ type: 'accountUse', id: 'a1', retry: 'try that again' });
     check('switch asks the helper', native.sent.some(m => m.type === 'account_use' && m.id === 'a1'));
+    check('a switch in progress is marked for the panel', g('cizState').get().accountBusy === 'a1');
     await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: true, email: 'other@example.com' });
     check('switch done: logged, conversation reset, message retried',
       g('cizState').get().chatSession === '' && g('cizState').log().some(e => /Chat now uses other@example.com/.test(e.text))
       && panelIn.some(m => m.type === 'retry' && m.text === 'try that again'));
+    check('a finished switch clears the mark and says which account the chat uses', g('cizState').get().accountBusy === '' && g('cizState').get().accountNote.ok === true && /now uses other@example.com/.test(g('cizState').get().accountNote.text));
+    await fromPanel({ type: 'accountUse', id: 'a1' });
+    await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: false, error: 'Claude is still answering. Switch accounts after it finishes.' });
+    check('a refused switch is shown in Profile too', g('cizState').get().accountBusy === '' && g('cizState').get().accountNote.ok === false && /still answering/.test(g('cizState').get().accountNote.text));
+    const addonEmail = () => (g('cizState').get().account || {}).email;
+    claudeEmail = 'other@example.com';
+    await fromPanel({ type: 'accountUse', id: 'a1' });
+    await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: true, email: 'other@example.com' });
+    check('a switch re-reads claude.ai, so the add-on follows an account already signed in there', addonEmail() === 'other@example.com', addonEmail());
+    claudeEmail = 'personalworksacc@gmail.com';
+    browser.tabs.onUpdated.fire(1, { status: 'loading' }, { url: 'https://claude.ai/chats' });
+    await tick();
+    check('a claude.ai page still loading changes nothing', addonEmail() === 'other@example.com');
+    browser.tabs.onUpdated.fire(1, { status: 'complete' }, { url: 'https://claude.ai/chats' });
+    await tick();
+    check('a claude.ai page that loads moves the add-on to the account claude.ai is on', addonEmail() === 'personalworksacc@gmail.com', addonEmail());
+    claudeEmail = 'other@example.com';
+    browser.tabs.onUpdated.fire(1, { status: 'complete' }, { url: 'https://example.com/' });
+    await tick();
+    check('a page that is not claude.ai does not change the add-on', addonEmail() === 'personalworksacc@gmail.com');
+    browser.tabs.onUpdated.fire(1, { status: 'complete' }, { url: 'https://claude.ai/chats' });
+    await tick();
+    check('the next claude.ai page follows the account again', addonEmail() === 'other@example.com', addonEmail());
+    claudeEmail = 'personalworksacc@gmail.com';
+    await fromPanel({ type: 'accountUse', id: 'a1' });
+    await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: true, email: 'other@example.com' });
+    check('the chat switch leaves the add-on as the account claude.ai is on, and says the note', addonEmail() === 'personalworksacc@gmail.com' && g('cizState').get().accountNote.ok === true);
     await fromPanel({ type: 'accountAdd' });
     check('add asks the helper', native.sent.some(m => m.type === 'account_add'));
     await helperSays({ type: 'account_result', action: 'login_started', id: 'a2', ok: true, isNew: true });

@@ -485,7 +485,7 @@ function startChat(msg) {
       child = spawn(exe, chatArgs(files, resume, choice, opts), {
         // Only the Zen tools: all loaded up front (ENABLE_TOOL_SEARCH=false). With other servers on: "auto" loads them up
         // front while they are small and defers big sets (like vidIQ's) behind ToolSearch, to keep each turn light.
-        cwd: P.WORKSPACE, env: { ...claudeEnv(), ENABLE_TOOL_SEARCH: tb.servers.length ? 'auto' : 'false' }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: P.WORKSPACE, env: { ...claudeEnv(accountDir(key)), ENABLE_TOOL_SEARCH: tb.servers.length ? 'auto' : 'false' }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (e) {
       return finishChat(run, false, `Could not start Claude Code: ${e.message}`);

@@ -486,6 +486,10 @@ textarea:focus-visible { outline: none; }
 .acctcard.off .avatar { background: var(--off); }
 .aacts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .aacts .pill { font-size: 11px; }
+.chatline { margin: 0; font-size: 12.5px; color: var(--muted); }
+.note { margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 12.5px; }
+.note.good { color: var(--go); border-color: color-mix(in srgb, var(--go) 45%, var(--line)); }
+.note.bad { color: var(--stop); border-color: color-mix(in srgb, var(--stop) 45%, var(--line)); }
 
 /* ---------- Settings: sections that open and close ---------- */
 .sechead { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink); text-align: left; }

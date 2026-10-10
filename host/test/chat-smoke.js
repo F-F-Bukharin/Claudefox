@@ -360,6 +360,9 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     const used = await next(m => m.type === 'account_result' && m.action === 'use', 8000);
     const stMain = await next(m => m.type === 'claude_status' && m.accountId === 'main', 8000);
     check('switching back to main needs no sign-in', used.ok && stMain.accountId === 'main' && !stMain.loggedIn, JSON.stringify({ used, stMain }));
+    toHelper({ type: 'chat', id: 'acc2', text: 'hi after switching back' });
+    await next(m => m.type === 'chat_done' && m.id === 'acc2', 15000);
+    check('after switching back, the next chat turn runs in the main profile', JSON.parse(fs.readFileSync(record, 'utf8')).config === path.join(tmp, 'claude-in-zen', 'claude'));
     toHelper({ type: 'account_remove', id: 'main' });
     const refuse = await next(m => m.type === 'account_result' && m.action === 'remove', 8000);
     check('the active account cannot be removed while others exist', !refuse.ok && /Switch to another/.test(refuse.error));

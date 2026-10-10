@@ -309,9 +309,35 @@ async function resumeSignIn(why) {
   try { await signIn({ auto: why }); } finally { resumeBusy = false; }
 }
 
-// A claude.ai tab finishing its load is a good moment to retry (e.g. Zen started offline).
+// The add-on's account is the claude.ai session Zen has open. Once the add-on is signed in, it follows that
+// session: when claude.ai is on another account (for example after you sign in there as the account you picked
+// with Use), the add-on switches over the next time a claude.ai page loads. It never signs out by itself and
+// never reads cookies.
+let followBusy = false;
+async function followClaudeAccount() {
+  if (followBusy || !cizState.get().signedIn) return;
+  followBusy = true;
+  try {
+    const { account } = await fetchAccountFromBackground();
+    if (!account || !account.email) return;   // signed out, or claude.ai unreadable right now: keep the add-on as it is
+    const now = cizState.get().account || {};
+    if (String(now.email || '').toLowerCase() === account.email.toLowerCase()) return;
+    await cizState.set({ account, signedInAt: Date.now() });
+    await browser.storage.local.set({ [REMEMBER_KEY]: { email: account.email, name: account.name || '', uuid: account.uuid || '', at: Date.now() } });
+    await cizState.addLog('info', `The add-on follows claude.ai: now signed in as ${account.email}`);
+  } catch {
+    // claude.ai could not be read; the add-on stays as it was
+  } finally {
+    followBusy = false;
+  }
+}
+
+// A claude.ai tab finishing its load is a good moment to retry (e.g. Zen started offline), or to follow a
+// claude.ai account that changed while the add-on was signed in.
 browser.tabs.onUpdated.addListener((id, info, tab) => {
-  if (info.status === 'complete' && tab && String(tab.url || '').startsWith(CIZ.CLAUDE_ORIGIN + '/')) resumeSignIn('claude.ai tab');
+  if (info.status !== 'complete' || !tab || !String(tab.url || '').startsWith(CIZ.CLAUDE_ORIGIN + '/')) return;
+  if (cizState.get().signedIn) followClaudeAccount();
+  else resumeSignIn('claude.ai tab');
 });
 
 async function signIn(opts) {
@@ -510,6 +536,7 @@ function connectNative() {
     const err = (p && p.error) || browser.runtime.lastError;
     nativePort = null;
     if (cizState.get().accountLogin) cizState.set({ accountLogin: null });
+    if (cizState.get().accountBusy) cizState.set({ accountBusy: '' });
     failChats('The helper stopped, so the answer was cut off.');
     if (err && /No such native application/i.test(err.message)) {
       cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
@@ -548,11 +575,23 @@ function sendNative(msg) {
 
 let pendingRetry = null;   // { id, text }: send this again once the switch to account id is done
 
+// Profile shows how a switch went (accountNote) and that one is waiting (accountBusy), not only the action log.
+async function accountNote(ok, text) {
+  await cizState.set({ accountNote: { ok: !!ok, text: String(text || '').slice(0, 300) } });
+}
+
 async function accountAction(type, id, retry) {
   if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first.');
-  if (chatRuns.size && type !== 'account_signin') return cizState.addLog('error', 'Claude is still answering. Try again after it finishes.');
+  if (chatRuns.size && type !== 'account_signin') {
+    if (type === 'account_use') await accountNote(false, 'Claude is still answering. Switch accounts after it finishes.');
+    return cizState.addLog('error', 'Claude is still answering. Try again after it finishes.');
+  }
   const accountId = String(id || '');
-  if (!sendNative({ type, id: accountId })) return cizState.addLog('error', 'Accounts: the helper is not connected.');
+  if (!sendNative({ type, id: accountId })) {
+    if (type === 'account_use') await accountNote(false, 'The helper is not connected, so the chat did not switch.');
+    return cizState.addLog('error', 'Accounts: the helper is not connected.');
+  }
+  if (type === 'account_use') await cizState.set({ accountBusy: accountId, accountNote: null });
   if (type === 'account_use' && retry && typeof retry === 'string') pendingRetry = { id: accountId, text: retry.slice(0, 50000) };
   if (type === 'account_add') await cizState.addLog('info', 'Opening a sign-in window for another Claude account…');
 }
@@ -565,13 +604,22 @@ function accountLabel(id) {
 async function onAccountResult(msg) {
   const id = String(msg.id || '');
   switch (msg.action) {
-    case 'use':
-      if (!msg.ok) { pendingRetry = null; return cizState.addLog('error', `Switch failed: ${msg.error}`); }
+    case 'use': {
+      await cizState.set({ accountBusy: '' });
+      if (!msg.ok) {
+        pendingRetry = null;
+        await accountNote(false, msg.error || 'The chat did not switch.');
+        return cizState.addLog('error', `Switch failed: ${msg.error}`);
+      }
       await cizState.set({ chatSession: '' });   // conversations belong to the account that had them
-      await cizState.addLog('info', `Chat now uses ${msg.email || accountLabel(id)}`);
+      await followClaudeAccount();   // if claude.ai is already on the chosen account, the add-on follows it now
+      const who = msg.email || accountLabel(id);
+      await accountNote(true, `The chat now uses ${who}. Your next message runs on it.`);
+      await cizState.addLog('info', `Chat now uses ${who}`);
       if (pendingRetry && pendingRetry.id === id) postToPanels({ type: 'retry', text: pendingRetry.text });
       pendingRetry = null;
       return;
+    }
     case 'login_started':
       await cizState.set({ accountLogin: { id, isNew: !!msg.isNew, at: Date.now() } });
       return cizState.addLog('info', 'A sign-in window is open: pick the Claude account in the browser and click Authorize. The panel notices when you are done.');
