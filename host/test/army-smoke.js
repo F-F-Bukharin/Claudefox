@@ -32,7 +32,9 @@ function fakeClaude(C) {
   process.stdin.on('data', d => { prompt += d; });
   process.stdin.on('end', async () => {
     const name = worker ? `w-${cfg.env.CLAUDE_IN_ZEN_ARMY_TOKEN}` : `lead-${(/LEAD:(\w+)/.exec(prompt) || [])[1]}`;
-    const rec = { worker, argv, prompt, pid: process.pid, env: cfg.env, steps: [] };
+    let settings = null;
+    try { settings = JSON.parse(fs.readFileSync(val('--settings'), 'utf8')); } catch {}
+    const rec = { worker, argv, prompt, pid: process.pid, env: cfg.env, settings, steps: [] };
     const save = () => fs.writeFileSync(path.join(C.recDir, name + '.json'), JSON.stringify(rec));
     save();
     const key = (worker ? /SCRIPT:(\w+)/ : /LEAD:(\w+)/).exec(prompt);
@@ -123,7 +125,7 @@ function startHelper(name, extraEnv) {
   fs.mkdirSync(base);
   const env = { ...process.env, LOCALAPPDATA: base, CLAUDE_IN_ZEN_PIPE: path.join(base, 'h.sock'), CLAUDE_IN_ZEN_CLAUDE: fake, ...extraEnv };
   const proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
-  const h = { proc, base, inbox: [], calls: [], waiters: [], tabSeq: 100 };
+  const h = { proc, base, inbox: [], calls: [], waiters: [], tabSeq: 100, held: [] };
   let buf = Buffer.alloc(0);
   h.send = msg => {
     const body = Buffer.from(JSON.stringify(msg));
@@ -137,7 +139,7 @@ function startHelper(name, extraEnv) {
       if (buf.length < 4 + len) break;
       const msg = JSON.parse(buf.subarray(4, 4 + len).toString());
       buf = buf.subarray(4 + len);
-      if (msg.type === 'call') { h.calls.push(msg); h.send(answer(h, msg)); continue; }
+      if (msg.type === 'call') { h.calls.push(msg); const r = answer(h, msg); if (r) h.send(r); continue; }
       h.inbox.push(msg);
       h.waiters = h.waiters.filter(w => !w(msg));
     }
@@ -160,6 +162,7 @@ function startHelper(name, extraEnv) {
 function answer(h, msg) {
   const a = msg.args || {};
   const ok = result => ({ type: 'result', id: msg.id, ok: true, result });
+  if (msg.tool === 'tab_open' && /\/slow/.test(a.url)) { h.held.push(msg); return null; }   // answered later by the test
   if (msg.tool === 'tab_open') { const id = ++h.tabSeq; return ok({ tab_id: id, url: a.url, title: `Tab ${id}` }); }
   if (msg.tool === 'get_page_text') return ok({ title: 'Page', url: `https://example.com/page${a.tab_id}`, text: 'Price: 10' });
   if (msg.tool === 'click' && a.ref === 'popup') return ok({ navigated: false, opened_tab: { tab_id: ++h.tabSeq, url: 'https://example.net/pop' } });
@@ -248,11 +251,14 @@ async function mainChecks() {
     check('3. worker flags: Haiku high, no built-in tools, only the Zen tools, nothing prompted, no Bash',
       wv('--model') === 'claude-haiku-5-5' && wv('--effort') === 'high' && wa.includes('--tools') && wv('--tools') === '' && wa.includes('--strict-mcp-config')
       && wv('--allowedTools') === 'mcp__claude-in-zen' && wv('--permission-mode') === 'dontAsk' && !wa.join(' ').includes('Bash')
-      && path.basename(wv('--settings')) === 'settings.json', JSON.stringify(wa.filter(x => x.length < 80)));
+      && /^r\d+-settings\.json$/.test(path.basename(wv('--settings'))), JSON.stringify(wa.filter(x => x.length < 80)));
     check('3. worker tool server: its token, its name, no panel flag', ws.length === 3 && ws.every(w => /^[0-9a-f]{32}$/.test(w.env.CLAUDE_IN_ZEN_ARMY_TOKEN) && /^Army worker w\d$/.test(w.env.CLAUDE_IN_ZEN_CLIENT) && !('CLAUDE_IN_ZEN_PANEL' in w.env)));
     check('3. worker prompt names its first tab and what to report', /^Your task: SCRIPT:s5 read the first page\n\nStart in tab \d+ \(https:\/\/example\.com\/a\)\.\nReport: the price$/.test(w1.prompt), w1.prompt);
-    const settings = JSON.parse(fs.readFileSync(wv('--settings'), 'utf8'));
+    const settings = w1.settings || { permissions: { deny: [] } };
     check('3. worker settings carry the guard deny rules', settings.permissions.deny.length > 10);
+    check('3. worker settings switch off the account\'s plugins and claude.ai connectors', settings.disableClaudeAiConnectors === true
+      && settings.enabledPlugins && Object.values(settings.enabledPlugins).every(v => v === false), JSON.stringify(Object.assign({}, settings, { permissions: undefined })));
+    check('3. a run\'s settings file is gone once the run is over', !fs.existsSync(wv('--settings')));
     check('4. worker tools/list is exactly the worker tools', [...w1.tools].sort().join() === [...WORKER_TOOLS].sort().join(), w1.tools.join(','));
 
     const callsOf = w => h.calls.filter(c => c.army && c.army.run === r1 && c.army.worker === w);
@@ -292,8 +298,8 @@ async function mainChecks() {
     check('11. army_end is sent for every worker', ['w1', 'w2', 'w3'].every(w => h.ends(r1).some(m => m.worker === w)) && h.ends('r2').some(m => m.worker === 'w1'));
     const third = st[st.length - 1];
     check('12. a third army_start in one message is refused', third.tool === 'army_start' && third.isError && third.text === 'This message already used 2 army runs. Answer with what you have.', third.text);
-    const leftovers = fs.readdirSync(path.join(h.base, 'claude-in-zen', 'army')).filter(f => f !== 'settings.json');
-    check('worker tool-server configs are deleted when workers end', !leftovers.length, leftovers.join(','));
+    const leftovers = fs.readdirSync(path.join(h.base, 'claude-in-zen', 'army'));
+    check('worker tool-server configs and run settings are deleted when workers end', !leftovers.length, leftovers.join(','));
     const clientsMsgs = h.inbox.filter(m => m.type === 'clients' || Array.isArray(m.clients));
     check('workers stay out of the clients list', !clientsMsgs.some(m => (m.clients || []).some(n => /Army worker/.test(n))));
 
@@ -319,6 +325,49 @@ async function mainChecks() {
     const ev3 = h.armyEvents('a2');
     const last3 = ev3[ev3.length - 1];
     check('13. Cancel: the last trail event is finished with the worker stopped', last3 && last3.finished && last3.workers[0].state === 'stopped', JSON.stringify(last3));
+  } finally {
+    try { h.proc.kill(); } catch {}
+  }
+}
+
+// Stop while the first tabs are still opening, and the page loads one message may use.
+async function raceChecks() {
+  const h = startHelper('c', { CLAUDE_IN_ZEN_ARMY_PAGES: '6' });
+  try {
+    h.send({ type: 'hello', version: 'test' });
+    await h.next(m => m.type === 'hello');
+    script('noop', []);
+
+    // Cancel lands while Zen is still opening the worker's first tab.
+    script('c1', [{ tool: 'army_start', args: { tasks: [{ goal: 'SCRIPT:noop slow tab', start_url: 'https://example.com/slow' }] } }]);
+    h.send({ type: 'chat', id: 'c1', text: 'LEAD:c1', model: 'army' });
+    for (let i = 0; i < 100 && !h.held.length; i++) await sleep(50);
+    const run = (h.armyEvents('c1')[0] || {}).run;
+    h.send({ type: 'chat_cancel', id: 'c1' });
+    await h.next(m => m.type === 'chat_done' && m.id === 'c1', 5000);
+    const before = h.ends(run).length;
+    const held = h.held.shift();
+    if (held) h.send({ type: 'result', id: held.id, ok: true, result: { tab_id: 777, url: held.args.url, title: 'Slow' } });
+    for (let i = 0; i < 40 && h.ends(run).length <= before; i++) await sleep(50);
+    check('13. Stop while a first tab opens: army_end goes again once the tab is there, so it closes',
+      !!held && before >= 1 && h.ends(run).length > before, `held ${!!held}, ends before ${before}, after ${h.ends(run).length}`);
+    check('13. ...and no worker starts for that tab', !workersOf(/slow tab/).length);
+
+    // The page loads of one message: the first run's 5 first tabs leave 1 of 6 here.
+    const five = Array.from({ length: 5 }, (_, i) => ({ goal: `SCRIPT:noop part ${i + 1}`, start_url: `https://example.com/p${i + 1}` }));
+    script('c2', [
+      { tool: 'army_start', args: { tasks: five } },
+      { tool: 'army_wait', args: { run_id: '$run', seconds: 20 }, untilDone: true },
+      { tool: 'army_start', args: { tasks: five.slice(0, 2) } },
+      { tool: 'army_start', args: { tasks: five.slice(0, 1) } },
+      { tool: 'army_wait', args: { run_id: '$run', seconds: 20 }, untilDone: true },
+    ]);
+    h.send({ type: 'chat', id: 'c2', text: 'LEAD:c2', model: 'army' });
+    await h.next(m => m.type === 'chat_done' && m.id === 'c2', 30000);
+    const st = lead('c2').steps;
+    check('15 page loads a message: a run that needs more than is left is refused, naming what is left',
+      st[2] && st[2].isError && st[2].text === 'The army has 1 page load left for this message: send at most 1 worker, or answer with what you have.', st[2] && st[2].text);
+    check('...and the refused call does not use up one of the two runs', st[3] && !st[3].isError && /"run_id": "r\d+"/.test(st[3].text), st[3] && st[3].text);
   } finally {
     try { h.proc.kill(); } catch {}
   }
@@ -362,6 +411,8 @@ function pureChecks() {
   check('rule: tab_activate refused', !r.ok && r.error === 'Workers never bring a tab to the front.');
   r = checkCall(w, 'javascript', {}, now);
   check('rule: a tool outside the list refused', !r.ok && r.error === "Workers can't use javascript. Work with the tools you have.");
+  check('rule: workers never touch local pages or files', ['local_page_open', 'local_files', 'local_file_read', 'read_document', 'create_file']
+    .every(t => !checkCall(W(), t, { path: '/x' }, now).ok));
   r = checkCall(w, 'tabs_list', {}, now);
   check('rule: tabs_list refused (not a worker tool)', !r.ok && /can't use tabs_list/.test(r.error));
   check('rule: refused calls do not count', w.calls === 0);
@@ -386,7 +437,21 @@ function pureChecks() {
   check('rule: tab_open needs a url', !r.ok && r.error === 'Give the url to open.');
   w = W({ tabs: new Set([101, 102, 103, 104]), extra: 3 });
   r = checkCall(w, 'tab_open', { url: 'https://a.example' }, now);
-  check('rule: extra tabs used up', !r.ok && r.error === 'You already opened 3 extra tabs, the most allowed. Use one of yours: 101, 102, 103, 104.');
+  check('rule: extra tabs used up', !r.ok && r.error === 'You already have 4 tabs, the most allowed. Use one of yours: 101, 102, 103, 104.', r.error);
+  w = W({ tabs: new Set([101, 102, 103, 104]), extra: 0 });
+  r = checkCall(w, 'tab_open', { url: 'https://a.example' }, now);
+  check('rule: tabs the pages opened count toward the 4 tabs', !r.ok && /^You already have 4 tabs/.test(r.error));
+  w = W({ budget: { pages: 14 } });
+  r = checkCall(w, 'navigate', { url: 'https://a.example' }, now);
+  check('rule: a page load counts for the whole message', r.ok && w.budget.pages === 15 && w.navs === 1);
+  r = checkCall(w, 'tab_open', { url: 'https://b.example' }, now);
+  check('rule: past 15 page loads in a message, every worker is refused', !r.ok && r.error === 'The army has loaded 15 pages for this message, the most allowed. Write your report with what you have.', r.error);
+  r = checkCall(w, 'get_page_text', {}, now);
+  check('rule: reading still works once the page loads are used up', r.ok);
+  w = W({ navs: 6 });
+  r = checkCall(w, 'navigate', { url: 'https://a.example' }, now);
+  check('rule: 6 page loads per worker', !r.ok && /^You have loaded 6 pages/.test(r.error));
+  w = W({ tabs: new Set([101, 102, 103, 104]), extra: 3 });
   r = checkCall(w, 'tab_close', { tab_id: 101 }, now);
   check('rule: the first tab cannot be closed', !r.ok && r.error === 'Tab 101 is your first tab: keep it open.');
   r = checkCall(w, 'tab_close', { tab_id: 9 }, now);
@@ -411,12 +476,13 @@ function pureChecks() {
   noteResult(w, 'click', { tab_id: 101 }, { ok: true, result: { opened_tab: { tab_id: 151, url: 'https://c.example' } } });
   check('note: a tab the page opened belongs to the worker, not counted as extra', w.tabs.has(151) && w.extra === 1 && /^Clicking/.test(w.action));
   noteResult(w, 'press_key', { tab_id: 101 }, { ok: true, result: { opened_tab: { tab_id: 152 } } });
+  check('note: press_key opened tabs count too', w.tabs.has(152) && w.tabs.size === 4);
   noteResult(w, 'type_text', { tab_id: 101 }, { ok: true, result: { opened_tab: { tab_id: 153 } } });
-  check('note: press_key and type_text opened tabs count too', w.tabs.has(152) && w.tabs.has(153));
+  check('note: a tab opened past the 4-tab limit is not the worker\'s (the add-on closes it)', !w.tabs.has(153) && w.tabs.size === 4);
   noteResult(w, 'tab_close', { tab_id: 150 }, { ok: true, result: { closed: 150 } });
   check('note: tab_close removes the tab', !w.tabs.has(150) && w.action === 'Closing a tab');
   noteResult(w, 'tab_open', { url: 'https://d.example' }, { ok: false, error: 'nope' });
-  check('note: a failed tab_open adds nothing', w.tabs.size === 4 && w.extra === 1);
+  check('note: a failed tab_open adds nothing', w.tabs.size === 3 && w.extra === 1);
   w = W();
   noteResult(w, 'get_page_text', { tab_id: 101 }, { ok: true, result: { url: 'https://e.example/p', text: 'x' } });
   noteResult(w, 'get_page_text', { tab_id: 101 }, { ok: true, result: { url: 'https://e.example/p', text: 'x' } });
@@ -431,6 +497,7 @@ function pureChecks() {
   try {
     pureChecks();
     await mainChecks();
+    await raceChecks();
     await timeoutChecks();
   } catch (e) {
     check('no unexpected errors', false, e.stack || e.message);

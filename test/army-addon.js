@@ -166,6 +166,14 @@ const tabOf = id => tabs.find(t => t.id === id);
     check('a tab opened from an army tab joins that worker, and the user\'s tab is put back in front',
       army.owner(50) && army.owner(50).worker === 'w1' && updated.slice(u).some(([id, o]) => id === 1 && o && o.active === true), JSON.stringify(updated.slice(u)));
 
+    // 6b. a worker has 4 tabs at most: one more that its page opens is closed at once
+    for (const id of [401, 402]) army.register(id, { run: 'r1', worker: 'w1' });   // w1 now has A, 50, 401 and 402
+    tabs.push({ id: 51, windowId: 1, active: false, url: 'https://a.example/pop2', status: 'complete' });
+    tabEv.onCreated.fire({ id: 51, windowId: 1, active: false, openerTabId: A, url: 'https://a.example/pop2' });
+    await tick();
+    check('a fifth tab a worker\'s page opens is closed at once and is not the worker\'s', removed.includes(51) && !army.owner(51), removed.join(','));
+    for (const id of [401, 402]) army.unregister(id);
+
     // 7. an army tab that comes to the front right after an army action goes back; one the user clicks later stays
     await armyCall('scroll', { tab_id: A, direction: 'down' });
     u = updated.length;
@@ -181,6 +189,16 @@ const tabOf = id => tabs.find(t => t.id === id);
     check('the user\'s own tab is remembered as theirs', army.userTab && army.userTab.tabId === 2);
     tabEv.onActivated.fire({ tabId: 1, windowId: 1 });
 
+    // 7b. Show on a worker's row in the panel: the user's own switch, which the army leaves alone
+    await armyCall('scroll', { tab_id: A, direction: 'down' });   // the worker acted on it just now
+    u = updated.length;
+    await fromPanel({ type: 'openTab', id: A });
+    tabEv.onActivated.fire({ tabId: A, windowId: 1 });
+    await tick();
+    check('Show switches to the worker\'s tab and the army does not switch back', updated.slice(u).some(([id, o]) => id === A && o && o.active === true)
+      && !updated.slice(u).some(([id, o]) => id === 1 && o && o.active === true), JSON.stringify(updated.slice(u)));
+    tabEv.onActivated.fire({ tabId: 1, windowId: 1 });
+
     // 14. tabs_list marks army tabs
     r = await call('tabs_list');
     check('tabs_list marks army tabs with their worker id', r.ok && r.result.find(t => t.id === A).army === 'w1' && r.result.find(t => t.id === B).army === 'w2' && !('army' in r.result.find(t => t.id === 1)));
@@ -192,7 +210,8 @@ const tabOf = id => tabs.find(t => t.id === id);
     const shotArmy = await armyCall('screenshot', { tab_id: A });
     check('a screenshot that cannot be captured fails with the tab_activate hint, and no tab is switched',
       !shot.ok && /Could not capture tab 2: Tab is not drawn\. Zen draws a tab only while it is in front.*tab_activate/.test(shot.error) && updated.length === u && visibleCaptures === 0, shot.error);
-    check('the same for an army worker\'s screenshot', !shotArmy.ok && /tab_activate/.test(shotArmy.error) && updated.length === u && visibleCaptures === 0, shotArmy.error);
+    check('the same for an army worker\'s screenshot, pointing it to get_page_text (workers cannot bring a tab to the front)',
+      !shotArmy.ok && /get_page_text/.test(shotArmy.error) && !/tab_activate/.test(shotArmy.error) && updated.length === u && visibleCaptures === 0, shotArmy.error);
     capture = async () => undefined;
     const blank = await call('screenshot', { tab_id: 2 });
     check('a capture with no image fails the same way', !blank.ok && /Could not capture tab 2: .*tab_activate/.test(blank.error) && updated.length === u && visibleCaptures === 0, blank.error);
@@ -211,12 +230,25 @@ const tabOf = id => tabs.find(t => t.id === id);
     await helperSays({ type: 'army_end', run: 'r1' });
     check('army_end with only the run closes the rest of the run', removed.slice(rm).join() === String(B) && army.tabs.size === 0, removed.slice(rm).join(','));
 
+    // 8b. a tab still opening when its run or worker ended: closed as soon as it is there
+    await helperSays({ type: 'army_end', run: 'r7' });
+    rm = removed.length;
+    const late = await armyCall('tab_open', { url: 'https://late.example/' }, 'w1', 'r7');
+    await helperSays({ type: 'army_end', run: 'r6', worker: 'w2' });
+    const late2 = await armyCall('tab_open', { url: 'https://late2.example/' }, 'w2', 'r6');
+    const lateIds = removed.slice(rm);
+    check('a tab of a run or worker that already ended is closed as soon as it opens', [late, late2].every(x => !x.ok && x.error === 'This worker was stopped, so its new tab was closed.')
+      && lateIds.length === 2 && lateIds.every(id => !army.owner(id) && !tabOf(id)), JSON.stringify([late, late2, lateIds]));
+
     // 9. Stop and a helper that goes away close every army tab
     const s1 = (await armyCall('tab_open', { url: 'https://s1.example/' }, 'w1', 'r2')).result.tab_id;
     const s2 = (await armyCall('tab_open', { url: 'https://s2.example/' }, 'w3', 'r2')).result.tab_id;
     rm = removed.length;
     await fromPanel({ type: 'stop' });
     check('Stop closes every army tab', [s1, s2].every(id => removed.slice(rm).includes(id)) && !removed.slice(rm).includes(1) && army.tabs.size === 0);
+    army.register(777, { run: 'r5', worker: 'w1' }, army.stopAt - 1);   // a tab_open that was under way when Stop came
+    await tick();
+    check('a tab that started opening before Stop is closed when it arrives', removed.includes(777) && !army.owner(777));
     await fromPanel({ type: 'start' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
     const s3 = (await armyCall('tab_open', { url: 'https://s3.example/' }, 'w1', 'r3')).result.tab_id;
@@ -263,6 +295,18 @@ const tabOf = id => tabs.find(t => t.id === id);
     await tick(80);
     const s2s = vm.runInContext('cizState', ctx2).get();
     check('a fresh start with armyOn comes up with the army on and Quality, and today\'s count', s2s.chatArmy === true && s2s.chatModel === 'quality' && s2s.armyToday === 3, JSON.stringify({ a: s2s.chatArmy, m: s2s.chatModel, t: s2s.armyToday }));
+
+    // 16. static: nothing a worker can reach brings a tab or a window to the front
+    const toolsSrc = fs.readFileSync(path.join(ext, 'lib', 'tools.js'), 'utf8');
+    const armySrc = fs.readFileSync(path.join(ext, 'lib', 'army.js'), 'utf8');
+    const armyTools = [...g('CIZ_ARMY_TOOLS')];
+    const bodies = {};
+    for (const part of toolsSrc.split(/^  async (?=\w+\(args)/m).slice(1)) bodies[part.slice(0, part.indexOf('('))] = part;
+    const focusing = /tabs\.update\([^)]*active|windows\.update|captureVisibleTab|tabs\.highlight/;
+    const bad = armyTools.filter(t => !bodies[t] || focusing.test(bodies[t]));
+    check('static: no tool a worker may use switches tabs or windows (and each one is found)', !bad.length && !armyTools.includes('tab_activate'), bad.join(','));
+    check('static: no captureVisibleTab anywhere in the tools; army.js changes the active tab only in _restore',
+      !/captureVisibleTab/.test(toolsSrc) && (armySrc.match(/tabs\.update\(/g) || []).length === 1 && /_restore\(windowId\) \{[\s\S]*?tabs\.update\(u\.tabId/.test(armySrc) && !/windows\.update/.test(armySrc));
 
     // 15. the shared scripts still pass the main smoke test
     const smoke = spawnSync(process.execPath, [path.join(__dirname, 'addon-smoke.js')], { encoding: 'utf8', timeout: 120000 });

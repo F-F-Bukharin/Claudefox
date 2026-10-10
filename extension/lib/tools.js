@@ -929,9 +929,11 @@ const CIZ_TOOLS = {
   async tab_open(args) {
     const url = String(args.url || '').trim();
     cizRefuseUrl(url, args.__army);
+    const since = Date.now();
     const tab = await browser.tabs.create({ url, active: args.active !== false });
-    // Registered before the page loads, so Stop or the worker's end closes it even mid-load.
-    if (args.__army) cizArmy.register(tab.id, args.__army);
+    // Registered before the page loads, so Stop or the worker's end closes it even mid-load (or at once, when that
+    // came while the tab was being made).
+    if (args.__army && !cizArmy.register(tab.id, args.__army, since)) throw new Error('This worker was stopped, so its new tab was closed.');
     if (args.wait === false) return { tab_id: tab.id, url };
     const done = await cizWaitLoaded(tab.id, 30000);
     return { tab_id: tab.id, url: done.url || url, title: done.title, loaded: done.loaded };
@@ -1039,6 +1041,7 @@ const CIZ_TOOLS = {
     const m = /^data:image\/png;base64,(.+)$/.exec(dataUrl || '');
     if (!m) {
       if (gate.about) throw new Error('Zen did not let the add-on capture this browser page.');
+      if (args.__army) throw new Error(`Could not capture tab ${tab.id}: ${why}. Read the page with get_page_text or find instead.`);
       throw new Error(`Could not capture tab ${tab.id}: ${why}. Zen draws a tab only while it is in front. If you need this picture, ask the user, or bring the tab to the front with tab_activate first.`);
     }
     let vp = null;

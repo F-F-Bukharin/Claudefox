@@ -435,6 +435,11 @@ let chat = null;   // the running turn: { id, child, sessionId, finished, stderr
 const army = require('./lib/army').createArmy({
   callAddon, sendAddon, emit: (run, event) => emitChat(run, event), currentChat: () => chat, findClaude,
   envFor: key => claudeEnv(accountDir(key)), mcpServer: path.join(__dirname, 'zen-mcp.js'), limitRe: LIMIT_RE,
+  // Workers get none of the account's plugins or connectors (their hooks would run shell commands in every worker).
+  workerSettings: key => {
+    const on = toolbox.chatOptions(key).settings.enabledPlugins || {};
+    return { enabledPlugins: Object.fromEntries(Object.keys(on).map(id => [id, false])), disableClaudeAiConnectors: true };
+  },
 });
 function isDir(p) { try { return fs.statSync(p).isDirectory(); } catch { return false; } }
 

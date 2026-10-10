@@ -17,7 +17,6 @@ const { workerArgs } = require('./chatargs');
 const MAX_TASKS = 5;
 const MAX_RUNS_PER_TURN = 2;
 const TRAIL_MS = 700;   // action updates go to the panel at most this often per run
-const SETTINGS_FILE = path.join(P.ARMY_DIR, 'settings.json');
 
 // Kills a process and everything it started. sync: for shutdown, so it is done before the helper exits.
 function killTree(child, sync) {
@@ -41,7 +40,8 @@ function cleanUrl(u) {
 }
 
 // deps: { callAddon(tool, args, extra, ms) -> Promise<{ ok, result, error }>, sendAddon(msg), emit(chatRun, event),
-// currentChat() -> the running chat turn, findClaude(), envFor(accountKey), mcpServer: path of zen-mcp.js, limitRe }
+// currentChat() -> the running chat turn, findClaude(), envFor(accountKey), mcpServer: path of zen-mcp.js, limitRe,
+// workerSettings(accountKey) -> settings that switch off the account's plugins and claude.ai connectors }
 function createArmy(deps) {
   const runs = new Map();     // run id -> run
   const tokens = new Map();   // worker token -> worker
@@ -50,8 +50,7 @@ function createArmy(deps) {
   // Leftovers of a helper that did not stop cleanly: their tokens are dead anyway.
   try {
     fs.mkdirSync(P.ARMY_DIR, { recursive: true });
-    for (const f of fs.readdirSync(P.ARMY_DIR)) if (/^r\d+-w\d+\.json$/.test(f)) fs.unlinkSync(path.join(P.ARMY_DIR, f));
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ permissions: { deny: guard.denyRules() } }, null, 1));
+    for (const f of fs.readdirSync(P.ARMY_DIR)) if (/^(r\d+-(w\d+|settings)|settings)\.json$/.test(f)) fs.unlinkSync(path.join(P.ARMY_DIR, f));
   } catch (e) { log.error('army folder', e.message); }
 
   // ---------------------------------------------------------------- trail
@@ -85,6 +84,15 @@ function createArmy(deps) {
   // ---------------------------------------------------------------- workers
 
   function cfgFile(w) { return path.join(P.ARMY_DIR, `${w.run.id}-${w.id}.json`); }
+  function settingsFile(run) { return path.join(P.ARMY_DIR, `${run.id}-settings.json`); }
+
+  // A run's worker settings: the file guard's deny rules, and none of the account's plugins (their hooks, skills and
+  // tool servers) or claude.ai connectors, as in a chat turn with every tool off.
+  function writeSettings(run) {
+    let extra = {};
+    try { extra = (deps.workerSettings && deps.workerSettings(run.chat.key)) || {}; } catch (e) { log.warn('army settings', e.message); }
+    fs.writeFileSync(settingsFile(run), JSON.stringify(Object.assign({ permissions: { deny: guard.denyRules() } }, extra), null, 1));
+  }
 
   // quiet: Stop ends the whole run at once with one army_end and one trail event.
   function endWorker(w, state, error, opts) {
@@ -110,6 +118,7 @@ function createArmy(deps) {
     if (run.over) return;
     run.over = true;
     clearTimeout(run.runTimer);
+    try { fs.unlinkSync(settingsFile(run)); } catch {}
     trail(run, true);
     wake(run);
   }
@@ -133,7 +142,7 @@ function createArmy(deps) {
     let child;
     try {
       fs.writeFileSync(cfgFile(w), JSON.stringify(cfg, null, 2));
-      child = spawn(exe, workerArgs(cfgFile(w), SETTINGS_FILE, LIMITS), {
+      child = spawn(exe, workerArgs(cfgFile(w), settingsFile(run), LIMITS), {
         cwd: P.WORKSPACE,
         env: { ...deps.envFor(run.chat.key), ENABLE_TOOL_SEARCH: 'false' },
         windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
@@ -210,15 +219,24 @@ function createArmy(deps) {
     const going = chat.armyRuns.find(r => !r.over);
     if (going) throw new Error(`Run ${going.id} is still going: call army_wait first.`);
     if (chat.armyRuns.length >= MAX_RUNS_PER_TURN) throw new Error(`This message already used ${MAX_RUNS_PER_TURN} army runs. Answer with what you have.`);
+    // 15 page loads per message for the whole army (armyguard LIMITS.pages); each worker's first page is one of them.
+    chat.armyBudget = chat.armyBudget || { pages: 0 };
+    const left = LIMITS.pages - chat.armyBudget.pages;
+    if (tasks.length > left) {
+      throw new Error(left > 0 ? `The army has ${left} page load${left === 1 ? '' : 's'} left for this message: send at most ${left} worker${left === 1 ? '' : 's'}, or answer with what you have.`
+        : `The army used all ${LIMITS.pages} page loads it gets for one message. Answer with what you have.`);
+    }
     const exe = deps.findClaude();
     if (!exe) throw new Error('Claude Code is not installed on this PC.');
 
     const run = { id: `r${++runSeq}`, chat, chatId: chat.id, round: chat.armyRuns.length + 1, workers: [], over: false, started: Date.now(),
       waiters: [], reported: new Set(), lastTrail: 0, trailTimer: null, trailSent: false, finishedSent: false, runTimer: null };
+    try { writeSettings(run); } catch (e) { throw new Error(`Could not prepare the workers (${e.message}).`); }
     chat.armyRuns.push(run);
     runs.set(run.id, run);
+    chat.armyBudget.pages += tasks.length;
     run.workers = tasks.map((t, i) => {
-      const w = { id: `w${i + 1}`, run, token: crypto.randomBytes(16).toString('hex'), goal: t.goal, url: t.url, report: t.report,
+      const w = { id: `w${i + 1}`, run, budget: chat.armyBudget, token: crypto.randomBytes(16).toString('hex'), goal: t.goal, url: t.url, report: t.report,
         tabs: new Set(), mainTab: null, calls: 0, navs: 0, extra: 0, state: 'starting', steps: 0, sources: [], action: '', host: '',
         error: '', started: Date.now(), child: null, ended: false, urls: {} };
       tokens.set(w.token, w);
@@ -243,9 +261,9 @@ function createArmy(deps) {
       w.urls[w.mainTab] = w.url;
       w.host = hostOf(w.url);
     }));
-    // Stopped while the tabs opened: close whatever opened since.
+    // Stopped while the tabs opened: the add-on closes whatever opened since, and any tab of this run that opens later.
     if (run.stopped) {
-      if (run.workers.some(w => w.mainTab != null)) deps.sendAddon({ type: 'army_end', run: run.id });
+      deps.sendAddon({ type: 'army_end', run: run.id });
       throw new Error('The run was stopped.');
     }
     for (const w of run.workers) if (!w.ended) spawnWorker(w, exe);

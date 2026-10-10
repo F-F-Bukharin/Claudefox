@@ -192,6 +192,7 @@ async function openLink(url) {
 async function openTab(id) {
   try {
     const t = await browser.tabs.get(id);
+    cizArmy.show(id);   // Show on a worker's row: the user's own switch, which the army must not undo
     await browser.tabs.update(id, { active: true });
     try { await browser.windows.update(t.windowId, { focused: true }); } catch {}
   } catch { await cizState.addLog('error', `Tab ${id} is not open any more.`); }
@@ -987,10 +988,9 @@ async function dispatch(tool, args, source, army) {
       const what = result.clicked || `${result.filled || result.typed} into the field`;
       await cizState.addLog('action', `${tool}: ${String(what).slice(0, 140)}${result.navigated ? ` → ${String(result.url || '').slice(0, 80)}` : ''}`);
     }
-    if (army) {
-      if (tool === 'tab_open' && result) cizArmy.register(result.tab_id, army);
-      else if (tool === 'tab_close') cizArmy.unregister(args.tab_id);
-      else cizArmy.touch(args.tab_id);
+    if (army) {   // tab_open registered its tab itself (lib/tools.js), before the page loaded
+      if (tool === 'tab_close') cizArmy.unregister(args.tab_id);
+      else if (tool !== 'tab_open') cizArmy.touch(args.tab_id);
     }
     return { ok: true, result };
   } catch (e) {

@@ -11,8 +11,9 @@ const num = (k, d) => (Number(process.env[k]) > 0 ? Number(process.env[k]) : d);
 // Each limit can be lowered for tests through its environment variable.
 const LIMITS = {
   calls: num('CLAUDE_IN_ZEN_ARMY_CALLS', 40),        // tool calls per worker
-  navs: num('CLAUDE_IN_ZEN_ARMY_NAVS', 10),          // page loads per worker (navigate and tab_open)
-  extraTabs: num('CLAUDE_IN_ZEN_ARMY_EXTRA_TABS', 3), // tabs a worker may open besides its first one
+  navs: num('CLAUDE_IN_ZEN_ARMY_NAVS', 6),           // page loads per worker (navigate and tab_open)
+  pages: num('CLAUDE_IN_ZEN_ARMY_PAGES', 15),        // page loads per message: every worker of every run, first tabs too
+  extraTabs: num('CLAUDE_IN_ZEN_ARMY_EXTRA_TABS', 3), // tabs a worker may have besides its first one (4 in all, 20 a run)
   softMs: num('CLAUDE_IN_ZEN_ARMY_SOFT_MS', 150000), // after this, tools refuse and the worker writes its report
   hardMs: num('CLAUDE_IN_ZEN_ARMY_HARD_MS', 180000), // after this, the worker is killed
   runMs: num('CLAUDE_IN_ZEN_ARMY_RUN_MS', 360000),   // the whole run
@@ -26,8 +27,11 @@ function ownsTab(worker, id) {
   return worker.tabs.has(id);
 }
 
+// '' while the worker may load another page, else why not. worker.budget is shared by every worker of the message.
 function pageLoadsLeft(worker) {
-  return worker.navs < LIMITS.navs ? '' : `You have loaded ${worker.navs} pages, the most allowed for one worker. Write your report.`;
+  if (worker.navs >= LIMITS.navs) return `You have loaded ${worker.navs} pages, the most allowed for one worker. Write your report.`;
+  if (worker.budget && worker.budget.pages >= LIMITS.pages) return `The army has loaded ${worker.budget.pages} pages for this message, the most allowed. Write your report with what you have.`;
+  return '';
 }
 
 // { ok: true, args } with the arguments to forward, or { ok: false, error } for the worker. Counts accepted calls.
@@ -41,8 +45,8 @@ function checkCall(worker, tool, args, now) {
 
   if (tool === 'tab_open') {
     if (!String(a.url || '').trim()) return { ok: false, error: 'Give the url to open.' };
-    if (worker.extra >= LIMITS.extraTabs) {
-      return { ok: false, error: `You already opened ${worker.extra} extra tabs, the most allowed. Use one of yours: ${ids(worker)}.` };
+    if (worker.extra >= LIMITS.extraTabs || worker.tabs.size >= 1 + LIMITS.extraTabs) {
+      return { ok: false, error: `You already have ${worker.tabs.size} tabs, the most allowed. Use one of yours: ${ids(worker)}.` };
     }
     const full = pageLoadsLeft(worker);
     if (full) return { ok: false, error: full };
@@ -66,7 +70,10 @@ function checkCall(worker, tool, args, now) {
     }
   }
   worker.calls++;
-  if (nav) worker.navs++;
+  if (nav) {
+    worker.navs++;
+    if (worker.budget) worker.budget.pages++;
+  }
   return { ok: true, args: a };
 }
 
@@ -97,8 +104,10 @@ function noteResult(worker, tool, args, res) {
       worker.extra++;
       worker.urls[Number(r.tab_id)] = r.url || a.url;
     }
-    // The page opened a tab of its own (a link with target=_blank): it belongs to the worker too.
-    if ((tool === 'click' || tool === 'press_key' || tool === 'type_text') && r.opened_tab && Number.isFinite(Number(r.opened_tab.tab_id))) {
+    // The page opened a tab of its own (a link with target=_blank): it belongs to the worker too, while the worker has
+    // fewer than 4 tabs. Past that the add-on closes it at once (extension/lib/army.js).
+    if ((tool === 'click' || tool === 'press_key' || tool === 'type_text') && r.opened_tab && Number.isFinite(Number(r.opened_tab.tab_id))
+      && worker.tabs.size < 1 + LIMITS.extraTabs) {
       worker.tabs.add(Number(r.opened_tab.tab_id));
       worker.urls[Number(r.opened_tab.tab_id)] = r.opened_tab.url || '';
     }
