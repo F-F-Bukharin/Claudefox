@@ -170,11 +170,12 @@ function createArmy(deps) {
       if (buf) onLine(buf);
       const text = result ? String(result.result || (Array.isArray(result.errors) && result.errors.join(' ')) || '') : '';
       const last = stderr.trim().split('\n').pop() || '';
-      if (deps.limitRe.test(text) || (!result && deps.limitRe.test(last))) return endWorker(w, 'failed', 'This account hit its usage limit.');
       if (result && !result.is_error && result.subtype === 'success') {
         w.report = text.slice(0, 4000);
         return endWorker(w, 'done');
       }
+      // Only an error is read as a usage limit: a good report may well mention a page's rate limit.
+      if (deps.limitRe.test(result ? text : last)) return endWorker(w, 'failed', 'This account hit its usage limit.');
       if (result) return endWorker(w, 'failed', text || result.subtype || 'Claude Code reported an error.');
       endWorker(w, 'failed', last || `Claude Code exited with code ${code}.`);
     });
