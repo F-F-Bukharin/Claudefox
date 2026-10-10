@@ -16,6 +16,8 @@ module.exports = {
   ACCOUNTS_FILE: path.join(BASE, 'accounts.json'),   // which account is active, cached emails
   WORKSPACE: path.join(BASE, 'workspace'),
   MCP_CONFIG: path.join(BASE, 'mcp.json'),
+  MCP_ARMY_CONFIG: path.join(BASE, 'mcp-army.json'),   // the lead's tool server in Army mode (army_start, army_wait)
+  ARMY_DIR: path.join(BASE, 'army'),                    // one tool-server config per running army worker
   PIPE: process.env.CLAUDE_IN_ZEN_PIPE || (process.platform === 'win32'
     ? `\\\\.\\pipe\\claude-in-zen-${USER}`
     : path.join(os.tmpdir(), `claude-in-zen-${USER}.sock`)),
