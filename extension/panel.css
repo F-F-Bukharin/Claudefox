@@ -554,3 +554,18 @@ body.improving .modebox, body.improving .starters, body.improving .model-line { 
 .rows, .acctcard, .conns, .tablist li, .filecard, .step-row, .confirm, .proposal, .improve-bar, .pickrow, .folderNow, .modeseg { border-color: var(--outline); box-shadow: var(--shade-1); }
 .inputbox { border-color: var(--outline); box-shadow: var(--shade-2); }
 .chip { box-shadow: 0 0 0 1px var(--outline), var(--shade-1); }
+
+/* ---------- Wallpaper (Settings): the page behind the cards ---------- */
+.wallseg { display: flex; gap: 2px; padding: 2px; margin-top: 8px; background: var(--line); border-radius: 9px; }
+.wallseg button { flex: 1; border: 0; border-radius: 7px; padding: 5px 6px; font-size: 12px; font-weight: 600; color: var(--muted); background: transparent; }
+.wallseg button[aria-checked="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shade-1); }
+.wallopts { display: grid; gap: 8px; margin-top: 10px; }
+.wallopts[hidden], #wallNote[hidden] { display: none; }
+.wallrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--ink); }
+.wallrow input[type="color"] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--outline); border-radius: 8px; background: var(--card); cursor: pointer; }
+#wallNote { margin-top: 8px; }
+html[data-wall="solid"] body { background: var(--wall-color); }
+html[data-wall="gradient"] body { background: linear-gradient(160deg, var(--wall-from), var(--wall-to)) fixed; }
+html[data-wall="picture"] body {
+  background: linear-gradient(color-mix(in srgb, var(--bg) 78%, transparent), color-mix(in srgb, var(--bg) 78%, transparent)), var(--wall-img) center / cover no-repeat fixed;
+}

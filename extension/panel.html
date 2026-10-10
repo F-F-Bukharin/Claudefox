@@ -205,6 +205,32 @@
       </div>
     </section>
 
+    <section class="card wallcard">
+      <h3>Wallpaper</h3>
+      <div class="wallseg" role="radiogroup" aria-label="Wallpaper">
+        <button type="button" role="radio" data-wall="default" aria-checked="true">Default</button>
+        <button type="button" role="radio" data-wall="solid" aria-checked="false">Solid</button>
+        <button type="button" role="radio" data-wall="gradient" aria-checked="false">Gradient</button>
+        <button type="button" role="radio" data-wall="picture" aria-checked="false">Picture</button>
+      </div>
+      <div class="wallopts" id="wallSolid" hidden>
+        <label class="wallrow"><span>Colour</span><input type="color" id="wallColor" value="#f6f4ef"></label>
+      </div>
+      <div class="wallopts" id="wallGradient" hidden>
+        <label class="wallrow"><span>From</span><input type="color" id="wallFrom" value="#f6f4ef"></label>
+        <label class="wallrow"><span>To</span><input type="color" id="wallTo" value="#cfdcef"></label>
+      </div>
+      <div class="wallopts" id="wallPicture" hidden>
+        <div class="wallrow">
+          <button type="button" class="ghost" id="wallPick">Choose picture…</button>
+          <button type="button" class="ghost" id="wallClear">Remove picture</button>
+        </div>
+      </div>
+      <p class="note" id="wallNote" hidden></p>
+      <input type="file" id="wallFile" accept="image/*" hidden>
+      <p class="note">Cards keep their own colour, so the text stays readable. The wallpaper is kept in this browser only.</p>
+    </section>
+
     <section class="card conns">
       <h3>Connections</h3>
       <div class="conn">

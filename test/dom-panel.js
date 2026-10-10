@@ -70,6 +70,17 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  $('themeToggle').checked=true; $('themeToggle').dispatchEvent(new w.Event('change'));
  ok('dark mode on sets the dark theme', w.document.documentElement.dataset.theme==='dark');
  $('themeToggle').checked=false; $('themeToggle').dispatchEvent(new w.Event('change'));
+ ok('wallpaper: four choices, Default checked', [...w.document.querySelectorAll('.wallseg button')].map(b=>b.dataset.wall).join('|')==='default|solid|gradient|picture' && w.document.querySelector('.wallseg button[data-wall="default"]').getAttribute('aria-checked')==='true');
+ w.document.querySelector('.wallseg button[data-wall="solid"]').click();
+ ok('wallpaper: Solid marks the page and shows only the colour', w.document.documentElement.dataset.wall==='solid' && !$('wallSolid').hidden && $('wallGradient').hidden && $('wallPicture').hidden);
+ $('wallColor').value='#112233'; $('wallColor').dispatchEvent(new w.Event('input'));
+ ok('wallpaper: the colour input sets the page colour', w.document.documentElement.style.getPropertyValue('--wall-color').trim()==='#112233', w.document.documentElement.style.getPropertyValue('--wall-color'));
+ w.document.querySelector('.wallseg button[data-wall="gradient"]').click();
+ ok('wallpaper: Gradient shows the two colours', w.document.documentElement.dataset.wall==='gradient' && !$('wallGradient').hidden && $('wallSolid').hidden);
+ w.document.querySelector('.wallseg button[data-wall="picture"]').click();
+ ok('wallpaper: Picture shows Choose and Remove', w.document.documentElement.dataset.wall==='picture' && !$('wallPicture').hidden && !!$('wallPick') && !!$('wallClear'));
+ $('wallClear').click();
+ ok('wallpaper: Remove picture goes back to Default', w.document.documentElement.dataset.wall==='default' && w.document.querySelector('.wallseg button[data-wall="default"]').getAttribute('aria-checked')==='true');
  ok('dark mode off sets the light theme', w.document.documentElement.dataset.theme==='light');
  // formatting, copy, selection-safe rendering
  $('input').value='fmt'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));

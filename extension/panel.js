@@ -116,6 +116,72 @@ function setTheme(dark) {
 }
 $('themeToggle').checked = document.documentElement.dataset.theme === 'dark';
 $('themeToggle').addEventListener('change', e => setTheme(e.target.checked));
+// Wallpaper: Default, a solid colour, a two-colour gradient, or a picture. It sits behind the cards, which keep their own colour. Kept in this browser; theme.js applies it before the first paint.
+const WALL_KEY = 'ciz-wall';
+const WALL_DEFAULTS = { mode: 'default', color: '#f6f4ef', from: '#f6f4ef', to: '#cfdcef', image: '' };
+function loadWall() {
+  try { return { ...WALL_DEFAULTS, ...JSON.parse(localStorage.getItem(WALL_KEY) || 'null') }; }
+  catch { return { ...WALL_DEFAULTS }; }
+}
+function saveWall(w) {
+  try { localStorage.setItem(WALL_KEY, JSON.stringify(w)); return true; }
+  catch { return false; }
+}
+function applyWall(w) {
+  const root = document.documentElement;
+  root.dataset.wall = w.mode;
+  root.style.setProperty('--wall-color', w.color);
+  root.style.setProperty('--wall-from', w.from);
+  root.style.setProperty('--wall-to', w.to);
+  root.style.setProperty('--wall-img', w.image ? `url("${w.image}")` : 'none');
+  for (const b of document.querySelectorAll('.wallseg button')) b.setAttribute('aria-checked', String(b.dataset.wall === w.mode));
+  $('wallSolid').hidden = w.mode !== 'solid';
+  $('wallGradient').hidden = w.mode !== 'gradient';
+  $('wallPicture').hidden = w.mode !== 'picture';
+  $('wallColor').value = w.color;
+  $('wallFrom').value = w.from;
+  $('wallTo').value = w.to;
+}
+function wallNote(text) { $('wallNote').textContent = text; $('wallNote').hidden = !text; }
+let wall = loadWall();
+applyWall(wall);
+// Returns false when the choice could not be kept in this browser (a picture too big for storage). The choice still applies for this session.
+function setWall(patch) {
+  wall = { ...wall, ...patch };
+  applyWall(wall);
+  return saveWall(wall);
+}
+for (const b of document.querySelectorAll('.wallseg button')) {
+  b.addEventListener('click', () => { wallNote(''); setWall({ mode: b.dataset.wall }); });
+}
+$('wallColor').addEventListener('input', e => setWall({ color: e.target.value }));
+$('wallFrom').addEventListener('input', e => setWall({ from: e.target.value }));
+$('wallTo').addEventListener('input', e => setWall({ to: e.target.value }));
+$('wallPick').addEventListener('click', () => $('wallFile').click());
+$('wallClear').addEventListener('click', () => { wallNote(''); setWall({ mode: 'default', image: '' }); });
+$('wallFile').addEventListener('change', e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) pictureToWall(file);
+});
+// The picture is scaled so its long side is 1600 px and kept as a JPEG, so it stays small enough to keep.
+function pictureToWall(file) {
+  if (!/^image\//.test(file.type)) { wallNote('That file is not a picture.'); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    const kept = setWall({ mode: 'picture', image: canvas.toDataURL('image/jpeg', 0.82) });
+    wallNote(kept ? '' : 'That picture is too big to keep in this browser, so it is used for this session only.');
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); wallNote('Could not open that picture.'); };
+  img.src = url;
+}
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
 // One button flips Speed and Quality. The + on its left (Speed mode only) turns Speed Plus (Haiku at max effort) on and off.
 function toggleMode() {
