@@ -22,6 +22,9 @@ const MAX_LIST = 300;                     // entries local_files shows
 const MAX_SCAN = 5000;                    // entries it looks at
 const MAX_READ = 5 * 1024 * 1024;         // the largest file local_file_read opens
 const PART = 60000;                       // characters per part
+// What local_page_open shows: kinds Zen draws in a tab itself. Anything else (a program, a script, an archive) would go
+// to Windows to "open", so it is refused; local_file_read gives the text of those.
+const SHOWN = /\.(html?|xhtml?|shtml|svg|xml|txt|text|md|markdown|json|css|m?js|log|csv|tsv|pdf|png|jpe?g|gif|webp|bmp|ico|avif|apng|mp4|webm|og[gva]|mp3|wav|flac|m4a|opus)$/i;
 
 // zen.exe: CLAUDE_IN_ZEN_ZEN_EXE (tests), else the usual install places (as tools\xpi-tools.ps1 looks).
 function findZen() {
@@ -84,7 +87,14 @@ function createLocalPages(deps) {
 
   // local_page_open: a page or file in a new Zen tab, in front, for Claude to see and play.
   async function open(args) {
-    const f = await allow(args && args.path, 'any');
+    const raw = args && args.path;
+    const first = realOf(raw);   // checked before the user is asked, so nothing refused here ever asks
+    const why = guard.localProblem(first.real, first.dir);
+    if (why) throw new Error(`Not allowed: ${first.real}: ${why}.`);
+    if (!first.dir && !SHOWN.test(first.real)) {
+      throw new Error(`local_page_open shows web pages, text, PDFs, images, audio and video, not ${path.extname(first.real) || 'files without an extension'}. Use local_file_read for the text of other files.`);
+    }
+    const f = await allow(raw, 'any');
     let url = pathToFileURL(f.real).href;
     if (f.dir && !url.endsWith('/')) url += '/';
     const exe = findZen();
