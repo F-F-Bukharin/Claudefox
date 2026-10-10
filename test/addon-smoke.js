@@ -155,6 +155,21 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     await fromPanel({ type: 'chatCancel', id: 'p3' });
     check('cancel is passed on', native.sent.some(m => m.type === 'chat_cancel' && m.id === 'p3'));
     await helperSays({ type: 'chat_done', id: 'p3', ok: false, error: 'Claude AI usage limit reached', limit: true });
+
+    // Improve Claude in Zen (the + menu): an empty message is fine; it runs Opus max with no tab and no files. The
+    // proposal reaches the panel, and Apply and Discard go to the helper.
+    await fromPanel({ type: 'chat', id: 'imp1', text: '', improve: true });
+    const imp = native.sent.find(m => m.type === 'chat' && m.id === 'imp1');
+    check('an improve message goes to the helper as selfimprove: no tab, no files, no resume', !!imp && imp.improve === true && imp.model === 'selfimprove' && imp.files === '' && imp.tab === null && imp.resume === '' && imp.unsafe === false && imp.caveman === false);
+    await helperSays({ type: 'chat_event', id: 'imp1', event: { kind: 'proposal', id: 'abc123def456', changed: 1, added: 1, removed: 0, files: [], blocked: [], tests: { ok: true, summary: 'All test files passed', tail: '' }, canApply: true, diff: '', diffFile: '' } });
+    await helperSays({ type: 'chat_done', id: 'imp1', ok: true, sessionId: '' });
+    check('the proposal reaches the panel', panelIn.some(m => m.type === 'chatEvent' && m.id === 'imp1' && m.event.kind === 'proposal'));
+    await fromPanel({ type: 'selfApply', id: 'abc123def456' });
+    check('Apply goes to the helper as self_apply', native.sent.some(m => m.type === 'self_apply' && m.id === 'abc123def456'));
+    await helperSays({ type: 'self_result', id: 'abc123def456', ok: true, text: 'Applied 1 file.', files: ['extension/panel.js'] });
+    check('the result reaches the panel', panelIn.some(m => m.type === 'selfResult' && m.id === 'abc123def456' && m.ok === true));
+    await fromPanel({ type: 'selfDiscard', id: 'abc123def456' });
+    check('Discard goes to the helper as self_discard', native.sent.some(m => m.type === 'self_discard' && m.id === 'abc123def456'));
     check('limit flag reaches the panel', panelIn.some(m => m.type === 'chatDone' && m.id === 'p3' && m.limit));
     await fromPanel({ type: 'newChat' });
     check('/clear drops the session', g('cizState').get().chatSession === '');

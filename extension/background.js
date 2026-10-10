@@ -125,6 +125,8 @@ async function handlePanel(msg, port) {
     case 'call':       return panelCall(msg, port);
     case 'chat':       return startChat(msg);
     case 'chatCancel': return cancelChat(String(msg.id || ''));
+    case 'selfApply':   return sendNative({ type: 'self_apply', id: String(msg.id || '') });
+    case 'selfDiscard': return sendNative({ type: 'self_discard', id: String(msg.id || '') });
     case 'newChat':    return cizState.set({ chatSession: '' });
     case 'setModel':   return cizState.set({ chatModel: msg.value === 'quality' ? 'quality' : 'speed' });
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
@@ -485,9 +487,10 @@ function cleanAttachments(list) {
 async function startChat(msg) {
   const id = String(msg.id || '').slice(0, 64);
   const text = String(msg.text || '');
-  const attachments = cleanAttachments(msg.attachments);
+  const improve = msg.improve === true;   // Improve Claude in Zen: no tab, no files, no attachments; Opus at max effort
+  const attachments = improve ? [] : cleanAttachments(msg.attachments);
   const fail = error => postToPanels({ type: 'chatDone', id, ok: false, error });
-  if (!id || (!text.trim() && !attachments.length)) return;
+  if (!id || (!text.trim() && !attachments.length && !improve)) return;
   const s = cizState.get();
   if (chatRuns.size) return fail('Claude is still answering. Wait, or press Cancel.');
   if (s.agent !== 'active') return fail('Claude is stopped. Press Start first.');
@@ -495,18 +498,21 @@ async function startChat(msg) {
   if (s.native !== 'connected') return fail('The helper is not connected. Run "Set up Claude in Zen.bat", then press retry in Settings.');
   if (s.claude && !s.claude.installed) return fail('Claude Code is not installed on this PC.');
   if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Double-click "Sign in Claude Code.bat" in the tools folder.');
-  const files = s.filesEnabled ? s.filesMode : '';
+  const files = !improve && s.filesEnabled ? s.filesMode : '';
   chatRuns.set(id, { startedAt: Date.now() });
-  const model = s.chatModel === 'quality' ? 'quality' : s.chatPlus ? 'speedplus' : 'speed';
+  const model = improve ? 'selfimprove' : s.chatModel === 'quality' ? 'quality' : s.chatPlus ? 'speedplus' : 'speed';
   let tab = null;
-  try {
-    const [t] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
-    if (t) tab = { id: t.id, title: t.title || '', url: t.url || '' };
-  } catch {}
-  const sent = sendNative({ type: 'chat', id, text, model, tab, resume: s.chatSession || '', files, folder: files ? s.filesFolder : '',
-    unsafe: !!s.unsafe, caveman: !!s.caveman, attachments });
+  if (!improve) {
+    try {
+      const [t] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+      if (t) tab = { id: t.id, title: t.title || '', url: t.url || '' };
+    } catch {}
+  }
+  const sent = sendNative({ type: 'chat', id, text, model, tab, resume: improve ? '' : (s.chatSession || ''), files, folder: files ? s.filesFolder : '',
+    unsafe: !improve && !!s.unsafe, caveman: !improve && !!s.caveman, attachments, improve });
   if (!sent) { chatRuns.delete(id); return fail('Could not reach the helper.'); }
-  await cizState.addLog('action', `chat → Claude Code, ${model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
+  await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
+    : `chat → Claude Code, ${model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
 }
 
 function cancelChat(id) {
@@ -761,6 +767,10 @@ async function onNativeMessage(msg) {
     case 'tool_result':
       return onToolResult(msg);
 
+    case 'self_result':
+      postToPanels({ type: 'selfResult', id: String(msg.id || ''), ok: !!msg.ok, text: String(msg.text || '').slice(0, 2000),
+        files: Array.isArray(msg.files) ? msg.files.slice(0, 60).map(f => String(f).slice(0, 200)) : [] });
+      return;
     case 'chat_done':
       return onChatDone(msg);
 

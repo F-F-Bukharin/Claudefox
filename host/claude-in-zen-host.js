@@ -140,6 +140,8 @@ function onAddon(msg) {
       startChat(msg);
       return;
 
+    case 'self_apply':   return selfApply(msg);
+    case 'self_discard': return selfDiscard(msg);
     case 'chat_cancel':
       cancelChat(String(msg.id || '*'), 'Cancelled.');
       return;
@@ -357,6 +359,7 @@ function writeMcpConfig() {
 
 const CHAT_TIMEOUT_MS = 60 * 60 * 1000;   // long jobs (a whole course's homework) take a while; Cancel is always there
 const { MODELS, chatArgs } = require('./lib/chatargs');
+const selfimprove = require('./lib/selfimprove');
 const LIMIT_RE = /usage limit|limit reached|rate.?limit|reached your|limit will reset|out of (extra )?usage/i;
 let chat = null;   // the running turn: { id, child, sessionId, finished, stderr, resultError, timer, files, key }
 function isDir(p) { try { return fs.statSync(p).isDirectory(); } catch { return false; } }
@@ -454,6 +457,7 @@ function finishChat(run, ok, error) {
   run.finished = true;
   clearTimeout(run.timer);
   if (chat === run) chat = null;
+  if (run.improve && !ok) selfimprove.drop(run.sandbox);
   const err = ok ? '' : String(error || 'Claude Code stopped without an answer.').slice(0, 1500);
   if (!ok) log.warn(`chat ${run.id} failed: ${err.slice(0, 200)}`); else log.info(`chat ${run.id} done ${Date.now() - run.started} ms`);
   sendAddon({ type: 'chat_done', id: run.id, ok: !!ok, error: err, limit: !ok && LIMIT_RE.test(err), sessionId: run.sessionId || '' });
@@ -462,15 +466,22 @@ function finishChat(run, ok, error) {
 function startChat(msg) {
   const id = String(msg.id || '').slice(0, 64);
   const refuse = error => sendAddon({ type: 'chat_done', id, ok: false, error, limit: false, sessionId: '' });
+  // Improve Claude in Zen: Claude edits a copy of the add-on and the user approves the change (lib/selfimprove.js).
+  const improve = msg.improve === true;
   if (chat) return refuse('Claude is still answering the last message.');
   const text = typeof msg.text === 'string' ? msg.text : '';
-  if (!text.trim() && !(Array.isArray(msg.attachments) && msg.attachments.length)) return refuse('The message is empty.');
+  const attached = Array.isArray(msg.attachments) && msg.attachments.length > 0;
+  if (!improve && !text.trim() && !attached) return refuse('The message is empty.');
+  if (improve && attached) return refuse('Attachments are not used when improving Claude in Zen. Send the message without files.');
   if (text.length > 50000) return refuse('The message is too long.');
   const exe = findClaude();
   if (!exe) return refuse('Claude Code is not installed on this PC. Install it, then double-click "Set up Claude in Zen.bat".');
 
   const files = { mode: null, folder: '' };
-  if (msg.files === 'read' || msg.files === 'write') {
+  let sandbox = null;
+  if (improve) {
+    try { sandbox = selfimprove.prepare(ROOT); } catch (e) { return refuse(`Could not make a copy of Claude in Zen to change: ${e.message}`); }
+  } else if (msg.files === 'read' || msg.files === 'write') {
     const folder = String(msg.folder || '').trim();
     if (!folder || !path.isAbsolute(folder) || !isDir(folder)) {
       return refuse(`File tools are on, but this folder was not found: ${folder || '(none)'}. Fix it in Settings or turn file tools off.`);
@@ -480,45 +491,53 @@ function startChat(msg) {
     files.mode = msg.files;
     files.folder = path.resolve(folder);
   }
-  const choice = MODELS[msg.model] || MODELS.speed;
-  const unsafe = msg.unsafe === true;
-  const caveman = msg.caveman === true;
-  const resume = typeof msg.resume === 'string' && /^[0-9a-f-]{36}$/i.test(msg.resume) ? msg.resume : '';
+  const choice = improve ? MODELS.selfimprove : (MODELS[msg.model] || MODELS.speed);
+  const unsafe = !improve && msg.unsafe === true;
+  const caveman = !improve && msg.caveman === true;
+  const resume = !improve && typeof msg.resume === 'string' && /^[0-9a-f-]{36}$/i.test(msg.resume) ? msg.resume : '';
   const key = activeId();
 
   // The turn is reserved now (one at a time); it starts after the tool list is fresh and the uploads are saved.
   const run = { id, child: null, key, files, effort: choice.effort, sessionId: resume, finished: false, stderr: '', resultError: '', started: Date.now(), timer: null,
-    wroteText: false, actedSinceText: false, progressIds: new Set() };
+    wroteText: false, actedSinceText: false, progressIds: new Set(), improve, sandbox };
   chat = run;
   emitChat(run, { kind: 'meta', model: choice.model, effort: choice.effort });   // what the helper asked for
   run.timer = setTimeout(() => cancelChat(id, 'The answer took longer than an hour and was stopped.'), CHAT_TIMEOUT_MS);
 
-  Promise.resolve(toolbox.ensureFresh(key)).catch(e => log.warn('tools scan', e.message)).then(() => {
+  const ready = improve ? Promise.resolve() : Promise.resolve(toolbox.ensureFresh(key)).catch(e => log.warn('tools scan', e.message));
+  ready.then(() => {
     if (run.finished) return;
     let saved = { files: [], errors: [] };
-    try { saved = uploads.save(msg.attachments); } catch (e) { saved.errors.push(`attachments: ${e.message}`); }
-    const tb = toolbox.chatOptions(key);
+    if (!improve) { try { saved = uploads.save(msg.attachments); } catch (e) { saved.errors.push(`attachments: ${e.message}`); } }
+    const tb = improve ? { servers: [], settings: {} } : toolbox.chatOptions(key);
     const opts = { unsafe, caveman, tb, cavemanText: caveman ? toolbox.skillText(key, 'caveman', 'caveman') : '' };
     let child;
     try {
-      child = spawn(exe, chatArgs(files, resume, choice, opts), {
+      child = spawn(exe, improve ? selfimprove.args(run.sandbox, choice, toolbox.chatOptions(key).settings) : chatArgs(files, resume, choice, opts), {
         // Only the Zen tools: all loaded up front (ENABLE_TOOL_SEARCH=false). With other servers on: "auto" loads them up
         // front while they are small and defers big sets (like vidIQ's) behind ToolSearch, to keep each turn light.
-        cwd: P.WORKSPACE, env: { ...claudeEnv(accountDir(key)), ENABLE_TOOL_SEARCH: tb.servers.length ? 'auto' : 'false' }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
+        // An improve run has no other servers at all, and works in its copy.
+        cwd: improve ? run.sandbox.work : P.WORKSPACE,
+        env: { ...claudeEnv(accountDir(key)), ENABLE_TOOL_SEARCH: !improve && tb.servers.length ? 'auto' : 'false' },
+        windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (e) {
       return finishChat(run, false, `Could not start Claude Code: ${e.message}`);
     }
     run.child = child;
-    log.info(`chat ${id} started (${choice.model}, files: ${files.mode || 'off'}, ${resume ? 'resumed' : 'new'}${unsafe ? ', unsafe mode' : ''}`
+    log.info(`chat ${id} started (${choice.model}${improve ? ', improve' : `, files: ${files.mode || 'off'}`}, ${resume ? 'resumed' : 'new'}${unsafe ? ', unsafe mode' : ''}`
       + `${tb.servers.length ? `, tools: ${tb.servers.join(', ')}` : ''}${saved.files.length ? `, ${saved.files.length} attachment(s)` : ''}${caveman ? ', caveman' : ''})`);
 
     child.stdin.on('error', () => {});
-    const ctx = msg.tab && typeof msg.tab === 'object'
-      ? `[Current tab: id ${Number(msg.tab.id)}, "${String(msg.tab.title || '').slice(0, 200)}", ${String(msg.tab.url || '').slice(0, 500)}]\n\n`
-      : '';
-    const body = text.trim() ? text : 'Look at the attached files.';
-    child.stdin.end(ctx + uploads.promptBlock(saved) + body, 'utf8');   // the prompt goes on stdin: no quoting or length limits
+    let prompt;
+    if (improve) prompt = selfimprove.request(text);
+    else {
+      const ctx = msg.tab && typeof msg.tab === 'object'
+        ? `[Current tab: id ${Number(msg.tab.id)}, "${String(msg.tab.title || '').slice(0, 200)}", ${String(msg.tab.url || '').slice(0, 500)}]\n\n`
+        : '';
+      prompt = ctx + uploads.promptBlock(saved) + (text.trim() ? text : 'Look at the attached files.');
+    }
+    child.stdin.end(prompt, 'utf8');   // the prompt goes on stdin: no quoting or length limits
 
     let buf = '';
     child.stdout.setEncoding('utf8');
@@ -533,11 +552,37 @@ function startChat(msg) {
     child.on('close', code => {
       if (buf) onChatLine(run, buf);
       if (run.resultError) return finishChat(run, false, run.resultError);
-      if (code === 0) return finishChat(run, true);
+      if (code === 0) return improve ? finishImprove(run) : finishChat(run, true);
       const tail = run.stderr.trim().split('\n').slice(-6).join('\n');
       finishChat(run, false, tail || `Claude Code exited with code ${code}.`);
     });
   });
+}
+
+// The improve run ended well: check the change, show it as a card, then end the turn.
+async function finishImprove(run) {
+  try {
+    emitChat(run, { kind: 'notice', text: 'Checking the change: running the tests on the copy…' });
+    const p = await selfimprove.propose(run.sandbox);
+    if (run.finished) return selfimprove.drop(run.sandbox);   // stopped while the tests ran
+    emitChat(run, Object.assign({ kind: 'proposal' }, p));
+    finishChat(run, true);
+  } catch (e) {
+    finishChat(run, false, `Could not check the change: ${e.message}`);
+  }
+}
+
+// Apply and Discard of an improve proposal (the card in the panel).
+function selfApply(msg) {
+  const id = String(msg.id || '');
+  let r;
+  try { r = selfimprove.apply(id, ROOT); } catch (e) { r = { ok: false, text: `Apply failed: ${e.message}`, files: [] }; }
+  sendAddon({ type: 'self_result', id, ok: !!r.ok, text: r.text, files: r.files || [] });
+}
+function selfDiscard(msg) {
+  const id = String(msg.id || '');
+  const r = selfimprove.discard(id);
+  sendAddon({ type: 'self_result', id, ok: true, text: r.text, files: [] });
 }
 
 function cancelChat(id, reason) {

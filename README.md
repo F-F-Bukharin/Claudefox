@@ -18,7 +18,11 @@ Friends: see `START HERE.txt` (it ships in the friends zip).
 - **Add files**: the **+** at the left of the message box attaches files (also paste or drag them in). Word,
   PowerPoint, Excel and OpenDocument files are turned into text for Claude; PDFs, images and text files are read as
   they are. The small button beside **+** opens more options: upload, screenshot of this tab, **Caveman mode** (short
-  replies, fewer tokens), Tools and plugins, New chat.
+  replies, fewer tokens), Tools and plugins, Improve Claude in Zen, New chat.
+- **Improve Claude in Zen** (the options button beside **+**): Claude edits the add-on's own code on Opus 5.5 at max
+  effort. It works on a copy, runs the add-on's tests on that copy, and shows the change as a card. **Apply** writes it
+  into the add-on and **Discard** drops it; nothing changes until you press Apply. Claude cannot change the safety code,
+  the tests, the installers or the manifest, and cannot add cookie access or keys.
 - **Documents**: Claude makes files you can open and download from the panel. A `.docx` is a real Word document
   (headings, lists, tables, links, page numbers), a `.xlsx` a real Excel workbook. The file viewer's **Save as** menu
   also saves Word, PDF, web page or Markdown.
@@ -85,6 +89,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `extension/panel.*` | Sidebar UI. |
 | `host/claude-in-zen-host.js` | The helper: native messaging, pipe server, Claude Code chat turns, accounts, `read_document`. |
 | `host/lib/chatargs.js` | The chat's system prompt and Claude Code flags. |
+| `host/lib/selfimprove.js` | Improve Claude in Zen: the copy, the diff, the checks, the tests on the copy, Apply and Discard. |
 | `host/lib/toolbox.js` | Tools and plugins: lists them, keeps the switches, sign-in windows, add and remove. |
 | `host/lib/guard.js` | The file guard's deny rules and folder checks. |
 | `host/lib/uploads.js`, `host/lib/doctext.js` | Attached files; text out of Word, PowerPoint, Excel and OpenDocument files. |

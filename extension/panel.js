@@ -26,6 +26,7 @@ port.onMessage.addListener(msg => {
   if (msg.type === 'fileCreated') onFileCreated(msg.file || {});
   if (msg.type === 'snap') onSnap(msg);
   if (msg.type === 'toolResult') onToolResult(msg);
+  if (msg.type === 'selfResult') onSelfResult(msg);
 });
 
 // Links in replies: web pages open in a new tab, zen://tab/<id> switches tab, zen://file/<id> opens a file.
@@ -680,7 +681,8 @@ for (const b of menu.querySelectorAll('button')) {
     else if (act === 'snap') send('snapTab', { req: String(Date.now()) });
     else if (act === 'caveman') send('setCaveman', { value: !state.caveman });
     else if (act === 'tools') { showPage('settings'); setSection('toolsHead', 'toolsBody', true); setTimeout(() => { const c = $('toolsCard'); if (c.scrollIntoView) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); }
-    else if (act === 'new') { chat = []; saveChat(); send('newChat'); renderChat(); input.focus(); }
+    else if (act === 'improve') startImprove();
+    else if (act === 'new') { leaveImprove(); chat = []; saveChat(); send('newChat'); renderChat(); input.focus(); }
   });
 }
 input.addEventListener('keydown', e => {
@@ -742,7 +744,7 @@ function busyMsg() { return chat.find(m => m.role === 'assistant' && m.pending);
 
 async function submit() {
   const text = input.value.trim();
-  if (!text && !attachments.length) return;
+  if (!text && !attachments.length && !improveOn) return;
   if (busyMsg()) { $('composerHint').textContent = 'Claude is still answering. Wait, or press Cancel.'; return; }
   if (text.startsWith('/') && !attachments.length) { input.value = ''; autoGrow(); addMsg({ role: 'user', text }); return runSlash(text); }
   if (state.agent === 'stopped') { addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' }); return; }
@@ -751,15 +753,16 @@ async function submit() {
   attachments = [];
   renderAttachments();
   input.value = ''; autoGrow();
-  addMsg({ role: 'user', text, files: files.map(a => ({ name: a.name, size: a.size })) });
+  addMsg({ role: 'user', text: text || (improveOn ? IMPROVE_EMPTY : ''), files: files.map(a => ({ name: a.name, size: a.size })) });
   const id = `p${Date.now().toString(36)}${chatSeq++}`;
   addMsg({ role: 'assistant', id, text: '', steps: [], pending: true, startedAt: Date.now() });
-  if (!files.length) { send('chat', { id, text }); return; }
+  const extra = improveOn ? { improve: true } : {};
+  if (!files.length) { send('chat', Object.assign({ id, text }, extra)); return; }
   let payload = [];
   try { payload = await Promise.all(files.map(readAttachment)); }
   catch (e) { return onChatDone({ id, ok: false, error: e.message }); }
   finally { for (const a of files) if (a.url && a.url.startsWith('blob:')) URL.revokeObjectURL(a.url); }
-  send('chat', { id, text, attachments: payload });
+  send('chat', Object.assign({ id, text, attachments: payload }, extra));
 }
 
 async function runSlash(text) {
@@ -778,12 +781,106 @@ async function runSlash(text) {
 
 // ------------------------------------------------------------ chat stream
 
+// ------------------------------------------------------------ improve Claude in Zen (the + menu)
+// Claude edits a copy of the add-on, and the reply ends with a card: Apply writes the change into the add-on,
+// Discard drops it. Nothing changes in the add-on until Apply.
+const IMPROVE_EMPTY = 'Improve Claude in Zen: pick one change that helps most.';
+let improveOn = false;
+function startImprove() {
+  if (state.agent === 'stopped' || !state.signedIn) { addMsg({ role: 'system', text: 'Start Claude and sign in first, then improve.' }); return; }
+  improveOn = true;
+  document.body.classList.add('improving');
+  $('improveBar').hidden = false;
+  input.placeholder = 'What should Claude in Zen do better? Leave it empty and Claude picks one change.';
+  input.focus();
+}
+function leaveImprove() {
+  improveOn = false;
+  document.body.classList.remove('improving');
+  $('improveBar').hidden = true;
+  input.placeholder = 'Message Claude…';
+}
+$('improveLeave').addEventListener('click', leaveImprove);
+
+// The proposal event, kept to the fields the card shows.
+function proposalFrom(ev) {
+  return {
+    id: String(ev.id || '').slice(0, 40),
+    changed: Number(ev.changed) || 0,
+    added: Number(ev.added) || 0,
+    removed: Number(ev.removed) || 0,
+    files: (Array.isArray(ev.files) ? ev.files : []).slice(0, 60).map(f => ({
+      path: String(f.path || '').slice(0, 200), status: String(f.status || ''), added: Number(f.added) || 0, removed: Number(f.removed) || 0,
+    })),
+    blocked: (Array.isArray(ev.blocked) ? ev.blocked : []).slice(0, 20).map(b => String(b).slice(0, 300)),
+    tests: ev.tests && typeof ev.tests === 'object'
+      ? { ok: !!ev.tests.ok, summary: String(ev.tests.summary || '').slice(0, 200), tail: String(ev.tests.tail || '').slice(0, 2000) } : null,
+    canApply: !!ev.canApply,
+    diff: String(ev.diff || ''),
+    diffFile: String(ev.diffFile || '').slice(0, 300),
+  };
+}
+
+// The card under an improve reply: what changed, whether the tests passed, the diff, and Apply or Discard.
+function proposalCard(m) {
+  const p = m.proposal;
+  const box = el('div', 'proposal');
+  if (!p.changed) box.appendChild(el('p', 'pnote', 'Claude made no change to the add-on.'));
+  else {
+    box.appendChild(el('p', 'phead', `Proposed change: ${p.changed} file${p.changed === 1 ? '' : 's'}, +${p.added} −${p.removed}`));
+    const list = el('ul', 'pfiles');
+    for (const f of p.files) list.appendChild(el('li', '', `${f.path}: ${f.status === 'added' ? 'new' : f.status === 'removed' ? 'removed' : 'edited'}, +${f.added} −${f.removed}`));
+    box.appendChild(list);
+  }
+  for (const b of p.blocked) box.appendChild(el('p', 'pwarn', b));
+  if (p.tests) {
+    box.appendChild(el('p', p.tests.ok ? 'ptests ok' : 'ptests bad', `${p.tests.ok ? 'Tests passed' : 'Tests failed'}: ${p.tests.summary}`));
+    if (!p.tests.ok && p.tests.tail) box.appendChild(el('pre', 'pdiff', p.tests.tail));
+  } else if (p.changed) box.appendChild(el('p', 'pmuted', 'Not tested: the change was blocked.'));
+  if (p.diff) {
+    const det = document.createElement('details');
+    det.appendChild(el('summary', '', 'Show changes'));
+    det.appendChild(el('pre', 'pdiff', p.diff));
+    box.appendChild(det);
+  }
+  if (p.diffFile) box.appendChild(el('p', 'pmuted', `Whole diff: ${p.diffFile}`));
+  const st = m.proposalState;
+  if (st) box.appendChild(el('p', st.pending ? 'pmuted' : st.ok ? 'pdone' : 'pwarn', st.text));
+  if (st && st.ok !== false) return box;   // applying, applied or discarded: nothing more to do here
+  if (!p.changed) return box;
+  const row = el('div', 'pbtns');
+  const apply = el('button', 'pbtn primary', 'Apply');
+  apply.type = 'button';
+  apply.disabled = !p.canApply;
+  apply.title = p.canApply ? 'Write this change into Claude in Zen' : 'This change did not pass its checks';
+  const discard = el('button', 'pbtn', 'Discard');
+  discard.type = 'button';
+  apply.addEventListener('click', () => { setProposalState(p.id, { pending: true, text: 'Applying…' }); send('selfApply', { id: p.id }); });
+  discard.addEventListener('click', () => { setProposalState(p.id, { pending: true, text: 'Discarding…' }); send('selfDiscard', { id: p.id }); });
+  row.append(apply, discard);
+  box.appendChild(row);
+  return box;
+}
+
+function setProposalState(id, st) {
+  const m = chat.find(x => x.proposal && x.proposal.id === id);
+  if (!m) return;
+  m.proposalState = st;
+  saveChat();
+  renderChat();
+}
+
+function onSelfResult(msg) {
+  setProposalState(String(msg.id || ''), { ok: !!msg.ok, text: String(msg.text || '') });
+}
+
 function onChatEvent(id, ev) {
   const m = chat.find(x => x.id === id);
   if (!m || !m.pending) return;
   if (ev.kind === 'text') m.text += String(ev.text || '');
   else if (ev.kind === 'meta') m.meta = { model: String(ev.model || ''), effort: String(ev.effort || '') };
   else if (ev.kind === 'status') m.status = String(ev.status || '');
+  else if (ev.kind === 'proposal') m.proposal = proposalFrom(ev);
   else if (ev.kind === 'stats') m.stats = { ms: Number(ev.ms) || 0, turns: Number(ev.turns) || 0 };
   else if (ev.kind === 'progress') {
     const steps = Array.isArray(ev.steps) && ev.steps.length ? ev.steps : (m.plan && m.plan.steps) || [];
@@ -1038,6 +1135,7 @@ function buildMsg(m) {
       for (const f of m.files) { const c = el('span', '', `📎 ${f.name}`); c.title = `${f.name} · ${sizeText(f.size || 0)}`; sf.appendChild(c); }
       div.appendChild(sf);
     }
+    if (m.proposal && m.role === 'assistant' && !m.pending) div.appendChild(proposalCard(m));
     if (m.text && m.role === 'assistant' && !m.pending) {
       const foot = document.createElement('div');
       foot.className = 'msgfoot';

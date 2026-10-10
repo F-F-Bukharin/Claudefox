@@ -42,6 +42,11 @@ Using it
   - The + at the left of the message box adds files (Word, PDF, slides, sheets, images...).
     You can also paste or drop them in. The small button next to it has more options:
     a screenshot of the tab, Caveman mode (short replies, fewer tokens), tools, new chat.
+  - Improve Claude in Zen (the small button beside the +, then Improve): Claude edits
+    the add-on's own code on Opus 5.5 at max effort. It works on a copy and runs the
+    tests. Apply writes the change into the add-on, Discard drops it. Nothing changes
+    until you press Apply. After Apply, reload the add-on: use update in Settings if it
+    is linked, or run Install in Zen.bat in the tools folder if it is installed.
   - Ask for a document and Claude makes a real Word file (.docx); open it in the panel
     and use Download, or Save as for PDF, a web page or Markdown.
   - Settings -> Tools and plugins lists your Claude plugins and connectors. Switch on the

@@ -247,5 +247,33 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
   const done=[...$('messages').querySelectorAll('.msg')];
   ok('finishing the reply leaves the messages before it in place', done.length===before.length && done.slice(0,-1).every((n,i)=>n===before[i]));
 }
+ {
+  // Improve Claude in Zen: the + menu item turns the improve bar on; a send carries improve; the card has Apply and Discard
+  const frame2 = () => new Promise(r => w.requestAnimationFrame(() => r()));
+  onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:false},log:[]});
+  const item = w.document.querySelector('#moreMenu [data-act="improve"]');
+  ok('the + menu has Improve Claude in Zen, on Opus 5.5', !!item && /Improve Claude in Zen/.test(item.textContent) && /Opus 5\.5/.test(item.textContent));
+  $('moreBtn').click(); item.click();
+  ok('the improve bar shows, and the panel is marked improving', !$('improveBar').hidden && /Opus 5\.5/.test($('improveBar').textContent) && w.document.body.classList.contains('improving'));
+  $('input').value = '';
+  $('composer').dispatchEvent(new w.Event('submit', {cancelable: true}));
+  const im = sent.filter(m => m.type === 'chat').pop();
+  ok('an improve message carries improve: true, empty text allowed', !!im && im.improve === true && im.text === '');
+  onMsg({type:'chatEvent', id: im.id, event: {kind:'proposal', id:'abc123def456', changed:2, added:3, removed:1,
+    files:[{path:'extension/panel.js', status:'modified', added:3, removed:1}, {path:'host/lib/x.js', status:'added', added:4, removed:0}],
+    blocked:[], tests:{ok:true, summary:'All test files passed', tail:''}, canApply:true, diff:'--- a/extension/panel.js\n+++ b/extension/panel.js', diffFile:'C:\\x\\changes.diff'}});
+  onMsg({type:'chatDone', id: im.id, ok: true});
+  await frame2();
+  const card = w.document.querySelector('.proposal');
+  ok('the card shows the change, the passed tests and an enabled Apply', !!card && /Proposed change: 2 files/.test(card.textContent) && /Tests passed/.test(card.textContent)
+    && [...card.querySelectorAll('button')].some(b => b.textContent === 'Apply' && !b.disabled));
+  [...card.querySelectorAll('button')].find(b => b.textContent === 'Apply').click();
+  ok('Apply sends selfApply with the proposal id', sent.some(m => m.type === 'selfApply' && m.id === 'abc123def456'));
+  onMsg({type:'selfResult', id:'abc123def456', ok:true, text:'Applied 2 files.', files:[]});
+  await frame2();
+  ok('the card then shows the result and no buttons', /Applied 2 files\./.test(w.document.querySelector('.proposal').textContent) && !w.document.querySelector('.proposal .pbtns'));
+  $('improveLeave').click();
+  ok('Leave hides the bar and the panel is no longer improving', $('improveBar').hidden && !w.document.body.classList.contains('improving'));
+}
  console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail?1:0);
 })().catch(e=>{console.log('ERROR',e.stack);process.exit(1)});

@@ -13,6 +13,8 @@ const MODELS = {
   speed:   { model: 'claude-haiku-5-5', effort: 'high' },
   speedplus: { model: 'claude-haiku-5-5', effort: 'max' },
   quality: { model: 'claude-opus-5-5', effort: 'high' },
+  // Improve Claude in Zen (lib/selfimprove.js): Opus at max effort, since it is code.
+  selfimprove: { model: 'claude-opus-5-5', effort: 'max' },
 };
 const FILE_TOOLS = { read: 'Read,Glob,Grep', write: 'Read,Glob,Grep,Edit,Write' };
 const WEB_TOOLS = 'WebSearch,WebFetch';   // always on: Claude can search and read the web without touching tabs
