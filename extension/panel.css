@@ -5,6 +5,7 @@
   --ink: #1f1e1c;
   --muted: #6b6862;
   --line: #e4e0d8;
+  --outline: #d7d1c5;
   --accent: #c96442;
   --accent-ink: #ffffff;
   --user-bubble: #ece7dd;
@@ -14,6 +15,8 @@
   --off: #9a968e;
   --plus: #7b4fd6;
   --radius: 12px;
+  --shade-1: 0 1px 2px rgb(31 30 28 / .06);
+  --shade-2: 0 2px 10px rgb(31 30 28 / .08), 0 1px 2px rgb(31 30 28 / .05);
 }
 /* Dark mode: theme.js sets data-theme before the first paint (the saved choice, or the system setting until one is saved) */
 :root[data-theme="dark"] {
@@ -23,6 +26,7 @@
   --ink: #eceae4;
   --muted: #a19d94;
   --line: #3a3834;
+  --outline: #4a4640;
   --accent: #d97757;
   --user-bubble: #34322e;
   --stop: #e2554b;
@@ -30,6 +34,8 @@
   --warn: #f0a33a;
   --off: #6f6b64;
   --plus: #a07cf0;
+  --shade-1: 0 1px 2px rgb(0 0 0 / .32);
+  --shade-2: 0 4px 14px rgb(0 0 0 / .34), 0 1px 2px rgb(0 0 0 / .3);
 }
 
 * { box-sizing: border-box; }
@@ -543,3 +549,8 @@ body.improving .modebox, body.improving .starters, body.improving .model-line { 
 .proposal .pbtn { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 12px; cursor: pointer; }
 .proposal .pbtn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .proposal .pbtn:disabled { opacity: .5; cursor: default; }
+
+/* ---------- Depth: subtle shadows and outlines on the surfaces (tokens on :root) ---------- */
+.rows, .acctcard, .conns, .tablist li, .filecard, .step-row, .confirm, .proposal, .improve-bar, .pickrow, .folderNow, .modeseg { border-color: var(--outline); box-shadow: var(--shade-1); }
+.inputbox { border-color: var(--outline); box-shadow: var(--shade-2); }
+.chip { box-shadow: 0 0 0 1px var(--outline), var(--shade-1); }
