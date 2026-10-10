@@ -104,14 +104,12 @@ for (const b of document.querySelectorAll('.seg button')) {
 $('devPing').addEventListener('click', () => send('devCall', { tool: 'ping' }));
 $('devTabs').addEventListener('click', () => send('devCall', { tool: 'tabs_list' }));
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
-// One button flips Speed and Quality. The + on its left turns Speed Plus (Haiku at max effort) on and off.
+// One button flips Speed and Quality. The + on its left (Speed mode only) turns Speed Plus (Haiku at max effort) on and off.
 function toggleMode() {
   send('setModel', { value: state.chatModel === 'quality' ? 'speed' : 'quality' });
 }
 function togglePlus() {
-  const on = state.chatModel !== 'quality' && !!state.chatPlus;
-  if (!on && state.chatModel === 'quality') send('setModel', { value: 'speed' });
-  send('setPlus', { value: !on });
+  send('setPlus', { value: !state.chatPlus });
 }
 $('modeBtn').addEventListener('click', toggleMode);
 $('plusBtn').addEventListener('click', togglePlus);
@@ -265,13 +263,14 @@ function render(s, log) {
   $('filesToggle').disabled = s.agent === 'stopped';
   $('pendingVal').textContent = String(s.pending || 0);
 
-  // model choice: one button shows Speed or Quality (a click flips it), and the + turns Speed Plus on
+  // model choice: one button shows Speed or Quality (a click flips it), and the + (Speed mode only) turns Speed Plus on
   const quality = s.chatModel === 'quality';
   const plus = !quality && !!s.chatPlus;
   $('modeSeg').dataset.mode = quality ? 'quality' : 'speed';
   $('modeLabel').textContent = quality ? 'Quality' : 'Speed';
   $('modeBtn').setAttribute('aria-label', quality ? 'Quality. Switch to Speed.' : 'Speed. Switch to Quality.');
   $('plusBtn').setAttribute('aria-pressed', String(plus));
+  $('plusBtn').hidden = quality;
   // the line under the outputs: what the next message runs on
   $('modelLine').textContent = (quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort')
     + (s.caveman && s.agent !== 'stopped' && s.signedIn ? ' · caveman' : '');

@@ -63,9 +63,8 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  ok('+ pressed, model line says Haiku max effort', $('plusBtn').getAttribute('aria-pressed')==='true' && $('modelLine').textContent==='Haiku 5.5 · max effort');
  $('plusBtn').click(); ok('+ again turns Speed Plus off', sent.filter(m=>m.type==='setPlus').pop().value===false);
  onMsg({type:'state',state:{...ready,chatModel:'quality',chatPlus:true},log:[]});
- ok('Quality shown, + not pressed', $('modeLabel').textContent==='Quality' && $('modeBtn').getAttribute('aria-label')==='Quality. Switch to Speed.' && $('plusBtn').getAttribute('aria-pressed')==='false');
- $('plusBtn').click(); ok('+ from Quality switches to Speed, then Speed Plus', sent.filter(m=>m.type==='setModel').pop().value==='speed' && sent.filter(m=>m.type==='setPlus').pop().value===true);
- const nFlipS = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click(); ok('Quality click flips to Speed and keeps + on', sent.filter(m=>m.type==='setModel').length===nFlipS+1 && sent.filter(m=>m.type==='setModel').pop().value==='speed' && sent.filter(m=>m.type==='setPlus').pop().value===true);
+ ok('Quality shown, + hidden', $('modeLabel').textContent==='Quality' && $('modeBtn').getAttribute('aria-label')==='Quality. Switch to Speed.' && $('plusBtn').hidden===true);
+  const nFlipS = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click(); ok('Quality click flips to Speed', sent.filter(m=>m.type==='setModel').length===nFlipS+1 && sent.filter(m=>m.type==='setModel').pop().value==='speed'); onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:true},log:[]}); ok('Back in Speed, + shows and stays on', $('plusBtn').hidden===false && $('plusBtn').getAttribute('aria-pressed')==='true');
  // formatting, copy, selection-safe rendering
  $('input').value='fmt'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
  const f2=sent.filter(m=>m.type==='chat').pop();

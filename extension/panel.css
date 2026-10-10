@@ -227,6 +227,7 @@ textarea:focus-visible { outline: none; }
 #plusBtn:hover { color: var(--plus); }
 #plusBtn svg { width: 13px; height: 13px; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 #plusBtn[aria-pressed="true"] { background: var(--plus); color: #fff; box-shadow: none; }
+#plusBtn[hidden] { display: none; }
 #modeBtn { min-width: 84px; padding: 0 14px; background: color-mix(in srgb, var(--accent) 18%, var(--card)); color: color-mix(in srgb, var(--accent) 75%, var(--ink)); }
 #modeBtn:hover { filter: brightness(0.96); }
 .modeseg[data-mode="quality"] #modeBtn { background: color-mix(in srgb, var(--accent) 78%, #000); color: #fff; }
