@@ -7,29 +7,37 @@ Not affiliated with or endorsed by Anthropic or Zen.
 Plan, decisions and TODO: `claude/zen-addon-plan.md` in the Mod Making project.
 Friends: see `START HERE.txt` (it ships in the friends zip).
 
-## Status (v0.5.0)
-- **Chat** with Claude in the panel, streamed, with a chip for each tool it uses and a Cancel link.
-  Follow-ups continue the conversation; `/clear` starts a new one.
+## Status (v0.8.0)
+- **Chat** with Claude in the panel, streamed, with a progress bar and a Cancel link. Follow-ups continue the
+  conversation; `/clear` (or **New chat** in the options menu) starts a new one. Long jobs can run up to an hour.
 - **Speed / Quality** button under the message box: Speed is Haiku 5.5, Quality is Opus 5.5, both on high effort.
-  In Speed, the small **Speed Plus** button switches Haiku 5.5 to max effort and turns the Speed button purple.
-  The line under the message box says what the next message runs on, and each reply shows the model and effort it
-  actually ran with.
-- **Update from Settings**: the Add-on row shows the installed version and the one in your project folder; **update**
-  has the helper rebuild the add-on and hand it to Zen's install prompt. The leftover `.xpi` tab closes on its own.
+  In Speed, the small **Speed Plus** button switches Haiku 5.5 to max effort. Each reply shows the model and effort
+  it ran with.
+- **Add files**: the **+** at the left of the message box attaches files (also paste or drag them in). Word,
+  PowerPoint, Excel and OpenDocument files are turned into text for Claude; PDFs, images and text files are read as
+  they are. The small button beside **+** opens more options: upload, screenshot of this tab, **Caveman mode** (short
+  replies, fewer tokens), Tools and plugins, New chat.
+- **Documents**: Claude makes files you can open and download from the panel. A `.docx` is a real Word document
+  (headings, lists, tables, links, page numbers), a `.xlsx` a real Excel workbook. The file viewer's **Save as** menu
+  also saves Word, PDF, web page or Markdown.
+- **Reading everything**: whole pages as Markdown, PDFs, Google Docs, Slides and Sheets (through their export),
+  Word, PowerPoint and Excel files in the file-tools folder (`read_document`), and the web (search and fetch).
+- **Tools and plugins** (Settings): your Claude Code plugins (synced from claude.ai or installed from a marketplace),
+  claude.ai connectors and MCP servers you add by address or command, each with a switch. **vidIQ** and **Caveman**
+  are on by default; everything else stays off and out of the chat until you switch it on. **Sign in** opens a
+  window for tools that need their own sign-in (vidIQ). Tools that run programs on this PC ask before turning on.
 - **Page tools**: list, open, switch and close tabs; navigate; read the page outline (with element refs) or its text;
-  find, click (by ref, selector, or x and y from a screenshot, with real pointer events), fill, press keys, scroll,
-  wait for something, play/pause/seek video and audio, screenshot.
-- Claude works on the **current tab** (it is told which one with every message) and leaves your other tabs out of it
-  unless you ask about them.
-- **File tools** (Settings, off by default): one folder, Read only (Read, Glob, Grep) or Read and write (adds Edit, Write).
-  Never a shell.
-- **Accounts**: the chat spends the Claude Code account of the add-on's own profile, shown in Settings, with a warning
-  when it differs from the claude.ai account in Zen. On a usage limit the panel offers "Log out and add another account"
-  (also the **switch** link in Settings).
-- **Sign-in is remembered**: after the first Sign in, Zen signs the panel back in on its own at startup by checking
-  the claude.ai session again (only email, name and account id are kept, never cookies). It ends when you sign out
-  in the panel or on claude.ai.
-- **First-run guide** on the empty chat page until the helper, Claude Code and both sign-ins are ready.
+  find, click (by ref, selector, or x and y from a screenshot, with real pointer events), fill, type, hover, press
+  keys, scroll, wait, play/pause/seek video and audio, screenshot.
+- **Debugging pages** (for the Google sign-in bug): `network_log` shows a tab's requests and redirect chain with
+  cookie names and flags (never values; secret-looking query values hidden), `console_log` its console messages.
+  No debug port.
+- Claude works on the **current tab** and leaves your other tabs out of it unless you ask about them.
+- **File tools** (Settings, off by default): one folder, Read only or Read and write. Never a shell.
+- **Accounts**: one Claude Code profile per account, switchable in Settings; on a usage limit the panel offers to
+  switch.
+- **Sign-in is remembered** across Zen restarts (email, name and account id only, never cookies).
+- **Update from Settings**: rebuilds and reinstalls the add-on, or reloads it when Zen is linked to the folder.
 - Test commands that need no Claude: `/tabs`, `/ping`, `/help`.
 
 ## How it fits together
@@ -46,7 +54,11 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 ## Rules (always on)
 - Google sign-in pages are hands-off unless you turn on **Unsafe mode** in Settings (Permissions). It lasts until Stop or a Zen restart. Non-web pages (`about:`, `file:`) are never read or touched.
 - Passwords, 2FA codes and payment details are never typed by Claude, in any mode. Claude fills an email, clicks through to the password step, then waits while you type the password in Zen.
-- Text on web pages is untrusted data, wrapped as such, never instructions.
+- Text on web pages, attached files and other tools' results is untrusted data, wrapped as such, never instructions.
+- **File guard**: browser profiles (Zen first), Windows credential stores, Claude's own sign-ins, key folders
+  (`.ssh`, `.aws`, `.gnupg`...) and secret files (`.env`, private keys, password databases) are denied to every file
+  tool in every chat turn, whatever folder you pick; a folder inside one of them is refused.
+- Plugins and connectors that are switched off never load into the chat, so their skills, agents and hooks can't run.
 - No "ask before doing" step for now. Later, only actions flagged as Important will ask first.
 - **Stop** cuts everything at once: page actions, the running answer and its Claude Code process, the helper,
   any sign-in window, and file tools.
@@ -62,14 +74,21 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `extension/` | The add-on (Manifest V2, persistent background page). |
 | `extension/lib/policy.js` | Fixed rules: blocked pages, sensitive fields. |
 | `extension/lib/state.js` | Session state and action log in `storage.session` (cleared when Zen quits; the sign-in marker lives in `storage.local`). |
-| `extension/lib/tools.js` | The tools Claude uses on Zen; page code runs in the add-on's isolated content-script world. |
-| `extension/background.js` | Sign-in, Stop/Start, helper link, chat relay, account switch, tool router. |
+| `extension/lib/tools.js` | The tools Claude uses on Zen; page code runs in the add-on's isolated content-script world. Google Docs export. |
+| `extension/lib/netlog.js` | `network_log` and `console_log` (metadata only). |
+| `extension/lib/docx.js` | Builds real Word and Excel files (and web pages) from what Claude wrote. |
+| `extension/lib/files.js`, `extension/viewer.*` | Files Claude made, kept in the add-on; the viewer with Save as. |
+| `extension/background.js` | Sign-in, Stop/Start, helper link, chat relay, account switch, tools relay, downloads, tool router. |
 | `extension/panel.*` | Sidebar UI. |
-| `host/claude-in-zen-host.js` | The helper: native messaging, pipe server, Claude Code chat turns, account switch. |
+| `host/claude-in-zen-host.js` | The helper: native messaging, pipe server, Claude Code chat turns, accounts, `read_document`. |
+| `host/lib/chatargs.js` | The chat's system prompt and Claude Code flags. |
+| `host/lib/toolbox.js` | Tools and plugins: lists them, keeps the switches, sign-in windows, add and remove. |
+| `host/lib/guard.js` | The file guard's deny rules and folder checks. |
+| `host/lib/uploads.js`, `host/lib/doctext.js` | Attached files; text out of Word, PowerPoint, Excel and OpenDocument files. |
 | `host/zen-mcp.js`, `host/lib/tools.js` | The Zen tool server (MCP over stdio) and its tool catalog. |
 | `host/install.ps1` | Registers the helper with Zen for this Windows user (no admin). |
 | `zen-profile/` | `user.js` and `userChrome.css` (sidebar on the right, Claude panel about 660 px wide) and `apply.ps1`, which merges them into the Zen profile. |
-| `test/`, `host/test/` | Tests; `Run tests.bat` or `node test/run-all.js` runs them all. |
+| `test/`, `host/test/` | Tests; `Run tests.bat` or `node test/run-all.js` runs them all. `node test/injection-live.js` is the live prompt-injection test (uses your plan, run it by hand). |
 
 | Script | What it does |
 | :- | :- |
@@ -111,4 +130,6 @@ Zen's build does not hard-require signed add-ons (`MOZ_REQUIRE_SIGNING` is `fals
 - Settings → Action log shows every action, chat turn and error. **check** re-reads the Claude Code account.
 - Helper and tool server logs (metadata only, never page content): `%LOCALAPPDATA%\claude-in-zen\logs\`.
 - `about:debugging` → Claude in Zen → **Inspect** → Console: `await cizDebug.call('tabs_list')`, `cizDebug.state()`.
+- Tool switches and the last list of tools: `%LOCALAPPDATA%\claude-in-zen\tools.json`. Each turn's flags for Claude
+  Code (plugins on and off, deny rules): `%LOCALAPPDATA%\claude-in-zen\chat-settings.json`.
 - Zen finds the helper at `HKCU\Software\Mozilla\NativeMessagingHosts\claude_in_zen`.

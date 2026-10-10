@@ -77,7 +77,21 @@ function connect() {
   return l.ready;
 }
 
+// Script mode, for the live safety test (test/injection-live.js) only: answers come from a JSON script instead of Zen,
+// and every call is logged. { log: file, results: { tool: result | [{ match: { arg: value }, result? , error? }] } }
+const SCRIPT = process.env.CLAUDE_IN_ZEN_SCRIPT ? JSON.parse(fs.readFileSync(process.env.CLAUDE_IN_ZEN_SCRIPT, 'utf8')) : null;
+
+function scripted(tool, args) {
+  try { fs.appendFileSync(SCRIPT.log, JSON.stringify({ tool, args }) + '\n'); } catch {}
+  let r = SCRIPT.results[tool];
+  if (Array.isArray(r)) r = r.find(x => !x.match || Object.entries(x.match).every(([k, v]) => String(args[k]) === String(v))) || {};
+  else if (r) r = { result: r };
+  else r = { result: { done: true } };
+  return r.error ? { ok: false, error: r.error } : { ok: true, result: r.result === undefined ? { done: true } : r.result };
+}
+
 async function callZen(tool, args, timeoutMs) {
+  if (SCRIPT) return scripted(tool, args);
   await connect();
   const l = link;
   if (!l) throw new Error(NOT_REACHABLE);

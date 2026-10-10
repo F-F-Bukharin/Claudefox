@@ -35,6 +35,13 @@ You need
 Using it
   - Type normally to talk to Claude. Speed (Haiku) is quick and light on usage, Quality
     (Opus) is slower and better. Click the button under the message box to switch.
+  - The + at the left of the message box adds files (Word, PDF, slides, sheets, images...).
+    You can also paste or drop them in. The small button next to it has more options:
+    a screenshot of the tab, Caveman mode (short replies, fewer tokens), tools, new chat.
+  - Ask for a document and Claude makes a real Word file (.docx); open it in the panel
+    and use Download, or Save as for PDF, a web page or Markdown.
+  - Settings -> Tools and plugins lists your Claude plugins and connectors. Switch on the
+    ones you want in the chat; "sign in" connects tools that need their own account.
   - Stop (top right) cuts everything off at once. Start brings it back.
   - File tools (Settings) are off by default. Turn them on for one folder, read only or read
     and write. Read and write can change and delete files there with no undo.
