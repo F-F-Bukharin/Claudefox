@@ -256,6 +256,8 @@ textarea:focus-visible { outline: none; }
 /* the starter chips sit above the text bar and show only in an empty chat */
 .starters { margin: 8px 0 0; padding: 0 4px; }
 .chat:not(.is-empty) .starters { display: none; }
+/* the "/" starter chips are smaller and in the mono face; the other commands are in the "/" menu */
+.starters .chip[data-fill^="/"] { font: 11.5px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; padding: 3px 8px; }
 
 /* file tools */
 .files { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 8px; }
@@ -475,6 +477,12 @@ textarea:focus-visible { outline: none; }
 .menu [aria-checked="true"] .mcheck { background: var(--plus); }
 .menu [aria-checked="true"] .mcheck::after { left: 14px; }
 .menu .sep { height: 1px; background: var(--line); margin: 4px 6px; }
+/* the "/" menu: the commands, narrowed as you type; the highlighted one runs on Enter */
+.slash-menu { min-width: 260px; max-height: 260px; overflow-y: auto; }
+.slash-menu button { padding: 6px 9px; }
+.slash-menu .mcmd { flex: none; min-width: 88px; font: 650 12px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--ink); }
+.slash-menu .mtext { flex: 1; font-size: 12.5px; color: var(--muted); }
+.slash-menu button[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 @keyframes menu-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
 
 /* files attached to a sent message */

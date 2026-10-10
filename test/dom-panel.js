@@ -27,7 +27,21 @@ const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort
  onMsg({type:'state',state:ready,log:[]});
  ok('guide hidden when ready', $('setup').hidden && $('emptyTitle').textContent==='What should I do in Zen?');
  ok('empty chat uses the centred layout', $('page-chat').classList.contains('is-empty'));
- ok('starter chips above the text bar: summarize, tabs, ping, help', [...w.document.querySelectorAll('.starters .chip')].map(b=>b.dataset.fill).join('|') === 'Summarize this page|/tabs|/ping|/help' && $('composer').parentElement.firstElementChild.classList.contains('starters'));
+ ok('starter chips above the text bar: summarize, tabs, help', [...w.document.querySelectorAll('.starters .chip')].map(b=>b.dataset.fill).join('|') === 'Summarize this page|/tabs|/help' && $('composer').parentElement.firstElementChild.classList.contains('starters'));
+ // the "/" menu: typing / lists the commands, narrows as you type, Enter runs the highlighted one, Escape closes it
+ const slashTyped=v=>{ $('input').value=v; $('input').dispatchEvent(new w.Event('input')); };
+ const slashKey=k=>$('input').dispatchEvent(new w.KeyboardEvent('keydown',{key:k,bubbles:true}));
+ const slashNames=()=>[...$('slashMenu').querySelectorAll('button')].map(b=>b.dataset.cmd);
+ slashTyped('/');
+ ok('slash menu: / lists the nine commands, help first', !$('slashMenu').hidden && slashNames().length===9 && slashNames()[0]==='help', slashNames().join(','));
+ slashTyped('/ta');
+ ok('slash menu: /ta narrows to tabs', slashNames().join(',')==='tabs', slashNames().join(','));
+ slashTyped('/'); slashKey('ArrowDown'); slashKey('Enter');
+ ok('slash menu: Enter runs the highlighted command (tabs)', [...$('messages').querySelectorAll('.msg.user .body')].pop().textContent.trim()==='/tabs' && $('input').value==='' && $('slashMenu').hidden);
+ slashTyped('/'); slashKey('Escape');
+ ok('slash menu: Escape closes it and keeps the text', $('slashMenu').hidden && $('input').value==='/');
+ slashTyped('/help'); slashKey('Enter');
+ ok('/help lists every command', /\/screenshot: Screenshot of this tab/.test($('messages').textContent) && /\/improve: Improve Claude in Zen/.test($('messages').textContent));
  ok('claude row ok, no mismatch', $('claudeVal').textContent==='signed in · personalworksacc@gmail.com' && /ok/.test($('claudeDot').className));
  onMsg({type:'state',state:{...ready,claude:{...ready.claude,email:'felpecabezaz@gmail.com'}},log:[]});
  ok('mismatch flagged', /not personalworksacc/.test($('claudeVal').textContent) && /warn/.test($('claudeDot').className));

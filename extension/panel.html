@@ -51,8 +51,7 @@
     <div class="composer">
       <div class="chips starters">
         <button class="chip" data-fill="Summarize this page">Summarize this page</button>
-        <button class="chip" data-fill="/tabs">/tabs: list my tabs</button>
-        <button class="chip" data-fill="/ping">/ping</button>
+        <button class="chip" data-fill="/tabs">/tabs</button>
         <button class="chip" data-fill="/help">/help</button>
       </div>
       <form id="composer" class="inputbox">
@@ -94,6 +93,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           <span class="mtext">New chat</span></button>
       </div>
+      <div id="slashMenu" class="menu slash-menu" role="listbox" aria-label="Commands" hidden></div>
       <div class="composer-row">
         <div class="context">
           <span class="ctx-label">Current tab</span>

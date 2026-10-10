@@ -666,7 +666,8 @@ refreshContext();
 // ------------------------------------------------------------ chat
 
 const input = $('input');
-input.addEventListener('input', autoGrow);
+input.addEventListener('input', () => { autoGrow(); slashIndex = 0; renderSlash(); });
+input.addEventListener('blur', closeSlash);
 
 // ------------------------------------------------------------ attachments (+ button, paste, drop, tab screenshot)
 
@@ -765,19 +766,30 @@ menu.addEventListener('keydown', e => {
   else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
 });
+// The actions of the + menu. The "/" commands with an act run the same ones (see COMMANDS).
+function doAct(act) {
+  if (act === 'upload') $('fileInput').click();
+  else if (act === 'snap') send('snapTab', { req: String(Date.now()) });
+  else if (act === 'caveman') send('setCaveman', { value: !state.caveman });
+  else if (act === 'tools') { showPage('settings'); setSection('toolsHead', 'toolsBody', true); setTimeout(() => { const c = $('toolsCard'); if (c.scrollIntoView) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); }
+  else if (act === 'improve') startImprove();
+  else if (act === 'new') { leaveImprove(); chat = []; saveChat(); send('newChat'); renderChat(); input.focus(); }
+}
 for (const b of menu.querySelectorAll('button')) {
-  b.addEventListener('click', () => {
-    const act = b.dataset.act;
-    openMenu(false);
-    if (act === 'upload') $('fileInput').click();
-    else if (act === 'snap') send('snapTab', { req: String(Date.now()) });
-    else if (act === 'caveman') send('setCaveman', { value: !state.caveman });
-    else if (act === 'tools') { showPage('settings'); setSection('toolsHead', 'toolsBody', true); setTimeout(() => { const c = $('toolsCard'); if (c.scrollIntoView) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); }
-    else if (act === 'improve') startImprove();
-    else if (act === 'new') { leaveImprove(); chat = []; saveChat(); send('newChat'); renderChat(); input.focus(); }
-  });
+  b.addEventListener('click', () => { openMenu(false); doAct(b.dataset.act); });
 }
 input.addEventListener('keydown', e => {
+  const list = slashMenu.hidden ? null : slashMatches();
+  if (list && list.length) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      slashIndex = (slashIndex + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length;
+      renderSlash();
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); closeSlash(); return; }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); runCommand(list[slashIndex].cmd); return; }
+  }
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
 });
 $('composer').addEventListener('submit', e => { e.preventDefault(); submit(); });
@@ -857,18 +869,77 @@ async function submit() {
   send('chat', Object.assign({ id, text, attachments: payload }, extra));
 }
 
+// The slash commands. The "/" menu lists them all, and the starter chips show only the essentials. A command with an act
+// runs the same action as the + menu; the rest are the test commands (no Claude needed).
+const COMMANDS = [
+  { cmd: 'help', text: 'What the commands do' },
+  { cmd: 'tabs', text: 'List my open tabs' },
+  { cmd: 'screenshot', act: 'snap', text: 'Screenshot of this tab' },
+  { cmd: 'upload', act: 'upload', text: 'Upload files' },
+  { cmd: 'caveman', act: 'caveman', text: 'Caveman mode: short replies' },
+  { cmd: 'tools', act: 'tools', text: 'Tools and plugins' },
+  { cmd: 'improve', act: 'improve', text: 'Improve Claude in Zen' },
+  { cmd: 'clear', text: 'Clear this chat' },
+  { cmd: 'ping', text: 'Check the add-on answers' },
+];
+function helpText() {
+  return 'Type normally to talk to Claude. It can read and act on your tabs.\n\n'
+    + 'Commands (type / to see them; none needs Claude):\n'
+    + COMMANDS.map(c => `/${c.cmd}: ${c.text}`).join('\n');
+}
 async function runSlash(text) {
   const cmd = text.slice(1).split(/\s+/)[0].toLowerCase();
-  if (cmd === 'help') {
-    return addMsg({ role: 'assistant', text: 'Type normally to talk to Claude. It can read and act on your tabs.\n\nTest commands (no Claude needed):\n/tabs: list your open tabs\n/ping: check the add-on answers\n/clear: clear this chat and start a new conversation' });
-  }
+  const known = COMMANDS.find(c => c.cmd === cmd);
+  if (!known) return addMsg({ role: 'error', text: `Unknown command /${cmd}. Try /help.` });
+  if (known.act) return doAct(known.act);
+  if (cmd === 'help') return addMsg({ role: 'assistant', text: helpText() });
   if (cmd === 'clear') { chat = []; saveChat(); send('newChat'); return renderChat(); }
   const tool = { tabs: 'tabs_list', ping: 'ping' }[cmd];
-  if (!tool) return addMsg({ role: 'error', text: `Unknown command /${cmd}. Try /help.` });
   const out = await call(tool);
   if (!out.ok) return addMsg({ role: 'error', text: out.error });
   if (tool === 'ping') return addMsg({ role: 'assistant', text: `Pong. Add-on v${out.result.version} is answering.` });
   addMsg({ role: 'assistant', text: `You have ${out.result.length} tab${out.result.length === 1 ? '' : 's'} open:`, tabs: out.result.slice(0, 50) });
+}
+
+// The "/" menu: it opens when the text bar holds "/" and letters, and narrows as you type.
+const slashMenu = $('slashMenu');
+let slashIndex = 0;
+function slashMatches() {
+  const v = input.value;
+  if (!v.startsWith('/') || /\s/.test(v) || attachments.length) return null;
+  const q = v.slice(1).toLowerCase();
+  return COMMANDS.filter(c => c.cmd.startsWith(q));
+}
+function renderSlash() {
+  const list = slashMatches();
+  if (!list || !list.length) { slashMenu.hidden = true; return; }
+  slashIndex = Math.min(slashIndex, list.length - 1);
+  slashMenu.replaceChildren(...list.map((c, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', String(i === slashIndex));
+    b.dataset.cmd = c.cmd;
+    const k = document.createElement('span');
+    k.className = 'mcmd';
+    k.textContent = '/' + c.cmd;
+    const t = document.createElement('span');
+    t.className = 'mtext';
+    t.textContent = c.text;
+    b.append(k, t);
+    b.addEventListener('mousedown', e => e.preventDefault());   // the text bar keeps the focus
+    b.addEventListener('click', () => runCommand(c.cmd));
+    return b;
+  }));
+  slashMenu.hidden = false;
+}
+function closeSlash() { slashMenu.hidden = true; }
+// A command picked from the menu is sent the way a starter chip sends its text.
+function runCommand(cmd) {
+  closeSlash();
+  input.value = '/' + cmd;
+  autoGrow();
+  submit();
 }
 
 // ------------------------------------------------------------ chat stream
