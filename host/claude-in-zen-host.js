@@ -126,6 +126,13 @@ function onAddon(msg) {
       return;
     }
 
+    case 'local_grant_result':   // the user's answer about a folder (lib/localpages.js)
+    case 'local_tab_result': {   // the tab that shows a local page
+      const done = addonAsks.get(String(msg.id));
+      if (done) done(msg);
+      return;
+    }
+
     case 'claude_status':
       sendStatus();
       return;
@@ -337,6 +344,22 @@ function callAddon(tool, args, extra, ms) {
     if (!sendAddon(Object.assign({ type: 'call', id: hid, tool, args }, extra || {}))) {
       clearTimeout(timer);
       pending.delete(hid);
+      resolve({ ok: false, error: 'Could not reach the add-on.' });
+    }
+  });
+}
+
+// A question the helper asks the add-on (local_grant, local_tab), answered by a message of type <type>_result with the
+// same id. Resolves with that message, or { ok: false, error } when there is no answer in time.
+const addonAsks = new Map();   // id -> done(msg)
+function askAddon(type, payload, ms) {
+  return new Promise(resolve => {
+    const id = `q${nextId++}`;
+    const timer = setTimeout(() => { addonAsks.delete(id); resolve({ ok: false, error: `Zen did not answer within ${Math.round(ms / 1000)} s.` }); }, ms);
+    addonAsks.set(id, msg => { clearTimeout(timer); addonAsks.delete(id); resolve(msg); });
+    if (!sendAddon(Object.assign({}, payload, { type, id }))) {
+      clearTimeout(timer);
+      addonAsks.delete(id);
       resolve({ ok: false, error: 'Could not reach the add-on.' });
     }
   });
@@ -687,9 +710,14 @@ function cancelChat(id, reason) {
 // ------------------------------------------------------------------ tools the helper answers itself
 // read_document: the text of a Word, PowerPoint, Excel or OpenDocument file in the file-tools folder or among the
 // files attached to the chat, with the same limits as the file tools (never a protected place).
+const local = require('./lib/localpages').createLocalPages({ askAddon });
 const HELPER_TOOLS = {
   army_start: (args, client) => army.start(args, client),
   army_wait: (args, client) => army.wait(args, client),
+  // Local pages (lib/localpages.js): only inside a folder the user allows in the panel.
+  local_page_open: args => local.open(args),
+  local_files: args => local.list(args),
+  local_file_read: args => local.read(args),
   read_document(args) {
     const run = chat;
     const raw = String((args && args.path) || '').trim();

@@ -96,18 +96,28 @@ function folderProblem(folder) {
   return '';
 }
 
+// True when a file's name is one of SECRET_FILES (keys, passwords, sessions).
+function secretFile(file) {
+  const base = path.basename(file);
+  return SECRET_FILES.some(pat => new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', win() ? 'i' : '').test(base));
+}
+
 // True when a path may be read by Claude in Zen's own tools (read_document, attachments): inside one of the allowed
 // folders and outside every protected place and secret file.
 function readable(file, allowedFolders) {
   const f = real(file);
   if (!allowedFolders.some(d => d && within(f, real(d)))) return false;
   for (const place of protectedPlaces()) if (within(f, place) || within(f, real(place))) return false;
-  const base = path.basename(f);
-  for (const pat of SECRET_FILES) {
-    const re = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', win() ? 'i' : '');
-    if (re.test(base)) return false;
-  }
-  return true;
+  return !secretFile(f);
 }
 
-module.exports = { denyRules, folderProblem, readable, protectedPlaces, posix, SECRET_FILES };
+// Local pages (lib/localpages.js): why Claude may not open, list or read this path (already resolved to its real
+// spelling), or '' when it may once the user allows its folder. Same places as the file tools.
+function localProblem(realPath, isDir) {
+  const why = folderProblem(isDir ? realPath : path.dirname(realPath));
+  if (why) return why;
+  if (!isDir && secretFile(realPath)) return 'it is a file that holds keys, passwords or sign-ins, which Claude never opens';
+  return '';
+}
+
+module.exports = { denyRules, folderProblem, readable, localProblem, secretFile, within, protectedPlaces, posix, SECRET_FILES };

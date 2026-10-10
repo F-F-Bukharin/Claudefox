@@ -141,7 +141,7 @@ function format(tool, res) {
 
   if (PAGE_CONTENT.has(tool) && r && typeof r === 'object') {
     const more = r.next_start != null
-      ? `This is one part of a longer ${tool === 'read_document' ? 'file' : 'page'}: call ${tool} again with start_at ${r.next_start} for the next part.`
+      ? `This is one part of a longer ${tool === 'read_document' || tool === 'local_file_read' ? 'file' : 'page'}: call ${tool} again with start_at ${r.next_start} for the next part.`
       : r.truncated && '(truncated)';
     const head = [r.title && `Title: ${r.title}`, r.url && `URL: ${r.url}`, more].filter(Boolean).join('\n');
     const body = typeof r.text === 'string' ? r.text : JSON.stringify(r.matches || r, null, 2);

@@ -208,6 +208,38 @@ const TOOLS = [
     readOnly: true,
     timeoutMs: 60000,
   },
+  // Local pages and files (host/lib/localpages.js): answered by the helper. The user allows the folder first, in the
+  // panel; the first call in a new folder waits for that answer (up to two minutes).
+  {
+    name: 'local_page_open',
+    title: 'Open local page',
+    description: 'Open a page or file from this computer (an HTML game, a saved page, a PDF, an image) in a new Zen tab, in front, so you can see and use it with screenshot, get_page_text, find, click and press_key. Give its full path or file: URL. The first time in a folder, the user is asked to allow that folder; then the whole folder is open to you. tab_open and navigate cannot open file: pages.',
+    inputSchema: obj({
+      path: { type: 'string', description: 'Full path, like C:\\Users\\you\\Downloads\\game\\index.html, or a file: URL.' },
+    }, ['path']),
+    timeoutMs: 180000,
+  },
+  {
+    name: 'local_files',
+    title: 'List local folder',
+    description: 'What is in a folder on this computer: subfolders (ending in /) and files with their sizes. The first time in a folder, the user is asked to allow it.' + UNTRUSTED.replace('Page text', 'File names'),
+    inputSchema: obj({
+      path: { type: 'string', description: 'Full path of the folder, like C:\\Users\\you\\Downloads.' },
+    }, ['path']),
+    readOnly: true,
+    timeoutMs: 180000,
+  },
+  {
+    name: 'local_file_read',
+    title: 'Read local file',
+    description: 'The text of a file on this computer: HTML, scripts, CSS, text, JSON (Word, PowerPoint and Excel files come as Markdown). Use it to read a local game\'s code. Long files come in parts: pass start_at = next_start. The first time in a folder, the user is asked to allow it.' + UNTRUSTED.replace('Page text', 'File text'),
+    inputSchema: obj({
+      path: { type: 'string', description: 'Full path of the file, or its file: URL.' },
+      start_at: { type: 'integer', description: 'Character offset to continue from (next_start of the previous part).' },
+    }, ['path']),
+    readOnly: true,
+    timeoutMs: 180000,
+  },
   {
     name: 'network_log',
     title: 'Network log',
@@ -277,6 +309,7 @@ const TOOLS = [
 
 // Tools whose results carry page content, which the tool server labels as untrusted.
 // army_wait carries the workers' reports, which come from web pages.
-const PAGE_CONTENT = new Set(['army_wait', 'read_page', 'get_page_text', 'find', 'analyze_page', 'get_selection', 'read_document', 'network_log', 'console_log']);
+// local_files and local_file_read carry file names and file text from this computer.
+const PAGE_CONTENT = new Set(['army_wait', 'read_page', 'get_page_text', 'find', 'analyze_page', 'get_selection', 'read_document', 'local_files', 'local_file_read', 'network_log', 'console_log']);
 
 module.exports = { TOOLS, PAGE_CONTENT };
