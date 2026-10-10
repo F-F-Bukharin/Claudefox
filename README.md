@@ -39,6 +39,17 @@ Friends: see `START HERE.txt` (it ships in the friends zip).
   cookie names and flags (never values; secret-looking query values hidden), `console_log` its console messages.
   No debug port.
 - Claude works on the **current tab** and leaves your other tabs out of it unless you ask about them.
+- **Army** (Quality only): the octopus takes the **+**'s place and opens a card with an On/Off switch. With it on,
+  Opus 5.5 at max effort leads and may send up to five Haiku 5.5 workers, each in its own background tabs, for jobs
+  that need several pages at once. They read, click and type there with your logins; your tab stays in front.
+  Limits: 2 runs a message, 6 page loads a worker and 15 for the whole army in one message, 4 tabs a worker, 3 minutes
+  a worker, 6 a run. The card counts today's runs: 5 a day is the recommended most, and past that it warns (it never
+  blocks). The reply shows each worker's trail; **Show** opens a worker's tab. The switch is remembered.
+- **Local pages and files**: Claude can open a page or file from this PC in a tab (`local_page_open`, e.g. a
+  downloaded HTML game, then screenshot, click and keys), list a folder (`local_files`) and read a file's text
+  (`local_file_read`). The first time in a folder the panel asks **Allow this folder** or **Deny**; allowed folders are
+  listed in Profile (Permissions) with **Remove**. Zen also needs about:addons → Claude in Zen → Permissions and data →
+  **Access local files on your computer** turned on (off by default since Firefox 153).
 - **File tools** (Profile, off by default): one folder, Read only or Read and write. Never a shell.
 - **Accounts**: one Claude Code profile per account, switchable in Profile; on a usage limit the panel offers to
   switch.
@@ -59,7 +70,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 ```
 
 ## Rules (always on)
-- Google sign-in pages are hands-off unless you turn on **Unsafe mode** in Profile (Permissions). It lasts until Stop or a Zen restart. Non-web pages (`about:`, `file:`) are never read or touched.
+- Google sign-in pages are hands-off unless you turn on **Unsafe mode** in Profile (Permissions). It lasts until Stop or a Zen restart. `about:` pages can be seen in screenshots but never read or touched (the saved-password pages not even seen). `file:` pages only inside folders you allowed, never by army workers.
 - Passwords, 2FA codes and payment details are never typed by Claude, in any mode. Claude fills an email, clicks through to the password step, then waits while you type the password in Zen.
 - Text on web pages, attached files and other tools' results is untrusted data, wrapped as such, never instructions.
 - **File guard**: browser profiles (Zen first), Windows credential stores, Claude's own sign-ins, key folders
@@ -67,8 +78,11 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
   tool in every chat turn, whatever folder you pick; a folder inside one of them is refused.
 - Plugins and connectors that are switched off never load into the chat, so their skills, agents and hooks can't run.
 - No "ask before doing" step for now. Later, only actions flagged as Important will ask first.
-- **Stop** cuts everything at once: page actions, the running answer and its Claude Code process, the helper,
-  any sign-in window, and file tools.
+- **Army workers** work only in their own background tabs and on web pages: they can't switch tabs, list tabs, use
+  files, local pages or a shell, and Google sign-in is hands-off for them even in Unsafe mode. They run with every
+  plugin and connector off. Their page text is untrusted data for the lead too.
+- **Stop** cuts everything at once: page actions, the running answer and its Claude Code process, every army worker
+  and its tabs, any open folder question (answered no), the helper, any sign-in window, and file tools.
 - API-key and third-party-provider variables are stripped, so usage always runs on the signed-in plan.
 
 ## Branches and commits
