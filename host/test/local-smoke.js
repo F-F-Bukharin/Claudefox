@@ -184,6 +184,20 @@ function client() {
     r = await c.call('local_file_read', { path: game });
     check('local_file_read on a folder points to local_files', !r.ok && /is a folder\. Use local_files/.test(r.error), r.error);
 
+    // A FIFO (or, on Windows, a device name like CON) is not a regular file: refused at once, never read, so it can't
+    // block the helper. (Old code: the read blocks until something writes to the pipe, which the test then does.)
+    const fifoTxt = path.join(game, 'pipe.txt'), fifoHtml = path.join(game, 'pipe.html');
+    let fifos = false;
+    try { require('child_process').execFileSync('mkfifo', [fifoTxt, fifoHtml]); fifos = true; } catch {}
+    if (fifos) {
+      const t0 = Date.now();
+      r = await Promise.race([c.call('local_file_read', { path: fifoTxt }), sleep(3000).then(() => null)]);
+      if (!r) { fs.writeFileSync(fifoTxt, 'x'); r = { ok: false, error: 'the helper blocked on the FIFO' }; }
+      check('local_file_read refuses a FIFO at once instead of blocking the helper', !r.ok && /is not a regular file/.test(r.error) && Date.now() - t0 < 3000, r.error);
+      r = await Promise.race([c.call('local_page_open', { path: fifoHtml }), sleep(3000).then(() => null)]);
+      check('local_page_open refuses a FIFO before anyone is asked', r && !r.ok && /is not a regular file/.test(r.error), r && r.error);
+    }
+
     // The add-on asks for a file: tab outside the allowed folders (local_ask), and Profile's Remove.
     const levels = path.join(game, 'levels');
     toHelper({ type: 'local_ask', id: 'a1', folder: levels });

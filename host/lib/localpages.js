@@ -60,12 +60,14 @@ function realOf(raw) {
   try {
     const real = fs.realpathSync.native(asked);
     const st = fs.statSync(real);
-    return { asked, real, dir: st.isDirectory(), size: st.size };
+    return { asked, real, dir: st.isDirectory(), file: st.isFile(), size: st.size };
   } catch (e) {
     throw new Error(e && e.code === 'ENOENT' ? `There is nothing at ${asked}.` : `Could not open ${asked} (${(e && e.code) || e.message}).`);
   }
 }
 
+// A device, pipe or socket (a FIFO, or on Windows a name like CON): reading it could block the helper for good.
+const NOT_A_FILE = p => `${p} is not a regular file (a device, pipe or socket), so it is not opened.`;
 const sizeText = n => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 // The allowed folders, kept in a file of the helper's own (a protected place for every file tool).
@@ -120,6 +122,7 @@ function createLocalPages(deps) {
     const f = realOf(raw);
     if (kind === 'dir' && !f.dir) throw new Error(`${f.real} is a file. Use local_file_read to read it or local_page_open to open it.`);
     if (kind === 'file' && f.dir) throw new Error(`${f.real} is a folder. Use local_files to see what is in it.`);
+    if (!f.dir && !f.file) throw new Error(NOT_A_FILE(f.real));
     const why = guard.localProblem(f.real, f.dir);
     if (why) throw new Error(`Not allowed: ${f.real}: ${why}.`);
     f.folder = await askFolder(f.dir ? f.real : path.dirname(f.real));
@@ -142,6 +145,7 @@ function createLocalPages(deps) {
     const first = realOf(raw);   // checked before the user is asked, so nothing refused here ever asks
     const why = guard.localProblem(first.real, first.dir);
     if (why) throw new Error(`Not allowed: ${first.real}: ${why}.`);
+    if (!first.dir && !first.file) throw new Error(NOT_A_FILE(first.real));
     if (!first.dir && !SHOWN.test(first.real)) {
       throw new Error(`local_page_open shows web pages, text, PDFs, images, audio and video, not ${path.extname(first.real) || 'files without an extension'}. Use local_file_read for the text of other files.`);
     }

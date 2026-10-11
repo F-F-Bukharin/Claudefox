@@ -164,7 +164,14 @@ function createArmy(deps) {
       if (!line.trim()) return;
       let ev;
       try { ev = JSON.parse(line); } catch { return; }
-      if (ev && ev.type === 'result') result = ev;
+      if (!ev || ev.type !== 'result') return;
+      result = ev;
+      // The report is in: end the worker now. One whose process lingers after it (a slow shutdown, a stuck tool
+      // server) is then done with its report, instead of running into the hard time and losing it.
+      if (!ev.is_error && ev.subtype === 'success') {
+        w.report = String(ev.result || '').slice(0, 4000);
+        endWorker(w, 'done');
+      }
     };
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', d => {

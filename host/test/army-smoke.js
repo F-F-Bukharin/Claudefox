@@ -75,6 +75,11 @@ function fakeClaude(C) {
     const fill = a => JSON.parse(JSON.stringify(a || {}).replace(/"\$run"/g, JSON.stringify(run)).replace(/"\$newtab"/g, String(newTab)));
     for (const st of steps) {
       if (st.sleep) await new Promise(r => setTimeout(r, st.sleep));
+      else if (st.lingerReport) {   // the report, then the process stays (a slow shutdown)
+        out({ type: 'system', subtype: 'init', session_id: 'linger' });
+        out({ type: 'result', subtype: 'success', is_error: false, result: st.lingerReport, session_id: 'linger' });
+        await new Promise(r => setTimeout(r, 60000));
+      }
       else if (st.child) {
         const ch = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
         rec.childPid = ch.pid;
@@ -382,10 +387,12 @@ async function timeoutChecks() {
     script('hang', [{ sleep: 60000 }]);
     script('lim', [{ error: 'Claude AI usage limit reached|1760000000' }]);
     script('crash', [{ exit: 3, stderr: 'first line\nboom happened' }]);
+    script('linger', [{ lingerReport: 'Linger report: 42.' }]);
     script('b1', [{ tool: 'army_start', args: { tasks: [
       { goal: 'SCRIPT:hang forever', start_url: 'https://example.com/h' },
       { goal: 'SCRIPT:lim hit the limit', start_url: 'https://example.com/l' },
       { goal: 'SCRIPT:crash and burn', start_url: 'https://example.com/c' },
+      { goal: 'SCRIPT:linger report then stay', start_url: 'https://example.com/g' },
     ] } }, { tool: 'army_wait', args: { run_id: '$run', seconds: 20 }, untilDone: true }]);
     h.send({ type: 'chat', id: 'b1', text: 'LEAD:b1', model: 'army' });
     await h.next(m => m.type === 'chat_done' && m.id === 'b1', 30000);
@@ -397,6 +404,10 @@ async function timeoutChecks() {
       && h.ends('r1').some(m => m.worker === 'w1') && hang && !alive(hang.pid), JSON.stringify(by('w1')));
     check('a usage limit fails the worker with the limit message', by('w2').state === 'failed' && by('w2').error === 'This account hit its usage limit.', JSON.stringify(by('w2')));
     check('an exit without a result fails with the last stderr line', by('w3').state === 'failed' && by('w3').error === 'boom happened', JSON.stringify(by('w3')));
+    const linger = workersOf(/SCRIPT:linger/)[0];
+    const waitText = (lead('b1').steps.filter(x => x.tool === 'army_wait').map(x => x.text).join('\n'));
+    check('a worker that reports and then lingers is done with its report, and its process is ended', by('w4').state === 'done' && by('w4').ms < 2000
+      && /Linger report: 42\./.test(waitText) && h.ends('r1').some(m => m.worker === 'w4') && linger && !alive(linger.pid), JSON.stringify(by('w4')));
   } finally {
     try { h.proc.kill(); } catch {}
   }
