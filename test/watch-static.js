@@ -34,5 +34,11 @@ for (const token of ['createWatchGate', "case 'watch_load'", "case 'watch_set_on
 }
 check('paths.js defines WATCH_ON_LOAD', fs.readFileSync(path.join(ROOT, 'host', 'lib', 'paths.js'), 'utf8').includes('WATCH_ON_LOAD'));
 
+// section version (Task 11): the add-on, the host and the tool server all say 0.11.0
+const MANIFEST = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension', 'manifest.json'), 'utf8'));
+check('the manifest version is 0.11.0', MANIFEST.version === '0.11.0');
+check('the host says VERSION 0.11.0', /const VERSION = '0\.11\.0';/.test(HOST));
+check('the tool server says VERSION 0.11.0', /const VERSION = '0\.11\.0';/.test(fs.readFileSync(path.join(ROOT, 'host', 'zen-mcp.js'), 'utf8')));
+
 console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);
 process.exit(failed ? 1 : 0);
