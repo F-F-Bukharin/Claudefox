@@ -18,7 +18,7 @@ if ($signed) {
   Copy-Item (Join-Path $root 'build\claude-in-zen.xpi') (Join-Path $stage 'claude-in-zen.xpi')
   Write-Host "No signed build for v$v in build\signed: the zip has an UNSIGNED add-on, so friends need xpinstall.signatures.required = false (see START HERE.txt)." -ForegroundColor Yellow
 }
-foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1', 'pick-folder.ps1') { Copy-Item (Join-Path $root "host\$f") (Join-Path $stage "host\$f") }
+foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1') { Copy-Item (Join-Path $root "host\$f") (Join-Path $stage "host\$f") }
 Copy-Item (Join-Path $root 'host\lib\*.js') (Join-Path $stage 'host\lib')
 Copy-Item (Join-Path $root 'zen-profile\*') (Join-Path $stage 'zen-profile')
 foreach ($f in 'Set up Claude in Zen.bat', 'START HERE.txt') { Copy-Item (Join-Path $root $f) (Join-Path $stage $f) }

@@ -114,7 +114,8 @@ function firstLine(s) {
     .filter(l => l && !/^\[mcp-sdk\]|^At line|^\+ |CategoryInfo|FullyQualifiedErrorId/.test(l))[0] || '';
 }
 
-function createToolbox({ findClaude, claudeEnv, dirOf, emit, file }) {
+// confirm({ title, text, yes, no }) -> Promise<{ ok, error }>: the confirm window (lib/confirm.js), for what runs programs.
+function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
   const FILE = file || path.join(P.BASE, 'tools.json');
   let st = load();
   let busy = null;            // 'checking' | 'adding' | 'removing' | 'installing' while a slow command runs
@@ -520,6 +521,14 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file }) {
     busy = 'adding';
     push(key);
     try {
+      // A tool that runs a program on this PC is the user's call, made in the confirm window, which nothing in the
+      // add-on or the panel (a mod included) can answer for them.
+      if (local) {
+        const ok = confirm ? await confirm({ title: 'Claude in Zen: add a tool that runs a program?',
+          text: `Add the tool "${name}"? Every chat with it switched on runs this on your PC:\n\n${target}\n\nOnly add tools you trust.`,
+          yes: 'Add tool', no: 'Cancel' }) : { ok: false, error: 'There is no confirm window.' };
+        if (!ok.ok) return emitResult('add', false, `Not added: ${ok.error}`);
+      }
       const r = await run(key, args, 90000);
       if (!r.ok) return emitResult('add', false, `Claude Code did not add it: ${firstLine(r.err) || firstLine(r.out) || 'unknown error'}`);
       if (spec.on && !st.on.servers.includes(name)) { st.on.servers.push(name); save(); }
@@ -562,6 +571,11 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file }) {
     busy = 'installing';
     push(key);
     try {
+      // Plugins can run programs on this PC (hooks and tool servers): the user says yes in the confirm window.
+      const ok = confirm ? await confirm({ title: 'Claude in Zen: install a plugin?',
+        text: `Install the plugin "${s}"${src ? ` from ${src}` : ''}?\n\nPlugins can run programs on your PC (hooks and tool servers). Only install plugins you trust.`,
+        yes: 'Install', no: 'Cancel' }) : { ok: false, error: 'There is no confirm window.' };
+      if (!ok.ok) return emitResult('install', false, `Not installed: ${ok.error}`);
       const r = await run(key, args, 180000);
       let res = null;
       for (const line of r.out.split(/\r?\n/).reverse()) { try { res = JSON.parse(line); break; } catch {} }

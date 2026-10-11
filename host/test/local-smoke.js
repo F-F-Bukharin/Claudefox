@@ -1,7 +1,8 @@
 'use strict';
 // Local pages in the helper (lib/localpages.js): local_page_open, local_files and local_file_read through the pipe,
-// with a fake zen.exe and this file playing the add-on (it answers local_grant and local_tab like extension/lib/local.js).
-// Real paths are what the user is asked about; protected places and secret files are refused before anyone is asked.
+// with a fake zen.exe, a fake confirm window (the user's "Allow this folder" or "Deny") and this file playing the add-on
+// (it answers local_tab and records the allowed-folder list the helper sends). Real paths are what the user is asked
+// about; protected places and secret files are refused before anyone is asked.
 // POSIX only (symlinks, and the fake zen is a script with a shebang).   node host/test/local-smoke.js
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -39,6 +40,13 @@ const zen = path.join(tmp, 'zen');
 fs.writeFileSync(zen, `#!${process.execPath}\nrequire('fs').appendFileSync(${JSON.stringify(zenLog)}, JSON.stringify({ argv: process.argv.slice(2), moz: Object.keys(process.env).filter(k => /^MOZ_/.test(k)) }) + '\\n');\n`, { mode: 0o755 });
 const zenRuns = () => { try { return fs.readFileSync(zenLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
 
+// The fake confirm window: it writes each question down and says no to anything about the denied folder.
+const qLog = path.join(tmp, 'questions.log');
+const confirmExe = path.join(tmp, 'confirm');
+fs.writeFileSync(confirmExe, `#!${process.execPath}\nconst t = process.env.CIZ_Q_TEXT || '';\nrequire('fs').appendFileSync(${JSON.stringify(qLog)}, JSON.stringify({ text: t, yes: process.env.CIZ_Q_YES, no: process.env.CIZ_Q_NO }) + '\\n');\nprocess.stdout.write(t.includes(${JSON.stringify(denied)}) ? 'no' : 'yes');\n`, { mode: 0o755 });
+const questions = () => { try { return fs.readFileSync(qLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
+const asked = folder => questions().filter(q => q.text.includes(`\n\n${folder}\n\n`)).length;
+
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else failed++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${!ok && extra ? '  ' + extra : ''}`); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -46,30 +54,33 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const base = path.join(tmp, 'base');
 fs.mkdirSync(base);
 const env = { ...process.env, HOME: home, LOCALAPPDATA: base, APPDATA: path.join(home, 'AppData', 'Roaming'), CLAUDE_IN_ZEN_PIPE: path.join(base, 'h.sock'),
-  CLAUDE_IN_ZEN_CLAUDE: path.join(tmp, 'no-claude'), CLAUDE_IN_ZEN_ZEN_EXE: zen, MOZ_TEST_VAR: '1' };
-const proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+  CLAUDE_IN_ZEN_CLAUDE: path.join(tmp, 'no-claude'), CLAUDE_IN_ZEN_ZEN_EXE: zen, CLAUDE_IN_ZEN_CONFIRM: confirmExe, MOZ_TEST_VAR: '1' };
+let proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
 
 // ---- this test plays the add-on
-const asks = [];   // local_grant and local_tab messages from the helper
+const asks = [];        // local_tab messages from the helper
+const grantLists = [];  // every local_grants list the helper sent
+const shown = [];       // local_question messages: the folder on screen, then '' when it is answered
+const inbox = [];
 let buf = Buffer.alloc(0);
 const toHelper = msg => {
   const body = Buffer.from(JSON.stringify(msg));
   const head = Buffer.alloc(4); head.writeUInt32LE(body.length, 0);
   proc.stdin.write(Buffer.concat([head, body]));
 };
-proc.stdout.on('data', chunk => {
+const lastGrants = () => grantLists[grantLists.length - 1] || [];
+const nextMsg = async (pred, ms = 5000) => { const t = Date.now(); for (;;) { const m = inbox.find(pred); if (m) return m; if (Date.now() - t > ms) return null; await sleep(20); } };
+const onOut = chunk => {
   buf = Buffer.concat([buf, chunk]);
   while (buf.length >= 4) {
     const len = buf.readUInt32LE(0);
     if (buf.length < 4 + len) break;
     const msg = JSON.parse(buf.subarray(4, 4 + len).toString());
     buf = buf.subarray(4 + len);
-    if (msg.type === 'local_grant') {
-      asks.push(msg);
-      const folder = msg.kind === 'dir' ? msg.path : path.dirname(msg.path);
-      const no = folder.startsWith(denied);
-      toHelper({ type: 'local_grant_result', id: msg.id, ok: !no, folder, error: no ? `You did not allow Claude to look in ${folder}.` : '' });
-    } else if (msg.type === 'local_tab') {   // like the add-on, wait a moment for Zen to show the page
+    inbox.push(msg);
+    if (msg.type === 'local_grants') grantLists.push(msg.folders);
+    else if (msg.type === 'local_question') shown.push(msg.folder);
+    else if (msg.type === 'local_tab') {   // like the add-on, wait a moment for Zen to show the page
       asks.push(msg);
       (async () => {
         let seen = false;
@@ -78,7 +89,8 @@ proc.stdout.on('data', chunk => {
       })();
     }
   }
-});
+};
+proc.stdout.on('data', onOut);
 
 // ---- a client on the pipe, like the tool server
 function client() {
@@ -107,35 +119,40 @@ function client() {
     for (let i = 0; i < 100 && !(fs.existsSync(path.join(base, 'claude-in-zen', 'pipe-token')) && fs.existsSync(env.CLAUDE_IN_ZEN_PIPE)); i++) await sleep(50);
     for (let i = 0; i < 20 && !c; i++) { try { c = await client(); } catch { await sleep(100); } }
 
+    check('on connect the helper sends its allowed folders (none yet)', grantLists.length === 1 && !lastGrants().length, JSON.stringify(grantLists));
     let r = await c.call('local_page_open', { path: path.join(game, 'index.html') });
     const run = zenRuns()[0];
-    check('local_page_open asks about the folder, then runs zen -new-tab with the file URL', r.ok && r.result.tab_id === 55 && r.result.path === path.join(game, 'index.html')
+    const q0 = questions()[0];
+    check('local_page_open asks about the folder in the confirm window, then runs zen -new-tab with the file URL', r.ok && r.result.tab_id === 55 && r.result.path === path.join(game, 'index.html')
       && r.result.allowed_folder === game && run && run.argv[0] === '-new-tab' && run.argv[1] === `file://${game}/index.html`
-      && asks[0].type === 'local_grant' && asks[0].path === path.join(game, 'index.html') && asks[0].kind === 'file', JSON.stringify([r, run, asks[0]]));
+      && q0 && asked(game) === 1 && q0.yes === 'Allow this folder' && q0.no === 'Deny', JSON.stringify([r, run, q0]));
+    check('the panel hears about the question while the window is open, and when it is over', shown[0] === game && shown[1] === '', JSON.stringify(shown));
+    check('the helper sends the new list of allowed folders, and keeps it in its own file', JSON.stringify(lastGrants()) === JSON.stringify([game])
+      && JSON.stringify(JSON.parse(fs.readFileSync(path.join(base, 'claude-in-zen', 'local-grants.json'), 'utf8'))) === JSON.stringify([game]));
     check('zen starts without the MOZ_ variables Zen gave the helper', run && !run.moz.length, run && run.moz.join(','));
-    check('the add-on is asked which tab shows the page', asks[1] && asks[1].type === 'local_tab' && asks[1].url === run.argv[1]);
+    check('the add-on is asked which tab shows the page', asks[0] && asks[0].type === 'local_tab' && asks[0].url === run.argv[1]);
 
     r = await c.call('local_page_open', { path: `file://${game}/with%20space%20%231.html` });
-    check('a file: URL works too, and odd names are encoded', r.ok && zenRuns()[1].argv[1] === `file://${game}/with%20space%20%231.html`, JSON.stringify(r));
+    check('a file: URL works too, odd names are encoded, and an allowed folder asks nothing', r.ok && zenRuns()[1].argv[1] === `file://${game}/with%20space%20%231.html` && questions().length === 1, JSON.stringify(r));
 
-    asks.length = 0;
     r = await c.call('local_page_open', { path: path.join(game, 'link.html') });
-    check('a link is followed: the user is asked about the real folder and the real file opens', r.ok && asks[0] && asks[0].path === path.join(other, 'real.html')
-      && r.result.allowed_folder === other && zenRuns().pop().argv[1] === `file://${other}/real.html`, JSON.stringify([r, asks[0]]));
+    check('a link is followed: the user is asked about the real folder and the real file opens', r.ok && asked(other) === 1
+      && r.result.allowed_folder === other && zenRuns().pop().argv[1] === `file://${other}/real.html`, JSON.stringify(r));
 
-    asks.length = 0;
+    let nq = questions().length;
     const zensBefore = zenRuns().length;
     r = await c.call('local_page_open', { path: path.join(game, 'key.html') });
-    check('a link into a protected place is refused before anyone is asked', !r.ok && /^Not allowed: .*id_rsa: it holds browser, password or Claude sign-in data/.test(r.error) && !asks.length, r.error);
+    check('a link into a protected place is refused before anyone is asked', !r.ok && /^Not allowed: .*id_rsa: it holds browser, password or Claude sign-in data/.test(r.error) && questions().length === nq, r.error);
     r = await c.call('local_files', { path: path.join(game, 'keys') });
-    check('a folder link into a protected place is refused too', !r.ok && /^Not allowed:/.test(r.error) && !asks.length, r.error);
+    check('a folder link into a protected place is refused too', !r.ok && /^Not allowed:/.test(r.error) && questions().length === nq, r.error);
     r = await c.call('local_file_read', { path: path.join(game, '.env') });
-    check('a secret file is refused before anyone is asked', !r.ok && /holds keys, passwords or sign-ins/.test(r.error) && !asks.length, r.error);
+    check('a secret file is refused before anyone is asked', !r.ok && /holds keys, passwords or sign-ins/.test(r.error) && questions().length === nq, r.error);
     r = await c.call('local_page_open', { path: path.join(denied, 'x.html') });
-    check('when the user denies the folder, Claude hears it and nothing opens', !r.ok && r.error === `You did not allow Claude to look in ${denied}.` && zenRuns().length === zensBefore, r.error);
-    asks.length = 0;
+    check('when the user denies the folder, Claude hears it, nothing opens and nothing is kept', !r.ok && r.error.startsWith(`The user did not allow Claude to look in ${denied}.`)
+      && zenRuns().length === zensBefore && !lastGrants().includes(denied), r.error);
+    nq = questions().length;
     r = await c.call('local_page_open', { path: path.join(game, 'run.bat') });
-    check('a program or script is never handed to Zen to open, and nobody is asked', !r.ok && /^local_page_open shows web pages, text, PDFs, images, audio and video, not \.bat\./.test(r.error) && !asks.length, r.error);
+    check('a program or script is never handed to Zen to open, and nobody is asked', !r.ok && /^local_page_open shows web pages, text, PDFs, images, audio and video, not \.bat\./.test(r.error) && questions().length === nq, r.error);
     r = await c.call('local_file_read', { path: path.join(game, 'run.bat') });
     check('...but its text can be read', r.ok && r.result.text === '@echo off', JSON.stringify(r));
     r = await c.call('local_page_open', { path: 'game/index.html' });
@@ -149,11 +166,11 @@ function client() {
     r = await c.call('local_page_open', { path: game });
     check('a folder opens as Zen\'s listing (its URL ends in /)', r.ok && zenRuns().pop().argv[1] === `file://${game}/`, JSON.stringify(r));
 
-    asks.length = 0;
+    nq = questions().length;
     r = await c.call('local_files', { path: game });
     const lines = r.ok ? r.result.text.split('\n') : [];
-    check('local_files: folders first, files with sizes, secret files and protected links left out', r.ok && lines[0] === 'levels/' && lines.includes('index.html  (1 KB)')
-      && !lines.some(l => /\.env|keys\//.test(l)) && asks[0] && asks[0].kind === 'dir' && asks[0].path === game, JSON.stringify(r));
+    check('local_files: folders first, files with sizes, secret files and protected links left out, nothing asked again', r.ok && lines[0] === 'levels/' && lines.includes('index.html  (1 KB)')
+      && !lines.some(l => /\.env|keys\//.test(l)) && questions().length === nq, JSON.stringify(r));
     r = await c.call('local_files', { path: path.join(game, 'index.html') });
     check('local_files on a file points to the right tool', !r.ok && /is a file\. Use local_file_read/.test(r.error), r.error);
 
@@ -166,6 +183,39 @@ function client() {
     check('local_file_read refuses a binary file', !r.ok && /is not a text file/.test(r.error), r.error);
     r = await c.call('local_file_read', { path: game });
     check('local_file_read on a folder points to local_files', !r.ok && /is a folder\. Use local_files/.test(r.error), r.error);
+
+    // The add-on asks for a file: tab outside the allowed folders (local_ask), and Profile's Remove.
+    const levels = path.join(game, 'levels');
+    toHelper({ type: 'local_ask', id: 'a1', folder: levels });
+    let ans = await nextMsg(m => m.type === 'local_ask_result' && m.id === 'a1');
+    check('local_ask inside an allowed folder answers yes at once with that folder', ans && ans.ok === true && ans.folder === game, JSON.stringify(ans));
+    const newer = path.join(files, 'newer');
+    fs.mkdirSync(newer);
+    toHelper({ type: 'local_ask', id: 'a2', folder: newer });
+    ans = await nextMsg(m => m.type === 'local_ask_result' && m.id === 'a2');
+    check('local_ask about a new folder asks in the confirm window and adds it', ans && ans.ok === true && asked(newer) === 1 && lastGrants().includes(newer), JSON.stringify(ans));
+    toHelper({ type: 'local_ask', id: 'a3', folder: denied });
+    ans = await nextMsg(m => m.type === 'local_ask_result' && m.id === 'a3');
+    check('local_ask answers no when the user denies', ans && ans.ok === false && /did not allow/.test(ans.error), JSON.stringify(ans));
+    toHelper({ type: 'local_ask', id: 'a4', folder: path.join(home, '.ssh') });
+    ans = await nextMsg(m => m.type === 'local_ask_result' && m.id === 'a4');
+    check('local_ask for a protected folder is refused without a question', ans && ans.ok === false && /^Not allowed/.test(ans.error) && !asked(path.join(home, '.ssh')), JSON.stringify(ans));
+    const before = grantLists.length;
+    toHelper({ type: 'local_grant_remove', folder: newer });
+    await nextMsg(() => grantLists.length > before);
+    check('Remove forgets the folder and sends the new list', !lastGrants().includes(newer) && lastGrants().includes(game), JSON.stringify(lastGrants()));
+
+    // A new helper (Zen restarted) keeps the allowed folders.
+    c.end(); c = null;
+    proc.stdout.off('data', onOut);
+    proc.kill();
+    await new Promise(res => proc.on('exit', res));
+    grantLists.length = 0; buf = Buffer.alloc(0);
+    proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+    proc.stdout.on('data', onOut);
+    toHelper({ type: 'hello', version: 'test' });
+    await nextMsg(() => grantLists.length > 0);
+    check('after a restart the helper sends the same allowed folders', JSON.stringify(lastGrants()) === JSON.stringify([game, other]), JSON.stringify(lastGrants()));
   } catch (e) {
     check('no unexpected errors', false, e.stack || e.message);
   } finally {

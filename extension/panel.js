@@ -219,26 +219,19 @@ function togglePlus() {
 $('modeBtn').addEventListener('click', toggleMode);
 $('plusBtn').addEventListener('click', togglePlus);
 
-// Local pages: Claude's question about a folder (one at a time), and the allowed folders in Profile > Permissions.
+// Local pages: Claude's question about a folder (answered in the helper's confirm window), and the allowed folders in
+// Profile > Permissions.
 const FILE_ACCESS_OFF = "Zen keeps add-ons out of files on this computer. Turn on 'Access local files on your computer' for Claude in Zen: about:addons, Claude in Zen, Permissions and data.";
-function answerGrant(allow) {
-  const id = $('grantAsk').dataset.id;
-  if (!id) return;
-  $('grantAsk').hidden = true;
-  delete $('grantAsk').dataset.id;
-  send('grantAnswer', { id, allow });
-}
-$('grantAllow').addEventListener('click', () => answerGrant(true));
-$('grantDeny').addEventListener('click', () => answerGrant(false));
+const CONFIRM_WAIT = 'Answer in the Claude in Zen window that opened. If you do not see it, look behind Zen or on the taskbar.';
 function renderLocal(s) {
-  const ask = s.grantAsk && s.grantAsk.id ? s.grantAsk : null;
+  const ask = s.grantAsk && s.grantAsk.folder ? s.grantAsk : null;
   const box = $('grantAsk');
-  if (ask && box.dataset.id !== ask.id) {
-    box.dataset.id = ask.id;
+  if (ask && box.dataset.folder !== ask.folder) {
+    box.dataset.folder = ask.folder;
     $('grantFolder').textContent = ask.folder;
     showPage('chat');   // the question waits on the chat page, where Claude's answer will show
   }
-  if (!ask) delete box.dataset.id;
+  if (!ask) delete box.dataset.folder;
   box.hidden = !ask;
   $('grantAccess').textContent = FILE_ACCESS_OFF;
   $('grantAccess').hidden = s.fileAccess !== 'no';
@@ -319,13 +312,12 @@ function onToolResult(m) {
   if (m.action === 'install' && m.ok) { $('pluginSpec').value = ''; $('pluginSource').value = ''; }
 }
 
-// Unsafe mode: turning it on asks first (the confirm box). Turning it off needs no question.
+// Unsafe mode: turning it on asks in the helper's confirm window (a Windows window outside Zen); the switch follows
+// the answer. Turning it off needs no question.
 $('unsafeToggle').addEventListener('change', e => {
-  if (e.target.checked) { e.target.checked = false; $('unsafeConfirm').hidden = false; }
+  if (e.target.checked) { e.target.checked = !!state.unsafe; send('setUnsafe', { value: true }); }
   else send('setUnsafe', { value: false });
 });
-$('unsafeYes').addEventListener('click', () => { $('unsafeConfirm').hidden = true; send('setUnsafe', { value: true }); });
-$('unsafeNo').addEventListener('click', () => { $('unsafeConfirm').hidden = true; $('unsafeToggle').checked = !!state.unsafe; });
 
 // ------------------------------------------------------------ render state
 
@@ -416,10 +408,11 @@ function render(s, log) {
   $('unsafeBadge').hidden = !s.unsafe;
   $('unsafeToggle').checked = !!s.unsafe;
   $('unsafeToggle').disabled = s.agent === 'stopped';
-  if (s.unsafe) $('unsafeConfirm').hidden = true;
-  $('unsafeNote').textContent = s.unsafe
-    ? 'On. Claude may act on Google sign-in pages until you press Stop or restart Zen.'
-    : 'Off. Claude does not act on Google sign-in pages.';
+  const waiting = s.confirmPending && s.confirmPending.kind;
+  $('unsafeNote').textContent = waiting === 'unsafe' ? CONFIRM_WAIT
+    : s.unsafe ? 'On. Claude may act on Google sign-in pages until you press Stop or restart Zen.'
+      : 'Off. Claude does not act on Google sign-in pages.';
+  $('unsafeNote').classList.toggle('warnnote', waiting === 'unsafe');
   $('googleVal').textContent = s.unsafe ? 'allowed (Unsafe mode)' : 'always hands-off';
   $('googleVal').classList.toggle('warn', !!s.unsafe);
   $('filesToggle').checked = !!s.filesEnabled;
@@ -433,12 +426,14 @@ function render(s, log) {
     b.setAttribute('aria-checked', String(b.dataset.mode === (s.filesMode === 'write' ? 'write' : 'read')));
     b.disabled = s.agent === 'stopped';
   }
-  $('filesNote').textContent = !s.filesEnabled
-    ? 'Off. Claude has no file access. Type a full folder path, then turn it on.'
-    : s.filesMode === 'write'
-      ? 'On: Claude can read, create and change files in this folder only. There is no undo, so use a folder you can afford to lose. No shell.'
-      : 'On: Claude can read and search files in this folder only. No changes, no shell.';
-  $('filesNote').classList.toggle('warnnote', !!s.filesEnabled && s.filesMode === 'write');
+  const filesWaiting = !!(s.confirmPending && s.confirmPending.kind === 'files');
+  $('filesNote').textContent = filesWaiting ? CONFIRM_WAIT
+    : !s.filesEnabled
+      ? 'Off. Claude has no file access. Type a full folder path, then turn it on.'
+      : s.filesMode === 'write'
+        ? 'On: Claude can read, create and change files in this folder only. There is no undo, so use a folder you can afford to lose. No shell.'
+        : 'On: Claude can read and search files in this folder only. No changes, no shell.';
+  $('filesNote').classList.toggle('warnnote', filesWaiting || (!!s.filesEnabled && s.filesMode === 'write'));
   $('filesToggle').disabled = s.agent === 'stopped';
   $('pendingVal').textContent = String(s.pending || 0);
   renderLocal(s);

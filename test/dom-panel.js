@@ -149,19 +149,18 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  ok('tab highlight moves under Settings', $('tabThumb').style.transform==='translateX(200px)' && $('tabThumb').style.width==='100px', $('tabThumb').style.transform);
  w.document.querySelector('.tabs button[data-page="chat"]').click();
  ok('tab highlight slides back to Claude', $('tabThumb').style.transform==='translateX(0px)' && $('tabThumb').classList.contains('animate'));
-// Unsafe mode: turning it on asks first; the badge and the Google row follow the state
+// Unsafe mode: turning it on asks in the helper's confirm window (outside Zen); the switch, the badge and the Google row
+// follow the state
  onMsg({type:'state',state:{...ready,unsafe:false},log:[]});
  const mark=sent.length;
  $('unsafeToggle').checked=true; $('unsafeToggle').dispatchEvent(new w.Event('change'));
- ok('unsafe asks before turning on', !$('unsafeConfirm').hidden && !$('unsafeToggle').checked && !sent.slice(mark).some(m=>m.type==='setUnsafe'));
- $('unsafeNo').click();
- ok('unsafe cancel sends nothing', $('unsafeConfirm').hidden && !$('unsafeToggle').checked && !sent.slice(mark).some(m=>m.type==='setUnsafe'));
- $('unsafeToggle').checked=true; $('unsafeToggle').dispatchEvent(new w.Event('change')); $('unsafeYes').click();
- ok('unsafe confirm sends setUnsafe on', sent.slice(mark).some(m=>m.type==='setUnsafe'&&m.value===true));
+ ok('unsafe on asks the add-on (which asks the confirm window), and the switch waits for the answer', sent.slice(mark).some(m=>m.type==='setUnsafe'&&m.value===true) && !$('unsafeToggle').checked && !w.document.getElementById('unsafeConfirm'));
+ onMsg({type:'state',state:{...ready,unsafe:false,confirmPending:{kind:'unsafe'}},log:[]});
+ ok('while the confirm window is open, the note says where to answer', /Answer in the Claude in Zen window/.test($('unsafeNote').textContent) && $('unsafeNote').classList.contains('warnnote'));
  onMsg({type:'state',state:{...ready,unsafe:true},log:[]});
  ok('badge and Google row show Unsafe mode', !$('unsafeBadge').hidden && $('googleVal').textContent==='allowed (Unsafe mode)' && $('unsafeToggle').checked===true);
  $('unsafeToggle').checked=false; $('unsafeToggle').dispatchEvent(new w.Event('change'));
- ok('turning it off needs no question', sent.some(m=>m.type==='setUnsafe'&&m.value===false) && $('unsafeConfirm').hidden);
+ ok('turning it off needs no question', sent.some(m=>m.type==='setUnsafe'&&m.value===false));
  onMsg({type:'state',state:{...ready,unsafe:false},log:[]});
  ok('badge hidden and Google row back to hands-off when off', $('unsafeBadge').hidden && $('googleVal').textContent==='always hands-off');
  // Tools and plugins card: essentials first, local tools ask first, sign-in from the row
@@ -401,16 +400,11 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
   onMsg({type:'state',state:{...ready,grantAsk:null,localGrants:[],fileAccess:'yes'},log:[]});
   ok('local: no question, no folders: the card is hidden and the list says none', $('grantAsk').hidden && $('localCount').textContent==='none allowed' && $('localList').children.length===0);
   w.document.querySelector('.tabs button[data-page="profile"]').click();
-  onMsg({type:'state',state:{...ready,grantAsk:{id:'g1',folder},localGrants:[],fileAccess:'yes'},log:[]});
-  ok('local: a question shows the folder and brings the chat page up', !$('grantAsk').hidden && $('grantFolder').textContent===folder && !$('page-chat').hidden && $('grantAccess').hidden);
-  const nAns=sent.filter(m=>m.type==='grantAnswer').length;
-  $('grantAllow').click();
-  const ans=sent.filter(m=>m.type==='grantAnswer');
-  ok('local: Allow this folder answers yes for that question and hides the card', ans.length===nAns+1 && ans[ans.length-1].id==='g1' && ans[ans.length-1].allow===true && $('grantAsk').hidden);
-  onMsg({type:'state',state:{...ready,grantAsk:{id:'g2',folder:'D:\\x'},localGrants:[folder],fileAccess:'no'},log:[]});
-  ok('local: with Zen\'s file switch off, the question says how to turn it on', !$('grantAsk').hidden && !$('grantAccess').hidden && /Access local files on your computer/.test($('grantAccess').textContent));
-  $('grantDeny').click();
-  ok('local: Deny answers no', sent.filter(m=>m.type==='grantAnswer').pop().allow===false && sent.filter(m=>m.type==='grantAnswer').pop().id==='g2');
+  onMsg({type:'state',state:{...ready,grantAsk:{folder},localGrants:[],fileAccess:'yes'},log:[]});
+  ok('local: a question shows the folder, brings the chat page up, and says to answer in the confirm window (no buttons here)', !$('grantAsk').hidden && $('grantFolder').textContent===folder
+    && !$('page-chat').hidden && $('grantAccess').hidden && /Answer in the Claude in Zen window/.test($('grantAsk').textContent) && !$('grantAsk').querySelector('button'));
+  onMsg({type:'state',state:{...ready,grantAsk:{folder:'D:\\x'},localGrants:[folder],fileAccess:'no'},log:[]});
+  ok('local: with Zen\'s file switch off, the question says how to turn it on', !$('grantAsk').hidden && !$('grantAccess').hidden && /Access local files on your computer/.test($('grantAccess').textContent) && $('grantFolder').textContent==='D:\\x');
   ok('local: Profile lists the allowed folder with Remove, and the note warns about the file switch', $('localCount').textContent==='1 allowed' && $('localList').children.length===1
     && $('localList').querySelector('.mono').textContent===folder && /Access local files/.test($('localNote').textContent) && $('localNote').classList.contains('warnnote'));
   const rmBtn=$('localList').querySelector('button');

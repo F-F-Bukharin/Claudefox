@@ -1,7 +1,8 @@
 'use strict';
 // Local pages and files: Claude may open, list or read something on this computer only inside a folder the user
-// allowed. The add-on asks the user ("Allow this folder" or "Deny") and keeps the allowed folders
-// (extension/lib/local.js); the helper does the file side here.
+// allowed. The helper keeps the allowed folders (local-grants.json) and asks about a new one in its own confirm window
+// (lib/confirm.js: "Allow this folder" or "Deny"), which nothing in the add-on or the panel can answer for the user. The
+// add-on gets the list to guard file: tabs (extension/lib/local.js) and shows it in Profile, Permissions.
 //
 // Every path is followed to its real place first (links and junctions), and the real place is what the user is asked
 // about, so a link inside an allowed folder never reaches outside it. Protected places (lib/guard.js) are refused
@@ -16,7 +17,6 @@ const guard = require('./guard');
 const log = require('./log');
 const { extractText, kindOf } = require('./doctext');
 
-const ASK_MS = 150000;                    // the add-on gives the user 120 s to answer
 const TAB_MS = 20000;                     // the add-on looks for the new tab for up to 10 s
 const MAX_LIST = 300;                     // entries local_files shows
 const MAX_SCAN = 5000;                    // entries it looks at
@@ -68,8 +68,53 @@ function realOf(raw) {
 
 const sizeText = n => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-// deps: { askAddon(type, payload, ms) -> Promise<{ ok, error, folder, tab_id, title }> }
+// The allowed folders, kept in a file of the helper's own (a protected place for every file tool).
+function createGrants(file) {
+  let list = [];
+  try {
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (Array.isArray(saved)) list = saved.filter(f => typeof f === 'string' && path.isAbsolute(f)).map(f => path.resolve(f));
+  } catch {}
+  const save = () => {
+    try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(list, null, 1)); } catch (e) { log.error('local grants', e.message); }
+  };
+  return {
+    list: () => list.slice(),
+    // The allowed folder that holds this path, or ''.
+    covering: p => list.find(f => guard.within(p, f)) || '',
+    add(folder) { const f = path.resolve(folder); if (!list.some(g => guard.within(f, g))) { list = list.filter(g => !guard.within(g, f)).concat([f]); save(); } },
+    remove(folder) {
+      const before = list.length;
+      list = list.filter(g => !(guard.within(g, folder) && guard.within(folder, g)));
+      if (list.length !== before) { save(); return true; }
+      return false;
+    },
+  };
+}
+
+// deps: { askAddon(type, payload, ms) -> Promise<{ ok, error, tab_id, title }>, confirm({ title, text, yes, no }) ->
+// Promise<{ ok, error }>, grants: createGrants(...), changed() (the list changed: tell the add-on),
+// asking(folder) (a question about this folder is on screen, or '' when it is over) }
 function createLocalPages(deps) {
+  // A folder the user has not allowed yet: they answer in the confirm window. Resolves the allowed folder.
+  async function askFolder(folder) {
+    const have = deps.grants.covering(folder);
+    if (have) return have;
+    if (deps.asking) deps.asking(folder);
+    let r;
+    try {
+      r = await deps.confirm({
+        title: 'Claude in Zen: allow a folder?',
+        text: `Claude asks to look in this folder and its subfolders:\n\n${folder}\n\nIt may then open, list and read the files there, until you remove the folder in Claude in Zen's Profile, Permissions. Army workers never look there.`,
+        yes: 'Allow this folder', no: 'Deny',
+      });
+    } finally { if (deps.asking) deps.asking(''); }
+    if (!r || !r.ok) throw new Error(`The user did not allow Claude to look in ${folder}. ${(r && r.error) || ''}`.trim());
+    deps.grants.add(folder);
+    if (deps.changed) deps.changed();
+    return deps.grants.covering(folder) || folder;
+  }
+
   // The path's real place, once the user allows its folder. kind: 'file', 'dir' or 'any'.
   async function allow(raw, kind) {
     const f = realOf(raw);
@@ -77,12 +122,18 @@ function createLocalPages(deps) {
     if (kind === 'file' && f.dir) throw new Error(`${f.real} is a folder. Use local_files to see what is in it.`);
     const why = guard.localProblem(f.real, f.dir);
     if (why) throw new Error(`Not allowed: ${f.real}: ${why}.`);
-    const r = await deps.askAddon('local_grant', { path: f.real, kind: f.dir ? 'dir' : 'file' }, ASK_MS);
-    if (!r || !r.ok) throw new Error((r && r.error) || 'The user did not allow it.');
-    // The folder the user allowed must hold the real place (it does, as the add-on took the folder from it).
-    if (!r.folder || !guard.within(f.real, r.folder)) throw new Error(`Not allowed: ${f.real} is outside ${r.folder || 'the folder the user allowed'}.`);
-    f.folder = r.folder;
+    f.folder = await askFolder(f.dir ? f.real : path.dirname(f.real));
+    if (!guard.within(f.real, f.folder)) throw new Error(`Not allowed: ${f.real} is outside ${f.folder}.`);
     return f;
+  }
+
+  // The add-on found a file: tab outside the allowed folders (extension/lib/local.js): the same question, for that folder.
+  async function allowFolder(raw) {
+    const f = realOf(raw);
+    if (!f.dir) throw new Error(`${f.real} is not a folder.`);
+    const why = guard.localProblem(f.real, true);
+    if (why) throw new Error(`Not allowed: ${f.real}: ${why}.`);
+    return askFolder(f.real);
   }
 
   // local_page_open: a page or file in a new Zen tab, in front, for Claude to see and play.
@@ -157,7 +208,7 @@ function createLocalPages(deps) {
       total_chars: text.length, next_start: next, truncated: next != null };
   }
 
-  return { open, list, read };
+  return { open, list, read, allowFolder };
 }
 
-module.exports = { createLocalPages, toPath, findZen };
+module.exports = { createLocalPages, createGrants, toPath, findZen };

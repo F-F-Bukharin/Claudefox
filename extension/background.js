@@ -146,8 +146,7 @@ async function handlePanel(msg, port) {
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
     case 'setArmy':    return setArmy(!!msg.value);
     case 'setUnsafe': return setUnsafe(!!msg.value);
-    case 'grantAnswer':      return cizLocal.answer(String(msg.id || ''), !!msg.allow);
-    case 'localGrantRemove': return cizLocal.remove(String(msg.folder || ''));
+    case 'localGrantRemove': return cizLocal.remove(String(msg.folder || '').slice(0, 1000));
     case 'modUpdate':
       if (!sendNative({ type: 'mod_update', id: String(msg.id || ''), enabled: msg.enabled, broken: msg.broken })) return cizState.addLog('error', 'Mods: the helper is not connected, so the change was not saved.');
       return;
@@ -467,6 +466,7 @@ async function stopAll(source) {
   }
   await cizArmy.closeAll();      // every army worker's tab goes too
   await cizLocal.cancelAll();    // an open folder question counts as no
+  endConfirms('Stopped.');       // and so does an open confirm window (the helper closes it)
   failChats('Stopped.');
   cizNetReset();                 // forget recorded requests, stop watching consoles
   disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
@@ -487,12 +487,36 @@ async function pickFolder() {
   await cizState.set({ folderPicking: true });
 }
 
+// The helper's confirm window (host/lib/confirm.js): a Windows window outside Zen that nothing here can answer for
+// the user, a mod included. Unsafe mode and file tools go on only after a yes there, and the helper gives chat turns
+// only what was allowed. Resolves { ok, error }.
+const confirmWaiters = new Map();   // id -> done(result)
+let confirmSeq = 0;
+function askConfirm(payload) {
+  return new Promise(resolve => {
+    const id = `k${++confirmSeq}`;
+    const done = r => {
+      clearTimeout(timer);
+      confirmWaiters.delete(id);
+      if (!confirmWaiters.size) cizState.set({ confirmPending: null }).catch(() => {});
+      resolve(r);
+    };
+    const timer = setTimeout(() => done({ ok: false, error: 'No answer from the confirm window.' }), 150000);
+    confirmWaiters.set(id, done);
+    if (!sendNative(Object.assign({ type: 'confirm', id }, payload))) return done({ ok: false, error: 'The helper is not connected, and it shows the confirm window. Press Start first.' });
+    cizState.set({ confirmPending: { kind: String(payload.kind) } }).catch(() => {});
+  });
+}
+// Stop, or the helper went away: open questions count as no.
+function endConfirms(why) { for (const done of [...confirmWaiters.values()]) done({ ok: false, error: why }); }
+
 async function setFiles(value, mode, folder) {
   const m = mode === 'write' ? 'write' : 'read';
   const f = String(folder == null ? cizState.get().filesFolder : folder).trim().slice(0, 1000);
   if (!value) {
     const was = cizState.get().filesEnabled;
     await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    sendNative({ type: 'files_off' });
     if (was) await cizState.addLog('info', 'File tools off');
     return;
   }
@@ -500,6 +524,11 @@ async function setFiles(value, mode, folder) {
   if (!/^([A-Za-z]:[\\/]|\\\\|\/)/.test(f)) {
     await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
     return cizState.addLog('error', 'File tools need a full folder path, like C:\\Users\\you\\Documents\\notes. Left off.');
+  }
+  const r = await askConfirm({ kind: 'files', mode: m, folder: f });
+  if (!r.ok) {
+    await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    return cizState.addLog('error', `File tools stay off: ${r.error || 'not allowed in the confirm window.'}`);
   }
   await cizState.set({ filesEnabled: true, filesMode: m, filesFolder: f });
   await cizState.addLog('info', `File tools on (${m === 'write' ? 'read and write' : 'read only'}) for ${f}`);
@@ -510,6 +539,7 @@ async function setFiles(value, mode, folder) {
 // payment details are refused in every mode.
 async function setUnsafe(value) {
   if (!value) {
+    sendNative({ type: 'unsafe_off' });
     if (cizState.get().unsafe) {
       await cizState.set({ unsafe: false });
       await cizState.addLog('info', 'Unsafe mode off');
@@ -517,6 +547,8 @@ async function setUnsafe(value) {
     return;
   }
   if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on Unsafe mode.');
+  const r = await askConfirm({ kind: 'unsafe' });
+  if (!r.ok) return cizState.addLog('info', `Unsafe mode stays off: ${r.error || 'not allowed in the confirm window.'}`);
   await cizState.set({ unsafe: true });
   await cizState.addLog('warn', 'Unsafe mode on: Claude may act on Google sign-in pages. It still never types passwords, 2FA codes or payment details.');
 }
@@ -656,6 +688,8 @@ function connectNative() {
     for (const done of [...outputWaiters.values()]) done({ ok: false, error: 'the helper stopped' });
     failChats('The helper stopped, so the answer was cut off.');
     cizArmy.closeAll().catch(() => {});   // its workers are gone, so their tabs go too
+    cizLocal.cancelAll().catch(() => {});  // and nobody can answer a folder question now
+    endConfirms('The helper stopped.');
     if (err && /No such native application/i.test(err.message)) {
       cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
       return;
@@ -831,15 +865,13 @@ async function onNativeMessage(msg) {
       return;
     }
 
-    case 'local_grant': {   // the helper's local_page_open or local_files wants to look in a folder (lib/local.js)
-      const p = String(msg.path || '');
-      const folder = msg.kind === 'dir' ? cizNormFolder(p) : cizFolderOf(p);
-      const s = cizState.get();
-      const r = s.agent !== 'active' ? { ok: false, error: 'Agent is stopped. Press Start in the Claude in Zen panel.' }
-        : !s.signedIn ? { ok: false, error: 'Not signed in. Press "Sign in with Claude" in the panel.' }
-          : !folder ? { ok: false, error: 'Give a full path on this computer, like C:\\Users\\you\\Downloads\\game.' }
-            : await cizLocal.ask(folder);
-      sendNative({ type: 'local_grant_result', id: msg.id, ok: !!r.ok, folder, error: r.error || '' });
+    // Local pages (lib/local.js): the helper keeps the allowed folders and asks about new ones in its confirm window.
+    case 'local_grants':     return cizLocal.setGrants(msg.folders);
+    case 'local_question':   return cizLocal.setQuestion(String(msg.folder || ''));
+    case 'local_ask_result': return cizLocal.answer(String(msg.id || ''), msg);
+    case 'confirm_result': { // the user's answer in the helper's confirm window (askConfirm)
+      const done = confirmWaiters.get(String(msg.id || ''));
+      if (done) done({ ok: msg.ok === true, error: String(msg.error || '').slice(0, 300) });
       return;
     }
     case 'local_tab': {     // the helper opened a file in Zen: which tab shows it

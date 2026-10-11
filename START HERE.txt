@@ -55,11 +55,16 @@ Using it
     agent on again by itself.
   - File tools (Profile) are off by default. Turn them on for one folder, read only or read
     and write. Read and write can change and delete files there with no undo.
+  - Unsafe mode, file tools, folders for local pages, tools that run programs and plugin
+    installs each ask first in a small Claude in Zen window outside Zen. If you did not ask
+    for it, press Cancel or Deny.
+  - Mods (Settings) start off. Turn one on only if you trust it.
   - Army (Quality only): the octopus beside Quality opens a card with an On/Off switch. With
     it on, Opus leads up to five Haiku workers in background tabs for jobs that need many
     pages. A run uses much more of your plan than a normal reply: 5 a day is plenty.
   - Local pages: Claude can open an HTML file from your PC (a downloaded game, a saved page)
-    after you click "Allow this folder" in the panel. Zen also needs this switch on, once:
+    after you click "Allow this folder" in the small Claude in Zen window that opens. Zen
+    also needs this switch on, once:
     about:addons -> Claude in Zen -> Permissions and data -> Access local files on your
     computer. Allowed folders are listed in Profile, with Remove.
   - If your plan runs out, the panel offers "Log out and add another account".

@@ -157,72 +157,83 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
     L.ASK_MS = 5000;
     check('state starts with no grants, no question, and file access known', Array.isArray(st().localGrants) && st().localGrants.length === 0 && st().grantAsk === null && st().fileAccess === 'yes', JSON.stringify([st().localGrants, st().grantAsk, st().fileAccess]));
 
-    // ---- ask, then Allow
+    // The helper's side of a question: the add-on sends local_ask; the test answers like the helper after its confirm
+    // window (and sends the new list on a yes, as the helper does).
+    const lastAsk = () => [...native.sent].reverse().find(m => m.type === 'local_ask');
+    const helperAnswers = async (allow, folder) => {
+      const a = lastAsk();
+      if (allow) await helperSays({ type: 'local_grants', folders: [...st().localGrants, folder || a.folder] });
+      await helperSays({ type: 'local_ask_result', id: a.id, ok: allow, folder: allow ? (folder || a.folder) : '', error: allow ? '' : `The user did not allow Claude to look in ${a.folder}. The answer in the confirm window was no.` });
+    };
+
+    // ---- a file: tab outside the allowed folders: the helper asks, the user allows
     let n = injected.length;
+    const sentBefore = native.sent.filter(m => m.type === 'local_ask').length;
     let p = call('read_page', { tab_id: 10 });
     await tick();
-    const ask1 = st().grantAsk;
-    check('a read on a file: tab outside the grants asks about the file\'s folder, and nothing runs yet',
-      ask1 && ask1.folder === W + 'game' && /^g\d+$/.test(ask1.id) && injected.length === n, JSON.stringify(ask1));
-    await fromPanel({ type: 'grantAnswer', id: ask1.id, allow: true });
+    const ask1 = lastAsk();
+    check('a read on a file: tab outside the allowed folders asks the helper about the file\'s folder, and nothing runs yet',
+      ask1 && ask1.folder === W + 'game' && native.sent.filter(m => m.type === 'local_ask').length === sentBefore + 1 && injected.length === n, JSON.stringify(ask1));
+    await helperAnswers(true);
     let r = await p;
-    check('Allow lets the same call finish and remembers the folder in storage.local',
-      r.ok && injected.length === n + 1 && st().grantAsk === null && JSON.stringify(local.localGrants) === JSON.stringify([W + 'game']) && st().localGrants[0] === W + 'game', JSON.stringify([r, local.localGrants]));
+    check('a yes from the helper lets the same call finish, and the list comes from the helper', r.ok && injected.length === n + 1 && st().localGrants[0] === W + 'game' && !local.localGrants, JSON.stringify([r, st().localGrants]));
     let a0 = asks();
     const same = await call('read_page', { tab_id: 13 });
     const sub = await call('find', { tab_id: 11, query: 'start' });
-    check('another file in that folder, and one in a subfolder, ask nothing', same.ok && sub.ok && asks() === a0 && st().grantAsk === null, `${same.error || ''} ${sub.error || ''}`);
+    check('another file in that folder, and one in a subfolder, ask nothing', same.ok && sub.ok && asks() === a0, `${same.error || ''} ${sub.error || ''}`);
 
-    // ---- a sibling folder asks; Deny
+    // ---- a sibling folder asks; the user says no
     p = call('get_page_text', { tab_id: 12 });
     await tick();
-    const ask2 = st().grantAsk;
+    const ask2 = lastAsk();
     check('a sibling folder asks', ask2 && ask2.folder === W + 'other' && asks() === a0 + 1, JSON.stringify(ask2));
-    await fromPanel({ type: 'grantAnswer', id: ask2.id, allow: false });
+    await helperAnswers(false);
     r = await p;
-    check('Deny gives the Deny message and stores nothing', !r.ok && r.error === DENY(W + 'other') && local.localGrants.length === 1 && st().grantAsk === null, r.error);
+    check('a no comes back to Claude with the helper\'s words, and nothing is allowed', !r.ok && r.error.startsWith(`The user did not allow Claude to look in ${W}other.`) && st().localGrants.length === 1, r.error);
 
     // ---- no answer in time
     L.ASK_MS = 120;
     r = await call('read_page', { tab_id: 12 });
     L.ASK_MS = 5000;
-    check('no answer within ASK_MS gives the no-answer message and clears the question',
-      !r.ok && r.error === `No answer about ${W}other, so Claude did not look.` && st().grantAsk === null, r.error);
+    check('no answer within ASK_MS gives the no-answer message', !r.ok && r.error === `No answer about ${W}other, so Claude did not look.`, r.error);
 
-    // ---- two calls for one folder make one ask
+    // ---- two calls for one folder make one question
     a0 = asks();
+    const n0 = native.sent.filter(m => m.type === 'local_ask').length;
     const p1 = call('read_page', { tab_id: 12 }), p2 = call('scroll', { tab_id: 12 });
-    const e1 = L.ensure(W + 'other\\deeper\\..');
+    const e1 = L.ask(W + 'other\\deeper\\..');
     await tick();
-    const ask3 = st().grantAsk;
-    check('two calls (and an ensure) for one folder make one question', asks() === a0 + 1 && L._asks.length === 1 && ask3.folder === W + 'other');
-    await fromPanel({ type: 'grantAnswer', id: ask3.id, allow: true });
+    check('two calls (and an ask) for one folder send one question', native.sent.filter(m => m.type === 'local_ask').length === n0 + 1 && L._asks.size === 1 && asks() === a0 + 1);
+    await helperAnswers(true);
     const [r1, r2, en] = await Promise.all([p1, p2, e1]);
-    check('one Allow answers them all', r1.ok && r2.ok && en === true && local.localGrants.length === 2, `${r1.error || ''} ${r2.error || ''}`);
+    check('one yes answers them all', r1.ok && r2.ok && en.ok === true && st().localGrants.length === 2, `${r1.error || ''} ${r2.error || ''}`);
 
-    // ---- localGrantRemove
-    await fromPanel({ type: 'localGrantRemove', folder: 'c:/users/h/downloads/other/' });
-    check('localGrantRemove removes the folder and stores the list', JSON.stringify(st().localGrants) === JSON.stringify([W + 'game']) && JSON.stringify(local.localGrants) === JSON.stringify([W + 'game']), JSON.stringify(local.localGrants));
+    // ---- the helper's list and its question
+    await helperSays({ type: 'local_grants', folders: [W + 'game', 'c:/users/h/downloads/game/', '/home/f/x/', 'relative\\path', 42] });
+    check('the helper\'s list is kept normalized, without doubles or paths that are not full', JSON.stringify(st().localGrants) === JSON.stringify([W + 'game', '/home/f/x']), JSON.stringify(st().localGrants));
+    await helperSays({ type: 'local_question', folder: 'C:/Users/H/Desktop/new/' });
+    const q = st().grantAsk;
+    await helperSays({ type: 'local_question', folder: '' });
+    check('while the helper\'s window asks, the panel gets the folder; then it clears', q && q.folder === 'C:\\Users\\H\\Desktop\\new' && st().grantAsk === null, JSON.stringify(q));
 
-    // ---- one question at a time, the rest queue
-    const q1 = L.ask('D:\\one'), q2 = L.ask('D:\\two');
-    await tick();
-    const shown1 = st().grantAsk;
-    await fromPanel({ type: 'grantAnswer', id: shown1.id, allow: false });
-    const shown2 = st().grantAsk;
-    await fromPanel({ type: 'grantAnswer', id: shown2.id, allow: false });
-    check('one question shows at a time; the next shows when it is answered', shown1.folder === 'D:\\one' && shown2.folder === 'D:\\two' && !(await q1).ok && !(await q2).ok && st().grantAsk === null);
+    // ---- localGrantRemove goes to the helper
+    await fromPanel({ type: 'localGrantRemove', folder: '/home/f/x' });
+    const rmMsg = [...native.sent].reverse().find(m => m.type === 'local_grant_remove');
+    check('Remove in Profile asks the helper to forget the folder', rmMsg && rmMsg.folder === '/home/f/x', JSON.stringify(rmMsg));
 
     // ---- Stop while asking
     p = call('read_page', { tab_id: 12 });
-    const e2 = L.ensure(W + 'other');
     await tick();
-    const hadAsk = !!st().grantAsk;
+    const e2 = L.ask('D:\\other');
+    await tick();
+    const hadAsk = L._asks.size === 2;
     await fromPanel({ type: 'stop' });
     r = await p;
-    check('Stop while asking counts as no and clears the question', hadAsk && (await e2) === false && st().grantAsk === null && L._asks.length === 0 && !r.ok, r.error);
+    const e2r = await e2;
+    check('Stop while asking counts as no for every open question', hadAsk && e2r.ok === false && L._asks.size === 0 && st().grantAsk === null && !r.ok, r.error);
     await fromPanel({ type: 'start' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
+    await helperSays({ type: 'local_grants', folders: [W + 'game'] });
 
     // ---- army workers never touch local pages
     const A = (await armyCall('tab_open', { url: 'https://a.example/' })).result.tab_id;
@@ -270,22 +281,8 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
     check('navigate and tab_open to a file: URL are refused, pointing to local_page_open',
       !nv.ok && /off-limits to tab_open and navigate.*local_page_open/.test(nv.error) && !to.ok && /off-limits/.test(to.error) && tabOf(1).url === 'https://shop.example/', `${nv.error} | ${to.error}`);
 
-    // ---- the helper's local_grant
-    let m = await nativeAsk({ type: 'local_grant', path: W + 'game\\levels\\two.html', kind: 'file' }, 'local_grant_result');
-    check('local_grant kind file inside a grant answers ok at once with the file\'s folder', m.ok === true && m.folder === W + 'game\\levels' && !m.error, JSON.stringify(m));
-    const pd = nativeAsk({ type: 'local_grant', path: 'C:\\Users\\H\\Desktop\\new\\', kind: 'dir' }, 'local_grant_result');
-    await tick();
-    const ask4 = st().grantAsk;
-    await fromPanel({ type: 'grantAnswer', id: ask4.id, allow: true });
-    m = await pd;
-    check('local_grant kind dir asks about that folder itself and answers ok after Allow', ask4.folder === 'C:\\Users\\H\\Desktop\\new' && m.ok === true && m.folder === 'C:\\Users\\H\\Desktop\\new', JSON.stringify(m));
-    const pn = nativeAsk({ type: 'local_grant', path: '/home/f/secret.txt', kind: 'file' }, 'local_grant_result');
-    await tick();
-    await fromPanel({ type: 'grantAnswer', id: st().grantAsk.id, allow: false });
-    m = await pn;
-    check('local_grant answers not ok after Deny, with the Deny message', m.ok === false && m.folder === '/home/f' && m.error === DENY('/home/f'), JSON.stringify(m));
-
     // ---- the helper's local_tab
+    let m;
     tabs.push({ id: 30, windowId: 1, active: true, title: 'Loading', url: 'file:///c:/Users/H/Downloads/new%20game/index.html', status: 'loading' });
     setTimeout(() => { const t = tabOf(30); t.status = 'complete'; t.title = 'New Game'; }, 300);
     m = await nativeAsk({ type: 'local_tab', url: 'file:///C:/Users/H/Downloads/new game/index.html' }, 'local_tab_result');
@@ -295,12 +292,13 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
     m = await nativeAsk({ type: 'local_tab', url: 'file:///C:/nowhere/x.html' }, 'local_tab_result');
     check('local_tab answers not ok when no tab shows the file within TAB_MS', m.ok === false && m.tab_id === null && /No Zen tab showed C:\\nowhere\\x\.html/.test(m.error) && Date.now() - t0 >= 280, JSON.stringify(m));
 
-    // ---- a fresh start reads the grants back (last: the second copy shares the mocked browser)
+    // ---- a fresh start waits for the helper's list (last: the second copy shares the mocked browser)
+    local.localGrants = [W + 'old'];   // a list an older version kept in storage.local
     const ctx2 = makeCtx();
     for (const f of SCRIPTS) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx2, { filename: f });
     await tick(80);
     const s2 = vm.runInContext('cizState', ctx2).get();
-    check('a fresh start loads the allowed folders from storage.local', JSON.stringify(s2.localGrants) === JSON.stringify([W + 'game', 'C:\\Users\\H\\Desktop\\new']) && s2.grantAsk === null && s2.fileAccess === 'yes', JSON.stringify(s2.localGrants));
+    check('a fresh start allows nothing until the helper sends its list, and drops the old stored list', s2.localGrants.length === 0 && !('localGrants' in local) && s2.grantAsk === null && s2.fileAccess === 'yes', JSON.stringify(s2.localGrants));
   } catch (e) {
     check('no unexpected errors', false, e.stack);
   } finally {

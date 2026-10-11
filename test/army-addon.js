@@ -103,6 +103,13 @@ async function armyCall(tool, args, worker = 'w1', run = 'r1') {
 const day = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const tabOf = id => tabs.find(t => t.id === id);
 
+// The helper's confirm window answers (host/lib/confirm.js): the last question the add-on sent gets this answer.
+const answerConfirm = async ok => {
+  const q = [...native.sent].reverse().find(m => m.type === 'confirm');
+  native.onMessage.fire({ type: 'confirm_result', id: q && q.id, ok, error: ok ? '' : 'The answer in the confirm window was no.' });
+  await tick();
+  return q;
+};
 (async () => {
   try {
     await tick(50);
@@ -141,6 +148,7 @@ const tabOf = id => tabs.find(t => t.id === id);
 
     // 5. web pages only, Google sign-in hands-off even in Unsafe mode
     await fromPanel({ type: 'setUnsafe', value: true });
+    await answerConfirm(true);
     tabOf(A).url = 'https://accounts.google.com/signin/v2';
     n = injected.length;
     const onGoogle = await armyCall('read_page', { tab_id: A });

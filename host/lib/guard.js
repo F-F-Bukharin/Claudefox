@@ -34,7 +34,7 @@ function protectedPlaces() {
     path.join(app, 'Microsoft', 'Crypto'), path.join(app, 'Microsoft', 'SystemCertificates'),
     path.join(home, '.claude'), path.join(home, '.claude.json'), path.join(app, 'Claude'),
     P.CLAUDE_CONFIG_DIR, P.ACCOUNTS_DIR, P.TOKEN_FILE, P.ACCOUNTS_FILE, P.LOG_DIR,
-    path.join(P.BASE, 'tools.json'), path.join(P.BASE, 'mcp.json'), P.MCP_ARMY_CONFIG, P.ARMY_DIR, path.join(P.BASE, 'sign-in.cmd'), path.join(P.BASE, 'tool-sign-in.cmd'),
+    path.join(P.BASE, 'tools.json'), path.join(P.BASE, 'mcp.json'), P.MCP_ARMY_CONFIG, P.ARMY_DIR, P.LOCAL_GRANTS, path.join(P.BASE, 'sign-in.cmd'), path.join(P.BASE, 'tool-sign-in.cmd'),
     path.join(home, '.ssh'), path.join(home, '.gnupg'), path.join(home, '.aws'), path.join(home, '.azure'),
     path.join(home, '.config', 'gcloud'), path.join(home, '.kube'), path.join(home, '.docker'),
     path.join(app, 'Bitwarden'), path.join(local, '1Password'), path.join(app, 'KeePass'), path.join(app, 'KeePassXC'),

@@ -28,6 +28,14 @@ const OUTPUT = require('./lib/output');
 const { extractText, kindOf: docKind } = require('./lib/doctext');
 const armyguard = require('./lib/armyguard');
 const { killTree } = require('./lib/army');
+const { createConfirm } = require('./lib/confirm');
+const { createLocalPages, createGrants } = require('./lib/localpages');
+
+// The confirm window (lib/confirm.js): what the user allowed there, for this helper's life (Stop or a Zen restart ends
+// it). The add-on asks before Unsafe mode or file tools go on, and a chat turn gets only what was allowed here.
+const confirm = createConfirm({ killTree });
+const confirmed = { unsafe: false, files: null };   // files: { mode, folder }
+const sameDir = (a, b) => guard.within(a, b) && guard.within(b, a);
 
 log.open('host.log');
 // Stray console output must never reach stdout (the native messaging channel).
@@ -97,6 +105,8 @@ function pickFolder() {
       folderWindowOpen = false;
       if (err) return sendAddon({ type: 'pick_folder_result', ok: false, error: 'The folder window did not finish. Type the path instead.' });
       const picked = String(stdout || '').replace(/^\uFEFF/, '').trim();
+      // A folder picked in the Windows folder window is the user's own choice: file tools that were allowed move to it.
+      if (picked && confirmed.files && path.isAbsolute(picked)) confirmed.files.folder = path.resolve(picked);
       sendAddon({ type: 'pick_folder_result', ok: true, path: picked, cancelled: !picked });
     });
 }
@@ -109,6 +119,7 @@ function onAddon(msg) {
       log.info(`add-on ${addonVersion} connected`);
       sendAddon({ type: 'hello', version: VERSION, server: `host ${VERSION}`, clients: clientNames(), ...sourceInfo() });
       sendMods();
+      sendGrants();
       toolbox.push(activeId());
       toolbox.ensureFresh(activeId()).then(() => toolbox.push(activeId())).catch(e => log.warn('tools scan', e.message));
       return;
@@ -127,12 +138,23 @@ function onAddon(msg) {
       return;
     }
 
-    case 'local_grant_result':   // the user's answer about a folder (lib/localpages.js)
-    case 'local_tab_result': {   // the tab that shows a local page
+    case 'local_tab_result': {   // the tab that shows a local page (lib/localpages.js)
       const done = addonAsks.get(String(msg.id));
       if (done) done(msg);
       return;
     }
+
+    case 'confirm':       return answerConfirm(msg);   // Unsafe mode or file tools are about to go on
+    case 'unsafe_off':    confirmed.unsafe = false; return;
+    case 'files_off':     confirmed.files = null; return;
+    case 'local_ask':     // a file: tab outside the allowed folders: the user answers in the confirm window
+      local.allowFolder(String(msg.folder || ''))
+        .then(folder => sendAddon({ type: 'local_ask_result', id: msg.id, ok: true, folder }),
+          e => sendAddon({ type: 'local_ask_result', id: msg.id, ok: false, error: e.message || String(e) }));
+      return;
+    case 'local_grant_remove':
+      if (grants.remove(String(msg.folder || ''))) { log.info('local pages: a folder was removed'); sendGrants(); }
+      return;
 
     case 'claude_status':
       sendStatus();
@@ -599,12 +621,14 @@ function startChat(msg) {
     }
     const why = guard.folderProblem(folder, msg.files);
     if (why) return refuse(`File tools can't use ${folder}: ${why}. Pick another folder in Settings.`);
+    const ok = confirmed.files && sameDir(confirmed.files.folder, path.resolve(folder)) && (msg.files === 'read' || confirmed.files.mode === 'write');
+    if (!ok) return refuse(`File tools for ${folder} were not allowed in the Claude in Zen confirm window. Turn file tools off and on again in Profile, Permissions.`);
     files.mode = msg.files;
     files.folder = path.resolve(folder);
   }
   const choice = improve ? MODELS.selfimprove : (MODELS[msg.model] || MODELS.speed);
   const armyOn = !improve && msg.model === 'army';
-  const unsafe = !improve && msg.unsafe === true;
+  const unsafe = !improve && msg.unsafe === true && confirmed.unsafe;   // only when the user allowed it in the confirm window
   const caveman = !improve && msg.caveman === true;
   const resume = !improve && typeof msg.resume === 'string' && /^[0-9a-f-]{36}$/i.test(msg.resume) ? msg.resume : '';
   const key = activeId();
@@ -718,7 +742,42 @@ function tabLine(tab) {
 // ------------------------------------------------------------------ tools the helper answers itself
 // read_document: the text of a Word, PowerPoint, Excel or OpenDocument file in the file-tools folder or among the
 // files attached to the chat, with the same limits as the file tools (never a protected place).
-const local = require('./lib/localpages').createLocalPages({ askAddon });
+const grants = createGrants(P.LOCAL_GRANTS);
+function sendGrants() { sendAddon({ type: 'local_grants', folders: grants.list() }); }
+const local = createLocalPages({ askAddon, confirm: q => confirm.ask(q), grants, changed: sendGrants,
+  asking: folder => sendAddon({ type: 'local_question', folder }) });
+
+// The add-on asks before Unsafe mode or file tools go on. The user answers in the confirm window; the helper keeps
+// the answer, and chat turns get only what was allowed.
+async function answerConfirm(msg) {
+  const id = String(msg.id || '');
+  const reply = (ok, error) => sendAddon({ type: 'confirm_result', id, ok: !!ok, error: error || '' });
+  if (msg.kind === 'unsafe') {
+    const r = await confirm.ask({ title: 'Claude in Zen: turn on Unsafe mode?',
+      text: 'Claude may then act on Google sign-in and account pages like on any other site, to debug sign-in problems. It still never types passwords, 2FA codes or payment details.\n\nUnsafe mode turns off when you press Stop or restart Zen.',
+      yes: 'Turn on', no: 'Cancel' });
+    if (r.ok) confirmed.unsafe = true;
+    return reply(r.ok, r.error);
+  }
+  if (msg.kind === 'files') {
+    const mode = msg.mode === 'write' ? 'write' : 'read';
+    const raw = String(msg.folder || '').trim();
+    if (!raw || !path.isAbsolute(raw) || !isDir(raw)) return reply(false, `There is no folder at ${raw || '(none)'}.`);
+    const folder = path.resolve(raw);
+    const why = guard.folderProblem(folder, mode);
+    if (why) return reply(false, `File tools can't use ${folder}: ${why}.`);
+    const have = confirmed.files;
+    if (have && sameDir(have.folder, folder) && (mode === 'read' || have.mode === 'write')) return reply(true);   // allowed already
+    const r = await confirm.ask({ title: 'Claude in Zen: turn on file tools?',
+      text: mode === 'write'
+        ? `Let Claude read, create, change and delete files in this folder and its subfolders?\n\n${folder}\n\nThere is no undo. Claude never gets a shell.`
+        : `Let Claude read and search the files in this folder and its subfolders?\n\n${folder}\n\nNo changes, no shell.`,
+      yes: mode === 'write' ? 'Allow read and write' : 'Allow reading', no: 'Cancel' });
+    if (r.ok) confirmed.files = { mode, folder };
+    return reply(r.ok, r.error);
+  }
+  return reply(false, 'Unknown question.');
+}
 const HELPER_TOOLS = {
   army_start: (args, client) => army.start(args, client),
   army_wait: (args, client) => army.wait(args, client),
@@ -816,7 +875,7 @@ let acc = loadAccounts();
 let login = null;   // the open sign-in window: { id, dir, isNew, started, timer }
 
 // Settings > Tools and plugins: per account (each account is its own Claude Code profile).
-const toolbox = createToolbox({ findClaude, claudeEnv, dirOf: id => accountDir(id), emit: m => sendAddon(m) });
+const toolbox = createToolbox({ findClaude, claudeEnv, dirOf: id => accountDir(id), emit: m => sendAddon(m), confirm: q => confirm.ask(q) });
 
 function loadAccounts() {
   let a = {};
@@ -1019,6 +1078,7 @@ function shutdown(reason) {
   shuttingDown = true;
   log.info(`shutting down: ${reason}`);
   cancelChat('*', 'Stopped.');
+  confirm.closeAll(true);   // an open confirm window answers no
   if (login) { clearTimeout(login.timer); login = null; }   // the window itself stays: finishing it still works later
   for (const c of clients.values()) { try { c.sock.destroy(); } catch {} }
   try { server.close(); } catch {}

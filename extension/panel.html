@@ -54,16 +54,12 @@
         <button class="chip" data-fill="/tabs">/tabs</button>
         <button class="chip" data-fill="/help">/help</button>
       </div>
-      <!-- Claude asks to look in a folder on this computer (lib/local.js): one question at a time -->
-      <div id="grantAsk" class="confirm grant-ask" role="alertdialog" aria-labelledby="grantTitle" aria-describedby="grantFolder" hidden>
+      <!-- Claude asks to look in a folder on this computer: the answer is given in the helper's confirm window -->
+      <div id="grantAsk" class="confirm grant-ask" role="status" aria-labelledby="grantTitle" aria-describedby="grantFolder" hidden>
         <p id="grantTitle"><b>Claude asks to look in this folder</b></p>
         <p id="grantFolder" class="mono grant-folder"></p>
-        <p class="muted small">Allowing covers the folder and its subfolders until you remove it in Profile, Permissions. Army workers never look there.</p>
+        <p class="muted small">Answer in the Claude in Zen window that opened: Allow this folder, or Deny. Allowing covers the folder and its subfolders until you remove it in Profile, Permissions. Army workers never look there.</p>
         <p id="grantAccess" class="warnnote small" hidden></p>
-        <div class="confirm-btns">
-          <button type="button" id="grantDeny" class="ghost">Deny</button>
-          <button type="button" id="grantAllow" class="primary">Allow this folder</button>
-        </div>
       </div>
       <form id="composer" class="inputbox">
         <div class="attach">
@@ -206,13 +202,6 @@
         <span class="val"><input type="checkbox" id="unsafeToggle" class="switch"></span>
       </div>
       <p id="unsafeNote" class="muted small unsafe-note"></p>
-      <div id="unsafeConfirm" class="confirm" hidden>
-        <p>Claude will open and click through Google sign-in and account pages like any other site, so you can debug the sign-in bug. It still never types passwords, 2FA codes or payment details. Unsafe mode turns off when you press Stop or restart Zen.</p>
-        <div class="confirm-btns">
-          <button id="unsafeNo" class="ghost">Cancel</button>
-          <button id="unsafeYes" class="primary">Turn on</button>
-        </div>
-      </div>
       <div class="row">
         <span>Local folders</span>
         <span class="val" id="localCount">none allowed</span>

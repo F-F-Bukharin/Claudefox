@@ -31,6 +31,15 @@ for (const rel of scripts) {
   check('the menu uses ' + path.basename(rel), menu.includes(path.basename(rel)));
 }
 
+// The confirm window (host/confirm.ps1) ships to friends, and its no button is the default.
+const friends = fs.readFileSync(path.join(root, 'tools', 'build-friends.ps1'), 'utf8');
+const confirmPs = fs.readFileSync(path.join(root, 'host', 'confirm.ps1'), 'utf8');
+check('the friends zip ships the confirm window', /'confirm\.ps1'/.test(friends));
+check('the confirm window uses CRLF, says no on Enter and Esc, and stays on top', confirmPs.includes('\r\n') && !/[^\r]\n/.test(confirmPs)
+  && /\$form\.AcceptButton = \$no/.test(confirmPs) && /\$form\.CancelButton = \$no/.test(confirmPs) && /\$form\.TopMost = \$true/.test(confirmPs));
+// Local mods and saved files stay out of the .xpi.
+check('build-xpi leaves out mods and output, except their READMEs', /\$rel -like 'mods\/\*' -and \$rel -ne 'mods\/README\.txt'/.test(fs.readFileSync(path.join(root, 'tools', 'build-xpi.ps1'), 'utf8')));
+
 const prefLines = lines(menu).filter(l => /prefs\.js/.test(l));
 check('the menu reads prefs.js and never writes it', prefLines.length > 0 &&
   prefLines.every(l => !/Set-Content|Add-Content|Out-File|WriteAll|Copy-Item|Move-Item|Remove-Item/.test(l)));

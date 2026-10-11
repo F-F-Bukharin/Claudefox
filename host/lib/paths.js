@@ -18,6 +18,7 @@ module.exports = {
   MCP_CONFIG: path.join(BASE, 'mcp.json'),
   MCP_ARMY_CONFIG: path.join(BASE, 'mcp-army.json'),   // the lead's tool server in Army mode (army_start, army_wait)
   ARMY_DIR: path.join(BASE, 'army'),                    // one tool-server config per running army worker
+  LOCAL_GRANTS: path.join(BASE, 'local-grants.json'),   // folders the user allowed for local pages (lib/localpages.js)
   PIPE: process.env.CLAUDE_IN_ZEN_PIPE || (process.platform === 'win32'
     ? `\\\\.\\pipe\\claude-in-zen-${USER}`
     : path.join(os.tmpdir(), `claude-in-zen-${USER}.sock`)),

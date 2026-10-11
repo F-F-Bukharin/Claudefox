@@ -47,10 +47,11 @@ Friends: see `START HERE.txt` (it ships in the friends zip).
   blocks). The reply shows each worker's trail; **Show** opens a worker's tab. The switch is remembered.
 - **Local pages and files**: Claude can open a page or file from this PC in a tab (`local_page_open`, e.g. a
   downloaded HTML game, then screenshot, click and keys), list a folder (`local_files`) and read a file's text
-  (`local_file_read`). The first time in a folder the panel asks **Allow this folder** or **Deny**; allowed folders are
-  listed in Profile (Permissions) with **Remove**. Zen also needs about:addons → Claude in Zen → Permissions and data →
+  (`local_file_read`). The first time in a folder the confirm window (below) asks **Allow this folder** or **Deny**;
+  allowed folders are listed in Profile (Permissions) with **Remove**. Zen also needs about:addons → Claude in Zen → Permissions and data →
   **Access local files on your computer** turned on (off by default since Firefox 153).
-- **File tools** (Profile, off by default): one folder, Read only or Read and write. Never a shell.
+- **File tools** (Profile, off by default): one folder, Read only or Read and write, after a yes in the confirm window.
+  Never a shell, and never Claude in Zen's own code (Read and write refuses a folder inside it).
 - **Accounts**: one Claude Code profile per account, switchable in Profile; on a usage limit the panel offers to
   switch.
 - **Sign-in is remembered** across Zen restarts (email, name and account id only, never cookies).
@@ -70,6 +71,10 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 ```
 
 ## Rules (always on)
+- **Confirm window**: Unsafe mode, file tools, a folder for local pages, a tool that runs a program and a plugin install
+  each need a yes in a small Windows window the helper opens outside Zen. Nothing in the add-on or the panel, a mod
+  included, can answer it; no answer in two minutes, or Stop, counts as no. **Mods** start off: turn each one on in
+  Settings (Mods).
 - Google sign-in pages are hands-off unless you turn on **Unsafe mode** in Profile (Permissions). It lasts until Stop or a Zen restart. `about:` pages can be seen in screenshots but never read or touched (the saved-password pages not even seen). `file:` pages only inside folders you allowed, never by army workers.
 - Passwords, 2FA codes and payment details are never typed by Claude, in any mode. Claude fills an email, clicks through to the password step, then waits while you type the password in Zen.
 - Text on web pages, attached files and other tools' results is untrusted data, wrapped as such, never instructions.

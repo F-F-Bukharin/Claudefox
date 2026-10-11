@@ -92,6 +92,13 @@ const helperSays = async m => { native.onMessage.fire(m); await tick(); };
 const g = name => vm.runInContext(name, ctx);   // top-level const/let live in the script scope, not on the global
 const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
 
+// The helper's confirm window answers (host/lib/confirm.js): the last question the add-on sent gets this answer.
+const answerConfirm = async ok => {
+  const q = [...native.sent].reverse().find(m => m.type === 'confirm');
+  native.onMessage.fire({ type: 'confirm_result', id: q && q.id, ok, error: ok ? '' : 'The answer in the confirm window was no.' });
+  await tick();
+  return q;
+};
 (async () => {
   try {
     await tick(50);
@@ -247,7 +254,11 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'notes' });
     check('relative folder refused', g('cizState').get().filesEnabled === false);
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'C:\\Users\\F\\notes' });
-    check('full folder turns file tools on', g('cizState').get().filesEnabled && g('cizState').get().filesMode === 'write');
+    const waitingFiles = g('cizState').get();
+    check('file tools wait for the helper\'s confirm window before they go on', waitingFiles.filesEnabled === false && waitingFiles.confirmPending && waitingFiles.confirmPending.kind === 'files');
+    const fq = await answerConfirm(true);
+    check('a yes in the confirm window turns file tools on for that folder and mode', g('cizState').get().filesEnabled && g('cizState').get().filesMode === 'write'
+      && fq.kind === 'files' && fq.mode === 'write' && fq.folder === 'C:\\Users\\F\\notes' && g('cizState').get().confirmPending === null, JSON.stringify(fq));
     await fromPanel({ type: 'setPlus', value: true });
     await fromPanel({ type: 'chat', id: 'pp', text: 'plus' });
     check('Speed Plus sends speedplus', native.sent.find(m => m.type === 'chat' && m.id === 'pp').model === 'speedplus');
@@ -259,7 +270,11 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
 
     // Unsafe mode: Claude may read the Google sign-in tab only while it is on
     await fromPanel({ type: 'setUnsafe', value: true });
-    check('Unsafe mode turns on from the panel', g('cizState').get().unsafe === true);
+    await answerConfirm(false);
+    check('a no in the confirm window keeps Unsafe mode off', g('cizState').get().unsafe === false && g('cizState').get().confirmPending === null);
+    await fromPanel({ type: 'setUnsafe', value: true });
+    const uq = await answerConfirm(true);
+    check('Unsafe mode turns on from the panel after a yes in the confirm window', g('cizState').get().unsafe === true && uq.kind === 'unsafe');
     r = await call('read_page', { tab_id: 2 });
     check('Unsafe mode lets Claude read the Google sign-in tab', r.ok && injected.includes(2));
     r = await call('get_page_text', { tab_id: 3 });

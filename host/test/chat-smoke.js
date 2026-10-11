@@ -104,7 +104,13 @@ process.stdin.on('end', async () => {
 });
 `, { mode: 0o755 });
 
-const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_CLAUDE: fake, ANTHROPIC_API_KEY: 'sk-should-not-leak', CLAUDE_IN_ZEN_PICK: 'C:\\Users\\Test\\Notes' };
+// The confirm window (host/lib/confirm.js), played by a script: it writes each question down and answers what
+// confirm-answer.txt says (yes when there is none).
+const confirmLog = path.join(tmp, 'confirm.log'), confirmAnswer = path.join(tmp, 'confirm-answer.txt');
+const fakeConfirm = path.join(tmp, 'confirm');
+fs.writeFileSync(fakeConfirm, `#!${process.execPath}\nconst fs = require('fs');\nfs.appendFileSync(${JSON.stringify(confirmLog)}, JSON.stringify({ title: process.env.CIZ_Q_TITLE, text: process.env.CIZ_Q_TEXT, yes: process.env.CIZ_Q_YES, no: process.env.CIZ_Q_NO }) + '\\n');\nlet a = 'yes'; try { a = fs.readFileSync(${JSON.stringify(confirmAnswer)}, 'utf8').trim(); } catch {}\nprocess.stdout.write(a);\n`, { mode: 0o755 });
+const questions = () => { try { return fs.readFileSync(confirmLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
+const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_CLAUDE: fake, ANTHROPIC_API_KEY: 'sk-should-not-leak', CLAUDE_IN_ZEN_PICK: 'C:\\Users\\Test\\Notes', CLAUDE_IN_ZEN_CONFIRM: fakeConfirm };
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -204,12 +210,34 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     check('chat prompt has no ask-before rule', /no confirmation step/.test(val('--append-system-prompt')));
     check('default prompt keeps Google sign-in pages hands-off', /Google sign-in pages are hands-off/.test(val('--append-system-prompt')) && !/Unsafe mode is on/.test(val('--append-system-prompt')));
 
+    // File tools: a chat gets them only for what the user allowed in the confirm window.
+    toHelper({ type: 'chat', id: 'c2n', text: 'x', files: 'read', folder });
+    const notAllowed = await next(m => m.type === 'chat_done' && m.id === 'c2n');
+    check('file tools that were never allowed in the confirm window are refused', !notAllowed.ok && /were not allowed in the Claude in Zen confirm window/.test(notAllowed.error), notAllowed.error);
+    fs.writeFileSync(confirmAnswer, 'no');
+    toHelper({ type: 'confirm', id: 'k0', kind: 'files', mode: 'read', folder });
+    const said = await next(m => m.type === 'confirm_result' && m.id === 'k0');
+    check('a no in the confirm window keeps file tools off', said.ok === false && /no/.test(said.error), JSON.stringify(said));
+    fs.writeFileSync(confirmAnswer, 'yes');
+    toHelper({ type: 'confirm', id: 'k1', kind: 'files', mode: 'read', folder });
+    const yes1 = await next(m => m.type === 'confirm_result' && m.id === 'k1');
+    const q1 = questions().pop();
+    check('the confirm window asks about the folder in plain words, with its own buttons', yes1.ok === true && q1 && q1.text.includes(folder) && q1.yes === 'Allow reading' && q1.no === 'Cancel', JSON.stringify(q1));
+    toHelper({ type: 'confirm', id: 'k1b', kind: 'files', mode: 'read', folder });
+    const allowedAgain = await next(m => m.type === 'confirm_result' && m.id === 'k1b');
+    check('asking again for what is already allowed answers at once, without a window', allowedAgain.ok === true && questions().length === 2);
     toHelper({ type: 'chat', id: 'c2', text: 'again', resume: done.sessionId, files: 'read', folder });
     await next(m => m.type === 'chat_done' && m.id === 'c2', 15000);
     const b = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
     check('resume passes the session id', b[b.indexOf('--resume') + 1] === done.sessionId);
     check('read-only file tools', b[b.indexOf('--tools') + 1] === 'Read,Glob,Grep,WebSearch,WebFetch' && b[b.indexOf('--add-dir') + 1] === folder && b[b.indexOf('--permission-mode') + 1] === 'dontAsk');
 
+    toHelper({ type: 'chat', id: 'c3n', text: 'edit', files: 'write', folder });
+    const writeNo = await next(m => m.type === 'chat_done' && m.id === 'c3n');
+    check('read and write needs its own yes, reading is not enough', !writeNo.ok && /not allowed/.test(writeNo.error), writeNo.error);
+    toHelper({ type: 'confirm', id: 'k2', kind: 'files', mode: 'write', folder });
+    const yes2 = await next(m => m.type === 'confirm_result' && m.id === 'k2');
+    check('read and write is asked with its own warning', yes2.ok && /no undo/.test(questions().pop().text));
     toHelper({ type: 'chat', id: 'c3', text: 'edit', files: 'write', folder, model: 'quality' });
     await next(m => m.type === 'chat_done' && m.id === 'c3', 15000);
     const c = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
@@ -222,6 +250,13 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     check('reply says which model and effort ran', eventsFor('c3b').some(e => e.kind === 'meta' && e.model === 'claude-haiku-5-5' && e.effort === 'max'));
     check('Speed Plus is Haiku 5.5 on max', sp[sp.indexOf('--model') + 1] === 'claude-haiku-5-5' && sp[sp.indexOf('--effort') + 1] === 'max');
 
+    toHelper({ type: 'chat', id: 'c3x', text: 'unsafe', unsafe: true });
+    await next(m => m.type === 'chat_done' && m.id === 'c3x', 15000);
+    const ux = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
+    check('Unsafe mode the confirm window never allowed stays off in the prompt', /Google sign-in pages are hands-off/.test(ux[ux.indexOf('--append-system-prompt') + 1]));
+    toHelper({ type: 'confirm', id: 'k3', kind: 'unsafe' });
+    const yes3 = await next(m => m.type === 'confirm_result' && m.id === 'k3');
+    check('Unsafe mode is asked in the confirm window', yes3.ok && /Unsafe mode/.test(questions().pop().title));
     toHelper({ type: 'chat', id: 'c3u', text: 'unsafe', unsafe: true });
     await next(m => m.type === 'chat_done' && m.id === 'c3u', 15000);
     const ua = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
@@ -313,6 +348,18 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     toHelper({ type: 'tool_add', name: 'my-api', target: 'https://example.com/mcp', on: true });
     const ad = await next(m => m.type === 'tool_result' && m.action === 'add', 15000);
     check('add a tool server by address', ad.ok && fs.readFileSync(record + '.cmds', 'utf8').includes('mcp add --scope user --transport http my-api https://example.com/mcp'), ad.error);
+    check('a tool by address needs no confirm window', !questions().some(q => /my-api/.test(q.text)));
+    fs.writeFileSync(confirmAnswer, 'no');
+    toHelper({ type: 'tool_add', name: 'runner', target: 'cmd /c calc.exe' });
+    const cmdNo = await next(m => m.type === 'tool_result' && m.action === 'add', 15000);
+    const cq = questions().pop();
+    check('a tool that runs a program is added only after a yes in the confirm window', !cmdNo.ok && /^Not added/.test(cmdNo.error) && cq && cq.text.includes('cmd /c calc.exe')
+      && !fs.readFileSync(record + '.cmds', 'utf8').includes('runner'), cmdNo.error);
+    toHelper({ type: 'plugin_install', spec: 'hooky@market' });
+    const plNo = await next(m => m.type === 'tool_result' && m.action === 'install', 15000);
+    check('a plugin install also needs a yes in the confirm window', !plNo.ok && /^Not installed/.test(plNo.error) && /can run programs/.test(questions().pop().text)
+      && !fs.readFileSync(record + '.cmds', 'utf8').includes('hooky@market'), plNo.error);
+    fs.writeFileSync(confirmAnswer, 'yes');
     toHelper({ type: 'tool_add', name: 'bad name!', target: 'https://example.com/mcp' });
     const bad2 = await next(m => m.type === 'tool_result' && m.action === 'add', 8000);
     check('bad tool names are refused', !bad2.ok && /Name/.test(bad2.error));
