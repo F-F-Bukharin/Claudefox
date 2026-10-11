@@ -1,7 +1,7 @@
 # Watch tool: Claudefox 0.11 and the Cowork watch skill
 
 Date: 2026-10-11
-Status: design approved in chat; this spec awaits F's review before planning.
+Status: design and spec approved by F; the plan is docs/superpowers/plans/2026-10-11-watch-tool.md.
 Branch: dev. Target: Claudefox 0.11.0 (Zen gets the same code).
 
 ## Goal
@@ -25,9 +25,9 @@ The vendored copy lives in host/vendor/claude-video/, with the upstream MIT LICE
 
 Removed from the Claudefox copy: gemini.py, whisper.py, local_whisperx.py, setup.py (its installers), hooks/, the plugin manifests and SKILL.md.
 
-Changed: download.py always passes --ignore-config to yt-dlp, so no yt-dlp config file on the PC can add cookie or other options. Imports of removed modules are cut, and the speech fallback is switched off.
+Changed: download.py always passes --ignore-config to yt-dlp, so no yt-dlp config file on the PC can add cookie or other options. It runs yt-dlp as `python -m yt_dlp`, so the friends check and the run use the same install. The cookie options are removed from the copy altogether: download.py loses its cookie parameters and auth_args, watch.py loses the cookie flags, and no file in the copy mentions cookies except NOTICE.md. Imports of removed modules are cut, and the speech fallback is switched off. watch.py loses the whisper and Gemini options; --no-whisper stays, because the helper passes it.
 
-Kept: the modules the captions and frames path needs (watch.py, download.py, frames.py, transcribe.py, config.py, runtime.py), verified by the import test.
+Kept: the modules the captions and frames path needs (watch.py, download.py, frames.py, transcribe.py, config.py, runtime.py), verified by the import test. config.py keeps only its constants and frame_cap: it reads no file, no environment variable and no key, because the upstream reads ~/.config/watch/.env and the API key variables.
 
 ## Claudefox helper
 
@@ -41,13 +41,13 @@ The child process gets an environment with no API keys and no WATCH_* variables.
 
 Each run has its own folder under %LOCALAPPDATA%\claude-in-zen\watch\, deleted when the run ends, whether it succeeds, fails or times out. A run has a 10-minute deadline. The deadline and Stop both kill the whole process tree.
 
-The report is capped at 60 KB. Frames are the ones the report lists, at most 24, read as PNG or JPEG and returned as image blocks, the same way screenshots come back in zen-mcp.js. The text is labelled as untrusted page content through PAGE_CONTENT in tools.js.
+The report is capped at 60 KB. Frames are the ones the report lists, at most 24, read as JPEG (frames.py writes JPEG) and returned as image blocks, the same way screenshots come back in zen-mcp.js. The text is labelled as untrusted page content through PAGE_CONTENT in tools.js.
 
 The tool is registered in tools.js and routed in claude-in-zen-host.js, next to local_file_read.
 
 ## Gating
 
-The panel gets a "Watch videos" switch in Settings, beside Unsafe mode. It is off by default and session-only: it clears on load and on Stop, as Unsafe mode does. Turning it on asks in the confirm window: "Claude in Zen: let Claude watch videos? It runs Python, yt-dlp and ffmpeg on this PC." Yes switches it on. The helper keeps its own flag, confirmed.watch, and refuses the tool while that flag is false.
+The panel gets a "Watch videos" switch in Profile → Permissions, directly under Unsafe mode (the Unsafe switch is there, not in Settings). It is off by default and session-only: it clears on load and on Stop, as Unsafe mode does. Turning it on asks in the confirm window: "Claude in Zen: let Claude watch videos? It runs Python, yt-dlp and ffmpeg on this PC." Yes switches it on. The helper keeps its own flag, confirmed.watch, and refuses the tool while that flag is false.
 
 The tool is listed to chat only when the helper starts a chat with the flag on, using an environment flag like PANEL and LEAD in zen-mcp.js.
 
