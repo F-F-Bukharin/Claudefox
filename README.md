@@ -7,7 +7,8 @@ Not affiliated with or endorsed by Anthropic or Zen.
 Plan, decisions and TODO: `claude/zen-addon-plan.md` in the Mod Making project.
 Friends: see `START HERE.txt` (it ships in the friends zip, where the add-on is called **Claudefox**).
 
-## Status (v0.9.0)
+## Status (v0.10.0)
+- **New in 0.10.0**: the army (the octopus in Quality: Opus 5.5 leads up to five Haiku 5.5 workers in background tabs), local pages (Claude sees and plays `file:` pages in folders you allow), no shell in any mode (Desktop Commander and similar stay off), and the friends zip named **Claudefox**.
 - **Setup in one double-click**: `Set up Claude in Zen.bat` installs the helper, signs Claude Code in and opens Zen's add-ons page with the add-on's path copied. Safe to run again.
 - **Chat** with Claude in the panel, streamed, with a progress bar and a Cancel link. Follow-ups continue the
   conversation; `/clear` (or **New chat** in the options menu) starts a new one. Long jobs can run up to an hour.
