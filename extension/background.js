@@ -71,6 +71,7 @@ browser.runtime.onConnect.addListener(port => {
   }));
   port.postMessage({ type: 'state', state: cizState.get(), log: cizState.log() });
   port.postMessage({ type: 'chatRuns', ids: [...chatRuns.keys()] });
+  sendNative({ type: 'watch_load' });   // the helper replies with watch_state (and asks the first-run question once)
   refreshArmyToday();   // the army card shows today's runs, even when Zen stayed open past midnight
 });
 
@@ -154,6 +155,10 @@ async function handlePanel(msg, port) {
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
     case 'setArmy':    return setArmy(!!msg.value);
     case 'setUnsafe': return setUnsafe(!!msg.value);
+    case 'setWatch':       return setWatch(!!msg.value);
+    case 'setWatchOnLoad': return setWatchOnLoad(!!msg.value);
+    case 'watchShown':     return sendNative({ type: 'watch_shown', id: String(msg.id || '').slice(0, 40) });
+    case 'watchAnswer':    return sendNative({ type: 'watch_answer', id: String(msg.id || '').slice(0, 40), allow: !!msg.allow });
     case 'localGrantRemove': return cizLocal.remove(String(msg.folder || '').slice(0, 1000));
     case 'modUpdate':
       if (!sendNative({ type: 'mod_update', id: String(msg.id || ''), enabled: msg.enabled, broken: msg.broken })) return cizState.addLog('error', 'Mods: the helper is not connected, so the change was not saved.');
@@ -471,11 +476,12 @@ async function stopAll(source) {
   // Everything is cut in this first step, before any await: a tool call, a worker's call or a folder question that
   // arrives while the tabs close below already finds the agent stopped and the helper gone. (set() changes the state
   // at once; only saving it waits.)
-  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, pending: 0 });
+  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, pending: 0 });
   for (const [id, a] of pendingActions) {
     try { a.controller.abort(new Error('Stopped')); } catch {}
     pendingActions.delete(id);
   }
+  sendNative({ type: 'watch_off' });   // before the helper goes: watching off, and a waiting card is cancelled
   disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
   endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)
   failChats('Stopped.');
@@ -563,6 +569,35 @@ async function setUnsafe(value) {
   if (!r.ok) return cizState.addLog('info', `Unsafe mode stays off: ${r.error || 'not allowed in the confirm window.'}`);
   await cizState.set({ unsafe: true });
   await cizState.addLog('warn', 'Unsafe mode on: Claude may act on Google sign-in pages. It still never types passwords, 2FA codes or payment details.');
+}
+
+// Watch videos (the watch_video tool). The switch lasts for this session: Stop, an add-on restart or a Zen restart turns
+// it off. Turning it on asks the helper's confirm window; the helper keeps the switch in step with watch_state.
+async function setWatch(value) {
+  if (!value) {
+    sendNative({ type: 'watch_off' });
+    if (cizState.get().watch) {
+      await cizState.set({ watch: false });
+      await cizState.addLog('info', 'Watch videos off');
+    }
+    return;
+  }
+  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on watching.');
+  const r = await askConfirm({ kind: 'watch' });
+  if (!r.ok) return cizState.addLog('info', `Watch videos stays off: ${r.error || 'not allowed in the confirm window.'}`);
+  await cizState.set({ watch: true });
+  await cizState.addLog('info', 'Watch videos on for this session.');
+}
+
+// The saved option "Start with watching on". Off is saved at once. On asks the confirm window; the helper saves the answer
+// (a no saves Off) and replies with watch_state, which sets watchOnLoad.
+async function setWatchOnLoad(value) {
+  if (!value) {
+    sendNative({ type: 'watch_set_on_load', value: false });
+    return cizState.set({ watchOnLoad: false });
+  }
+  const r = await askConfirm({ kind: 'watch_on_load' });
+  if (!r.ok) return cizState.addLog('info', `Watching every time the panel opens stays off: ${r.error || 'not allowed in the confirm window.'}`);
 }
 
 // The army switch (Quality only): Opus 5.5 at max effort may send up to five Haiku workers to background tabs.
@@ -904,6 +939,13 @@ async function onNativeMessage(msg) {
     case 'local_grants':     return cizLocal.setGrants(msg.folders);
     case 'local_question':   return cizLocal.setQuestion(String(msg.folder || ''));
     case 'local_ask_result': return cizLocal.answer(String(msg.id || ''), msg);
+    case 'watch_state':   // the helper's switch and saved option: after a panel load, a confirm answer or a card's Yes
+      return cizState.set({ watch: msg.watch === true, watchOnLoad: msg.watchOnLoad === true ? true : msg.watchOnLoad === false ? false : null });
+    case 'watch_ask':     return cizState.set({ watchAsk: { id: String(msg.id || '').slice(0, 40), source: String(msg.source || '').slice(0, 500) } });
+    case 'watch_ask_done': {
+      const cur = cizState.get().watchAsk;
+      return cur && cur.id === String(msg.id || '').slice(0, 40) ? cizState.set({ watchAsk: null }) : undefined;
+    }
     case 'confirm_result': { // the user's answer in the helper's confirm window (askConfirm)
       const done = confirmWaiters.get(String(msg.id || ''));
       if (done) done({ ok: msg.ok === true, error: String(msg.error || '').slice(0, 300) });

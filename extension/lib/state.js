@@ -13,6 +13,9 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   filesMode: 'read',          // 'read' | 'write' when file tools are on
   filesFolder: '',            // the one folder file tools may use
   unsafe: false,              // Unsafe mode: Claude may act on Google sign-in pages. Session only (load() clears it)
+  watch: false,               // Watch videos (the watch_video tool): on for this session only (load() clears it)
+  watchOnLoad: null,          // from the helper: true (watching starts on), false, or null (never asked)
+  watchAsk: null,             // { id, source } while the helper's card waits for an answer in the panel
   accounts: [],               // chat accounts from the helper: { id, email, plan, loggedIn, active }
   accountLogin: null,         // { id, isNew } while a sign-in window is open
   accountBusy: '',            // the account id whose switch is waiting for the helper
@@ -41,7 +44,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   pending: 0,
   grantAsk: null,             // { folder } while the helper's confirm window asks to allow a folder (lib/local.js)
   localGrants: [],            // folders Claude may look in (paths on this computer), as the helper keeps them
-  confirmPending: null,       // { kind: 'unsafe' | 'files' } while the helper's confirm window waits for the user
+  confirmPending: null,       // { kind: 'unsafe' | 'files' | 'watch' | 'watch_on_load' } while the helper's confirm window waits for the user
   fileAccess: 'unknown',      // 'yes' | 'no' | 'unknown': whether Zen lets the add-on into file: pages
 });
 
@@ -51,7 +54,7 @@ const cizState = {
 
   async load() {
     const got = await browser.storage.session.get(['state', 'log']);
-    this._cache = Object.assign({}, CIZ_DEFAULT_STATE, got.state || {}, { unsafe: false });   // never survives a restart
+    this._cache = Object.assign({}, CIZ_DEFAULT_STATE, got.state || {}, { unsafe: false, watch: false, watchAsk: null });   // never survive a restart
     this._log = Array.isArray(got.log) ? got.log : [];
     return this._cache;
   },

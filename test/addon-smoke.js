@@ -287,6 +287,40 @@ const answerConfirm = async ok => {
     r = await call('get_page_text', { tab_id: 3 });
     check('Unsafe mode still refuses about: pages', !r.ok && /browser page.*screenshot shows it/.test(r.error));
 
+    // ---- watch switch (Task 9): the switch, the saved option and the card messages (the helper decides; see lib/watchgate.js)
+    await fromPanel({ type: 'setWatch', value: true });
+    const wq0 = await answerConfirm(false);
+    check('watch: a no in the confirm window keeps watching off and leaves no question open', g('cizState').get().watch === false && g('cizState').get().confirmPending === null && (wq0 || {}).kind === 'watch');
+    await fromPanel({ type: 'setWatch', value: true });
+    const wq = await answerConfirm(true);
+    check('watch: a yes in the confirm window turns watching on for this session', g('cizState').get().watch === true && (wq || {}).kind === 'watch');
+    check('watch: the log says it is on for this session', g('cizState').log().some(e => e.text === 'Watch videos on for this session.'));
+    await fromPanel({ type: 'setWatch', value: false });
+    check('watch: the switch off sends watch_off to the helper and clears the flag', native.sent.some(m => m.type === 'watch_off') && g('cizState').get().watch === false);
+    await fromPanel({ type: 'setWatchOnLoad', value: true });
+    const ol0 = await answerConfirm(false);
+    check('watch: a no to saving On leaves the saved option as it was and sends no watch_set_on_load', g('cizState').get().watchOnLoad === null && (ol0 || {}).kind === 'watch_on_load' && !native.sent.some(m => m.type === 'watch_set_on_load'));
+    await fromPanel({ type: 'setWatchOnLoad', value: true });
+    const ol = await answerConfirm(true);
+    await helperSays({ type: 'watch_state', watch: false, watchOnLoad: true });
+    check("watch: a yes to saving On takes the option from the helper's reply", g('cizState').get().watchOnLoad === true && (ol || {}).kind === 'watch_on_load');
+    await fromPanel({ type: 'setWatchOnLoad', value: false });
+    check('watch: turning the option off is sent at once and sets it to false', native.sent.some(m => m.type === 'watch_set_on_load' && m.value === false) && g('cizState').get().watchOnLoad === false);
+    check('watch: the panel load asked the helper for the watch state, once', native.sent.filter(m => m.type === 'watch_load').length === 1);
+    await helperSays({ type: 'watch_ask', id: 'w1', source: 'clip.mp4' });
+    check('watch: a card from the helper sets the waiting question', (g('cizState').get().watchAsk || {}).id === 'w1' && (g('cizState').get().watchAsk || {}).source === 'clip.mp4');
+    await fromPanel({ type: 'watchShown', id: 'w1' });
+    await fromPanel({ type: 'watchAnswer', id: 'w1', allow: true });
+    check('watch: the card shown and the answer reach the helper with the same id', native.sent.some(m => m.type === 'watch_shown' && m.id === 'w1') && native.sent.some(m => m.type === 'watch_answer' && m.id === 'w1' && m.allow === true));
+    await helperSays({ type: 'watch_ask_done', id: 'other' });
+    check('watch: a done for another card is ignored', (g('cizState').get().watchAsk || {}).id === 'w1');
+    await helperSays({ type: 'watch_ask_done', id: 'w1' });
+    check('watch: the helper ends the card', g('cizState').get().watchAsk === null);
+    await fromPanel({ type: 'setWatch', value: true });
+    await answerConfirm(true);
+    await helperSays({ type: 'watch_ask', id: 'w2', source: 'clip2.mp4' });
+    check('watch: switched on again, with a card waiting (checked at Stop)', g('cizState').get().watch === true && (g('cizState').get().watchAsk || {}).id === 'w2');
+
     // Google Docs: read through the export, with the user's session
     r = await call('get_page_text', { tab_id: 6 });
     check('Google Docs are read through their export', r.ok && /Google Doc, read through its export/.test(r.result.text) && /Calcule a velocidade/.test(r.result.text) && r.result.title === 'Lista 3'
@@ -327,6 +361,7 @@ const answerConfirm = async ok => {
     check('Stop ends the open answer in the panel', panelIn.some(m => m.type === 'chatDone' && m.id === 'p4' && m.error === 'Stopped.'));
     check('Stop disconnects the helper and turns file tools off', port.disconnected && s.agent === 'stopped' && s.filesEnabled === false);
     check('Stop turns Unsafe mode off too', s.unsafe === false);
+    check('watch switch: Stop turns watching off, ends the card and sends watch_off to the helper', s.watch === false && s.watchAsk === null && port.sent.filter(m => m.type === 'watch_off').length === 2);
     check('Stop forgets the network log', !g('cizNet').size && !g('cizConsoleTabs').size);
     const w = await waiting;
     check('Stop aborts the running page action at once', !w.ok && w.error === 'Stopped' && Date.now() - tStop < 500 && s.pending === 0, `${Date.now() - tStop} ms`);
