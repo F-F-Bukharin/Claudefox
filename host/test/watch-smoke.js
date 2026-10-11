@@ -1,5 +1,5 @@
 'use strict';
-// Watch tool helper checks, one section per task of the watch-tool plan: args and python (Tasks 3, 4), run (Task 5), result (Task 6), gate and handler (Task 7).   node host/test/watch-smoke.js
+// Watch tool helper checks, one section per task of the watch-tool plan: args and python (Tasks 3, 4), run (Task 5), result (Task 6), gate and handler (Task 7), surface (Task 8).   node host/test/watch-smoke.js
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
@@ -297,7 +297,60 @@ async function handlerSection() {
   }
 }
 
-pythonSection().then(runSection).then(resultSection).then(gateSection).then(handlerSection).then(() => {
+// section surface (Task 8): the tool entry, untrusted wrapping, frame images, the tool server switch and the chat line.
+// The tool server runs as a child process here, since its stdin and stdout carry MCP; its log goes to a temporary folder.
+function listedTools(extraEnv, base) {
+  const { spawn } = require('child_process');
+  return new Promise((resolve, reject) => {
+    const env = { ...process.env, LOCALAPPDATA: base };
+    for (const k of ['CLAUDE_IN_ZEN_WATCH', 'CLAUDE_IN_ZEN_PANEL', 'CLAUDE_IN_ZEN_ARMY_TOKEN', 'CLAUDE_IN_ZEN_ARMY_LEAD']) delete env[k];
+    Object.assign(env, extraEnv);
+    const child = spawn(process.execPath, [path.join(__dirname, '..', 'zen-mcp.js')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
+    const timer = setTimeout(() => { child.kill(); reject(new Error('the tool server did not answer tools/list')); }, 8000);
+    child.on('error', e => { clearTimeout(timer); reject(e); });
+    child.stdin.on('error', () => {});
+    let buf = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', d => {
+      buf += d;
+      let i;
+      while ((i = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        let m = null;
+        try { m = JSON.parse(line); } catch { continue; }
+        if (m && m.id === 2) { clearTimeout(timer); child.kill(); resolve(((m.result && m.result.tools) || []).map(t => t.name)); }
+      }
+    });
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } } }) + '\n');
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n');
+  });
+}
+
+async function surfaceSection() {
+  const { TOOLS, PAGE_CONTENT } = require('../lib/tools');
+  const { WORKER_TOOLS, checkCall } = require('../lib/armyguard');
+  const { chatPrompt } = require('../lib/chatargs');
+  const { format } = require('../zen-mcp');   // loads without starting the tool server: its startup runs only as the main module
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-surface-'));
+  try {
+    const listed = env => listedTools(env, base).catch(() => []);
+    const t = TOOLS.find(x => x.name === 'watch_video');
+    check('watch_video is a watch-only, read-only entry with a 15-minute limit, and its content is untrusted', !!t && t.watchOnly === true && t.readOnly === true && t.timeoutMs >= 900000 && PAGE_CONTENT.has('watch_video'));
+    check('army workers never get it', !WORKER_TOOLS.includes('watch_video') && checkCall({}, 'watch_video', { source: 'https://a.b' }, Date.now()).ok === false);
+    const c = format('watch_video', { ok: true, result: { text: 'Report', frames: [{ mimeType: 'image/jpeg', data: 'AAAA' }] } }).content;
+    check('frames come back as image blocks after the wrapped text', c.length === 2 && c[0].text.includes('<untrusted_page_content>') && c[0].text.includes('Report')
+      && c[1].type === 'image' && c[1].data === 'AAAA' && c[1].mimeType === 'image/jpeg');
+    check('the prompt has the watch line only when o.watch is set, and calls the content untrusted evidence', chatPrompt([], { watch: true }).includes('untrusted evidence')
+      && !chatPrompt([], {}).includes('watch_video') && chatPrompt([], {}) === chatPrompt([], { watch: false }));
+    const on = await listed({ CLAUDE_IN_ZEN_WATCH: '1' });
+    const off = await listed({});
+    check('the tool server lists watch_video only while CLAUDE_IN_ZEN_WATCH is 1', on.includes('watch_video') && !off.includes('watch_video'));
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+}
+
+pythonSection().then(runSection).then(resultSection).then(gateSection).then(handlerSection).then(surfaceSection).then(() => {
   console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);
   process.exit(failed ? 1 : 0);
 });
