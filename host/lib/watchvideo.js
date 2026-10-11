@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { toPath } = require('./localpages');
 const guard = require('./guard');
+const { makeRunDir, removeRunDir } = require('./watchrun');
 
 const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.webm', '.mkv', '.avi', '.flv', '.wmv']);
 const SCRUB = /^WATCH_|^YTDLP_|^YT_DLP_|^GEMINI_|^GROQ_|^OPENAI_|^PYTHON(PATH|HOME|STARTUP)$|API_?KEY|TOKEN|SECRET|PASSWORD|COOKIE/i;
@@ -112,4 +113,42 @@ function assembleResult({ stdout, stderr, code, runDir, readFile, maxFrames = 24
   return { text, frames };
 }
 
-module.exports = { checkSource, checkQuestion, checkTime, buildArgv, buildEnv, findPython, parseFrames, assembleResult };
+// The clock argument: empty, or a time the argument list can carry (checkTime). A bad one is refused at once.
+function clockArg(name, raw) {
+  if (raw == null || String(raw).trim() === '') return '';
+  const t = checkTime(raw);
+  if (t === null) throw new Error(`The ${name} time is not valid. Use seconds (90) or a clock time (1:30).`);
+  return t;
+}
+
+const readOrNull = p => { try { return fs.readFileSync(p); } catch { return null; } };
+
+// The tool (watch-tool spec, "Gating and permission"). A refusal or a missing Python throws at once. Unless watching is on
+// for the session, the permission step asks the user first; a No throws its text and nothing runs.
+// deps: { enabled, permission: { ask(source) -> Promise<{ ok, message? }> }, folderOf, baseDir, scriptPath, getPython,
+//         runs: { run(opts) -> Promise<{ code, stdout, stderr, timedOut, stopped }> }, deadlineMs }
+async function watchVideo(args, deps) {
+  const src = checkSource(args.source, deps.folderOf);
+  if (!src.ok) throw new Error(src.error);
+  const q = checkQuestion(args.question);
+  if (!q.ok) throw new Error(q.error);
+  const start = clockArg('start', args.start);
+  const end = clockArg('end', args.end);
+  const py = await deps.getPython();
+  if (!deps.enabled) {
+    const v = await deps.permission.ask(args.source);
+    if (!v.ok) throw new Error(v.message);
+  }
+  const runDir = makeRunDir(deps.baseDir);
+  try {
+    const argv = buildArgv({ script: deps.scriptPath, source: src.source, question: q.value, start, end, runDir });
+    const r = await deps.runs.run({ exe: py.exe, args: [...py.args, ...argv], cwd: runDir, env: buildEnv(process.env), deadlineMs: deps.deadlineMs });
+    if (r.stopped) return { text: 'Stopped.', frames: [] };
+    if (r.timedOut) return { text: 'The video took longer than 10 minutes, so it was stopped.', frames: [] };
+    return assembleResult({ stdout: r.stdout, stderr: r.stderr, code: r.code, runDir, readFile: readOrNull });
+  } finally {
+    try { removeRunDir(runDir); } catch { /* still held by a child that is shutting down; the result is already read */ }
+  }
+}
+
+module.exports = { checkSource, checkQuestion, checkTime, buildArgv, buildEnv, findPython, parseFrames, assembleResult, watchVideo };

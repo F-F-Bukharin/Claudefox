@@ -1,5 +1,5 @@
 'use strict';
-// Watch tool helper checks, one section per task of the watch-tool plan: args and python (Tasks 3, 4), run (Task 5), result (Task 6).   node host/test/watch-smoke.js
+// Watch tool helper checks, one section per task of the watch-tool plan: args and python (Tasks 3, 4), run (Task 5), result (Task 6), gate and handler (Task 7).   node host/test/watch-smoke.js
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
@@ -123,7 +123,181 @@ async function resultSection() {
   }
 }
 
-pythonSection().then(runSection).then(resultSection).then(() => {
+// section gate (Task 7): the permission card. A fake clock drives the cooldown; the waits are short real timers.
+async function gateSection() {
+  const { createWatchGate, DENIED, NO_PANEL, BUSY } = require('../lib/watchgate');
+  check('gate: the three texts are the spec\'s', DENIED === 'The user said no to watching videos for now.'
+    && NO_PANEL === 'Open the Claude panel to answer whether Claude may watch videos.'
+    && BUSY === 'The user is already answering a question about watching videos. Wait for that answer.');
+  const rigFor = (over = {}) => {
+    const rig = { t: 0, shows: [], hides: [], enabled: [], windows: 0, window: async () => true };
+    rig.gate = createWatchGate({
+      showCard: (id, source) => rig.shows.push({ id, source }),
+      hideCard: id => rig.hides.push(id),
+      confirmWindow: () => { rig.windows++; return rig.window(); },
+      setEnabled: on => rig.enabled.push(on),
+      now: () => rig.t, cardTimeoutMs: 80, panelWaitMs: 40, cooldownMs: 1000, ...over,
+    });
+    return rig;
+  };
+  const lastId = rig => rig.shows[rig.shows.length - 1].id;
+
+  // Allow, then Yes in the window: watching goes on once, and the card showed the source once
+  {
+    const r = rigFor();
+    const p = r.gate.ask('clip.mp4');
+    r.gate.shown(lastId(r)); r.gate.answer(lastId(r), true);
+    const res = await p;
+    check('gate: Allow then Yes resolves ok', deepEqual(res, { ok: true }));
+    check('gate: Yes switches watching on once', deepEqual(r.enabled, [true]));
+    check('gate: the card showed the source once', r.shows.length === 1 && r.shows[0].source === 'clip.mp4');
+  }
+  // Deny: DENIED, then the 60-second wait (no card), then a card again
+  {
+    const r = rigFor();
+    const p = r.gate.ask('a.mp4');
+    r.gate.shown(lastId(r)); r.gate.answer(lastId(r), false);
+    check('gate: Deny resolves DENIED', (await p).message === DENIED);
+    check('gate: a second ask in the wait returns DENIED at once', (await r.gate.ask('a.mp4')).message === DENIED);
+    check('gate: no card is posted during the wait', r.shows.length === 1);
+    r.t += 1001;
+    const p2 = r.gate.ask('a.mp4');
+    check('gate: after the wait a card posts again', r.shows.length === 2);
+    r.gate.cancel(); await p2;
+  }
+  // No panel: NO_PANEL, the card is hidden, and no wait starts
+  {
+    const r = rigFor();
+    const res = await r.gate.ask('b.mp4');
+    check('gate: no panel gives NO_PANEL and hides the card', res.message === NO_PANEL && r.hides.length === 1 && r.hides[0] === r.shows[0].id);
+    const p = r.gate.ask('b.mp4');
+    check('gate: NO_PANEL starts no wait: the next card posts at once', r.shows.length === 2);
+    r.gate.cancel(); await p;
+  }
+  // No answer within the card wait counts as No, and that No starts the wait
+  {
+    const r = rigFor();
+    const p = r.gate.ask('c.mp4');
+    r.gate.shown(lastId(r));
+    check('gate: no answer within the card wait counts as No', (await p).message === DENIED);
+    check('gate: that No starts the wait', (await r.gate.ask('c.mp4')).message === DENIED && r.shows.length === 1);
+  }
+  // Allow, then No in the window: DENIED, nothing switched on, the wait starts
+  {
+    const r = rigFor();
+    r.window = async () => false;
+    const p = r.gate.ask('d.mp4');
+    r.gate.shown(lastId(r)); r.gate.answer(lastId(r), true);
+    check('gate: Allow then No in the window is DENIED', (await p).message === DENIED);
+    check('gate: that No switches nothing on', r.enabled.length === 0);
+    check('gate: that No starts the wait', (await r.gate.ask('d.mp4')).message === DENIED && r.shows.length === 1);
+  }
+  // cancel while the card waits: DENIED, hidden, no wait
+  {
+    const r = rigFor();
+    const p = r.gate.ask('e.mp4');
+    const id = lastId(r);
+    r.gate.shown(id); r.gate.cancel();
+    check('gate: cancel while the card waits resolves DENIED', (await p).message === DENIED);
+    check('gate: cancel hides the card', r.hides.includes(id));
+    const p2 = r.gate.ask('e.mp4');
+    check('gate: cancel starts no wait: the next card posts at once', r.shows.length === 2);
+    r.gate.cancel(); await p2;
+  }
+  // cancel while the window is open: a later Yes is ignored
+  {
+    const r = rigFor();
+    let resolveWindow;
+    r.window = () => new Promise(resolve => { resolveWindow = resolve; });
+    const p = r.gate.ask('f.mp4');
+    r.gate.shown(lastId(r)); r.gate.answer(lastId(r), true);
+    r.gate.cancel();
+    resolveWindow(true);
+    const res = await p;
+    check('gate: a Yes after cancel is ignored: DENIED, and nothing switched on', res.ok === false && res.message === DENIED && r.enabled.length === 0);
+  }
+  // a second ask while a card is open is BUSY and posts nothing
+  {
+    const r = rigFor();
+    const p = r.gate.ask('g.mp4');
+    check('gate: a second ask while a card is open is BUSY', (await r.gate.ask('g.mp4')).message === BUSY && r.shows.length === 1);
+    r.gate.cancel(); await p;
+  }
+  // answers for an id that is not the open card are ignored: the card waits, then times out as No
+  {
+    const r = rigFor();
+    const p = r.gate.ask('h.mp4');
+    const id = lastId(r);
+    r.gate.shown('998'); r.gate.shown(id); r.gate.answer('999', true);
+    const res = await p;
+    check('gate: a stale id is ignored and the card times out as No', res.message === DENIED && r.windows === 0 && r.enabled.length === 0);
+  }
+}
+
+// section handler (Task 7): the permission step in watchVideo; a stub script stands in for watch.py and writes one frame
+async function handlerSection() {
+  const { watchVideo } = require('../lib/watchvideo');
+  const { createWatchRuns } = require('../lib/watchrun');
+  const { killTree } = require('../lib/army');
+  const { DENIED } = require('../lib/watchgate');
+  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-handler-'));
+  try {
+    const stub = path.join(t, 'stub-watch.js');
+    fs.writeFileSync(stub, [
+      "const fs = require('fs'), path = require('path');",
+      "const a = process.argv.slice(2), out = a[a.indexOf('--out-dir') + 1];",
+      "const dir = path.join(out, 'watch-x', 'frames');",
+      "fs.mkdirSync(dir, { recursive: true });",
+      "const f = path.join(dir, 'frame_0001.jpg');",
+      "fs.writeFileSync(f, Buffer.from([0xff, 0xd8, 0xff, 0xe0]));",
+      "process.stdout.write('## Frames\\n- `' + f + '` (t=00:01, reason=x)\\n');",
+    ].join('\n'));
+    const base = path.join(t, 'watch');
+    const runs = createWatchRuns({ killTree });
+    const pyOk = async () => ({ exe: process.execPath, args: [] });
+    const deps = (over = {}) => ({ enabled: false, permission: { ask: async () => ({ ok: true }) }, folderOf: () => '', baseDir: base,
+      scriptPath: stub, getPython: pyOk, runs, deadlineMs: 20000, ...over });
+    const URL_SRC = 'https://example.com/clip';
+    let asks = 0;
+    const counting = v => ({ ask: async () => { asks++; return v; } });
+
+    // with watching on, nothing is asked; the frame comes back and the run folder is removed
+    const r1 = await watchVideo({ source: URL_SRC }, deps({ enabled: true, permission: counting({ ok: true }) }));
+    check('handler: with watching on, the frame comes back and nothing is asked', r1.frames.length === 1 && r1.frames[0].mimeType === 'image/jpeg' && asks === 0);
+    check('handler: the run folder is removed afterwards', fs.readdirSync(base).length === 0);
+
+    // with watching off, an allowed question runs the video
+    const r2 = await watchVideo({ source: URL_SRC }, deps({ permission: counting({ ok: true }) }));
+    check('handler: with watching off and Allow, the video runs once', asks === 1 && r2.frames.length === 1);
+
+    // a No throws the user's text and runs nothing
+    let runCalls = 0;
+    const countingRuns = { run: async o => { runCalls++; return runs.run(o); } };
+    let threw = null;
+    try { await watchVideo({ source: URL_SRC }, deps({ permission: { ask: async () => ({ ok: false, message: DENIED }) }, runs: countingRuns })); } catch (e) { threw = e; }
+    check('handler: a No throws the user-said-no text and runs nothing', !!threw && threw.message === DENIED && runCalls === 0);
+
+    // a refused source stops before the question
+    asks = 0; threw = null;
+    try { await watchVideo({ source: '-rf' }, deps({ permission: counting({ ok: true }) })); } catch (e) { threw = e; }
+    check('handler: a dash-prefixed source is refused before any question', !!threw && /cannot start with a dash/.test(threw.message) && asks === 0);
+
+    // a missing Python stops before the question
+    asks = 0; threw = null;
+    try { await watchVideo({ source: URL_SRC }, deps({ permission: counting({ ok: true }), getPython: async () => { throw new Error('Python 3.10 or newer was not found.'); } })); } catch (e) { threw = e; }
+    check('handler: a missing Python stops before any question', !!threw && /Python 3\.10/.test(threw.message) && asks === 0);
+
+    // Stop, and the deadline
+    const stopped = await watchVideo({ source: URL_SRC }, deps({ enabled: true, runs: { run: async () => ({ code: null, stdout: '', stderr: '', timedOut: false, stopped: true }) } }));
+    check('handler: a stopped run says Stopped. and returns no frames', stopped.text === 'Stopped.' && stopped.frames.length === 0);
+    const late = await watchVideo({ source: URL_SRC }, deps({ enabled: true, runs: { run: async () => ({ code: null, stdout: '', stderr: '', timedOut: true, stopped: false }) } }));
+    check('handler: a run past the deadline says it was stopped', late.text === 'The video took longer than 10 minutes, so it was stopped.' && late.frames.length === 0);
+  } finally {
+    fs.rmSync(t, { recursive: true, force: true });
+  }
+}
+
+pythonSection().then(runSection).then(resultSection).then(gateSection).then(handlerSection).then(() => {
   console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);
   process.exit(failed ? 1 : 0);
 });

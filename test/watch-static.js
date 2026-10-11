@@ -26,5 +26,13 @@ for (const f of KEPT) {
 const py = spawnSync('python3', ['-I', '-B', '-c', `import sys; sys.path.insert(0, ${JSON.stringify(VENDOR)}); import watch, download, frames, transcribe, config, runtime; print('imports ok')`], { encoding: 'utf8' });
 if (!py.error) check('the vendored modules import under python3 -I', py.status === 0 && /imports ok/.test(py.stdout), (py.stderr || '').trim().split('\n').pop());
 
+// section wiring (Task 7): the host hooks the permission card, the saved option and the handler
+const HOST = fs.readFileSync(path.join(ROOT, 'host', 'claude-in-zen-host.js'), 'utf8');
+for (const token of ['createWatchGate', "case 'watch_load'", "case 'watch_set_on_load'", "case 'watch_off'", "case 'watch_answer'", "case 'watch_shown'",
+  'WATCH_ON_LOAD', "'watch_on_load'", "CLAUDE_IN_ZEN_WATCH: '1'", 'watch: !improve']) {
+  check(`host wires ${token}`, HOST.includes(token));
+}
+check('paths.js defines WATCH_ON_LOAD', fs.readFileSync(path.join(ROOT, 'host', 'lib', 'paths.js'), 'utf8').includes('WATCH_ON_LOAD'));
+
 console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);
 process.exit(failed ? 1 : 0);

@@ -20,6 +20,7 @@ module.exports = {
   ARMY_DIR: path.join(BASE, 'army'),                    // one tool-server config per running army worker
   LOCAL_GRANTS: path.join(BASE, 'local-grants.json'),   // folders the user allowed for local pages (lib/localpages.js)
   WATCH_DIR: path.join(BASE, 'watch'),                 // one run folder per watch_video run (lib/watchrun.js)
+  WATCH_ON_LOAD: path.join(BASE, 'watch-on-load.json'),   // the saved answer to "watch videos every time the panel opens?" (lib/watchgate.js)
   PIPE: process.env.CLAUDE_IN_ZEN_PIPE || (process.platform === 'win32'
     ? `\\\\.\\pipe\\claude-in-zen-${USER}`
     : path.join(os.tmpdir(), `claude-in-zen-${USER}.sock`)),
