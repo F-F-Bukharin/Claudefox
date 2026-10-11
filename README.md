@@ -5,7 +5,7 @@ running on your own Claude plan through Claude Code.
 Not affiliated with or endorsed by Anthropic or Zen.
 
 Plan, decisions and TODO: `claude/zen-addon-plan.md` in the Mod Making project.
-Friends: see `START HERE.txt` (it ships in the friends zip).
+Friends: see `START HERE.txt` (it ships in the friends zip, where the add-on is called **Claudefox**).
 
 ## Status (v0.9.0)
 - **Setup in one double-click**: `Set up Claude in Zen.bat` installs the helper, signs Claude Code in and opens Zen's add-ons page with the add-on's path copied. Safe to run again.
@@ -135,7 +135,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `tools\Install in Zen.bat` | Builds `build\claude-in-zen.xpi` (or picks the newest signed one in `build\signed`) and opens it in Zen for a permanent install. Run it again to update. |
 | `tools\Load in Zen.bat` | Builds `build\claude-in-zen.xpi` and opens `about:debugging` with its path copied (temporary install). |
 | `tools\Sign add-on.bat` | Signs the add-on with Mozilla into `build\signed` (needs API keys, see below). |
-| `tools\Build friends zip.bat` | Builds `build\friends\claude-in-zen-friends-v<version>.zip`, using a signed `.xpi` from `build\signed` if there is one. |
+| `tools\Build friends zip.bat` | Builds `build\friends\Claudefox-v<version>.zip`: a copy branded Claudefox by `tools\brand.js` (this PC's install stays Claude in Zen), using a signed Claudefox `.xpi` from `build\signed` if there is one. |
 | `tools\Apply Zen settings.bat` | Close Zen first. Merges the `zen-profile` settings into your Zen profile between marker lines; `apply.ps1 -Remove` undoes it. |
 | `tools\Run tests.bat` | Runs all tests. |
 

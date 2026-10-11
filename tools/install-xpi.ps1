@@ -16,7 +16,7 @@ if (Test-Linked $root) {
 try {
   $version = Get-SourceVersion $root
   & (Join-Path $PSScriptRoot 'build-xpi.ps1') | Out-Host
-  $xpi = Find-SignedXpi $root $version
+  $xpi = Find-SignedXpi $root $version 'Claude in Zen'
   if ($xpi) { Write-Host "Using the signed build for v${version}: $(Split-Path $xpi -Leaf)" }
   else {
     $xpi = Join-Path $root 'build\claude-in-zen.xpi'

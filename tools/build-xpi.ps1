@@ -1,9 +1,11 @@
 # Claude in Zen: packs extension\ into build\claude-in-zen.xpi (zip with forward-slash paths, manifest at the root).
+# -Source and -Out pack another copy instead (build-friends.ps1 packs its branded Claudefox copy).
+param([string]$Source, [string]$Out)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $root = Split-Path -Parent $PSScriptRoot
-$src  = Join-Path $root 'extension'
-$out  = Join-Path $root 'build\claude-in-zen.xpi'
+$src  = if ($Source) { (Resolve-Path $Source).Path.TrimEnd('\') } else { Join-Path $root 'extension' }
+$out  = if ($Out) { $Out } else { Join-Path $root 'build\claude-in-zen.xpi' }
 New-Item -ItemType Directory -Force (Split-Path $out) | Out-Null
 if (Test-Path $out) { Remove-Item $out -Force }
 # Mods made on this PC (extension\mods\<id>\) and files Claude saved (extension\output\) stay on this PC: of those two
@@ -20,4 +22,4 @@ try {
 } finally { $zip.Dispose() }
 if ($left) { Write-Host "Left out $left file(s) of local mods and saved output." }
 $v = (Get-Content (Join-Path $src 'manifest.json') -Raw | ConvertFrom-Json).version
-Write-Host "Built build\claude-in-zen.xpi (v$v)"
+Write-Host "Built $out (v$v)"

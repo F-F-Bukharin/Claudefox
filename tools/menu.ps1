@@ -221,7 +221,7 @@ $script:steps = @(
     Title = 'Build the zip for friends'
     Recommended = $false
     NeedsZen = $false
-    Detail = 'Writes build\friends\claude-in-zen-friends-v<version>.zip, with the signed build for this version when there is one (otherwise an unsigned one, and the log says so). Friends get the setup file, not this menu.'
+    Detail = 'Writes build\friends\Claudefox-v<version>.zip (the add-on is called Claudefox there), with the signed build for this version when there is one (otherwise an unsigned one, and the log says so). Friends get the setup file, not this menu.'
     Jobs = @( (New-PsJob (Join-Path $tools 'build-friends.ps1') '' @(0)) )
   },
   @{

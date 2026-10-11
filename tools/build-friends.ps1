@@ -1,30 +1,43 @@
-# Claude in Zen: builds build\friends\claude-in-zen-friends-v<version>.zip for friends.
-# Uses the signed .xpi from build\signed for this exact version if there is one, otherwise a fresh unsigned build.
+# Claude in Zen: builds the zip for people outside this PC, build\friends\Claudefox-v<version>.zip. There the add-on is
+# called Claudefox (tools\brand.js renames a staged copy, since friends may use plain Firefox); this PC's own install
+# and the source stay Claude in Zen. Uses a signed Claudefox .xpi from build\signed for this exact version if there
+# is one, otherwise a fresh unsigned build.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'xpi-tools.ps1')
 $v = Get-SourceVersion $root
 $dist = Join-Path $root 'build\friends'
-$stage = Join-Path $dist 'Claude in Zen'
+$stage = Join-Path $dist 'Claudefox'
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force (Join-Path $stage 'host\lib'), (Join-Path $stage 'zen-profile'), (Join-Path $stage 'tools') | Out-Null
 
-$signed = Find-SignedXpi $root $v
-if ($signed) {
-  Copy-Item $signed (Join-Path $stage 'claude-in-zen.xpi')
-  Write-Host "Using the signed add-on: $(Split-Path $signed -Leaf)"
-} else {
-  & (Join-Path $PSScriptRoot 'build-xpi.ps1') | Out-Host
-  Copy-Item (Join-Path $root 'build\claude-in-zen.xpi') (Join-Path $stage 'claude-in-zen.xpi')
-  Write-Host "No signed build for v$v in build\signed: the zip has an UNSIGNED add-on, so friends need xpinstall.signatures.required = false (see START HERE.txt)." -ForegroundColor Yellow
-}
+# A copy of the add-on to brand. Mods made on this PC and files Claude saved stay here: of those two folders only
+# the READMEs go.
+Copy-Item (Join-Path $root 'extension') (Join-Path $stage 'extension') -Recurse
+Get-ChildItem (Join-Path $stage 'extension\mods') -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+Get-ChildItem (Join-Path $stage 'extension\output') -Exclude 'README.txt' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1') { Copy-Item (Join-Path $root "host\$f") (Join-Path $stage "host\$f") }
 Copy-Item (Join-Path $root 'host\lib\*.js') (Join-Path $stage 'host\lib')
 Copy-Item (Join-Path $root 'zen-profile\*') (Join-Path $stage 'zen-profile')
 foreach ($f in 'Set up Claude in Zen.bat', 'START HERE.txt') { Copy-Item (Join-Path $root $f) (Join-Path $stage $f) }
 foreach ($f in 'Apply Zen settings.bat', 'Sign in Claude Code.bat') { Copy-Item (Join-Path $PSScriptRoot $f) (Join-Path $stage "tools\$f") }
 
-$zip = Join-Path $dist "claude-in-zen-friends-v$v.zip"
+# Claudefox: the name, the file names and the texts friends read. A rule that no longer matches stops the build.
+& node (Join-Path $PSScriptRoot 'brand.js') $stage
+if ($LASTEXITCODE -ne 0) { throw 'tools\brand.js could not brand the copy (see above), so no zip was built.' }
+
+$xpi = Join-Path $stage 'claudefox.xpi'
+$signed = Find-SignedXpi $root $v 'Claudefox'
+if ($signed) {
+  Copy-Item $signed $xpi
+  Write-Host "Using the signed add-on: $(Split-Path $signed -Leaf)"
+} else {
+  & (Join-Path $PSScriptRoot 'build-xpi.ps1') -Source (Join-Path $stage 'extension') -Out $xpi | Out-Host
+  Write-Host "No signed Claudefox build for v$v in build\signed: the zip has an UNSIGNED add-on. Firefox installs only signed add-ons; Zen and Firefox Developer Edition take it with xpinstall.signatures.required = false (see START HERE.txt)." -ForegroundColor Yellow
+}
+Remove-Item (Join-Path $stage 'extension') -Recurse -Force
+
+$zip = Join-Path $dist "Claudefox-v$v.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path $stage -DestinationPath $zip
 Remove-Item $stage -Recurse -Force

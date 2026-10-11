@@ -5,23 +5,29 @@ function Get-SourceVersion([string]$Root) {
   (Get-Content (Join-Path $Root 'extension\manifest.json') -Raw | ConvertFrom-Json).version
 }
 
-# The version in the manifest inside an .xpi (Mozilla's signed files keep manifest.json at the root).
-function Get-XpiVersion([string]$Path) {
+# The manifest inside an .xpi (Mozilla's signed files keep manifest.json at the root), or $null.
+function Get-XpiManifest([string]$Path) {
   $zip = [IO.Compression.ZipFile]::OpenRead($Path)
   try {
     $entry = $zip.GetEntry('manifest.json')
     if (-not $entry) { return $null }
     $reader = New-Object IO.StreamReader($entry.Open())
-    try { return ($reader.ReadToEnd() | ConvertFrom-Json).version } finally { $reader.Dispose() }
+    try { return ($reader.ReadToEnd() | ConvertFrom-Json) } finally { $reader.Dispose() }
   } finally { $zip.Dispose() }
 }
 
-# The newest signed .xpi in build\signed built from this exact version, or $null.
-function Find-SignedXpi([string]$Root, [string]$Version) {
+function Get-XpiVersion([string]$Path) { $m = Get-XpiManifest $Path; if ($m) { return $m.version } return $null }
+
+# The newest signed .xpi in build\signed built from this exact version, or $null. With -Name, only one whose
+# add-on name matches (Claude in Zen for this PC, Claudefox for friends), so the two builds never mix.
+function Find-SignedXpi([string]$Root, [string]$Version, [string]$Name) {
   $dir = Join-Path $Root 'build\signed'
   if (-not (Test-Path $dir)) { return $null }
   foreach ($f in (Get-ChildItem $dir -Filter *.xpi | Sort-Object LastWriteTime -Descending)) {
-    try { if ((Get-XpiVersion $f.FullName) -eq $Version) { return $f.FullName } } catch {}
+    try {
+      $m = Get-XpiManifest $f.FullName
+      if ($m -and $m.version -eq $Version -and (-not $Name -or $m.name -eq $Name)) { return $f.FullName }
+    } catch {}
   }
   return $null
 }
