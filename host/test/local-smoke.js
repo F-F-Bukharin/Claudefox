@@ -230,6 +230,27 @@ function client() {
     toHelper({ type: 'hello', version: 'test' });
     await nextMsg(() => grantLists.length > 0);
     check('after a restart the helper sends the same allowed folders', JSON.stringify(lastGrants()) === JSON.stringify([game, other]), JSON.stringify(lastGrants()));
+
+    // Which browser shows a local page: the one that started the helper (Zen or Firefox), and only real browsers.
+    const lp = require('../lib/localpages');
+    check('only browsers are started to show a page', lp.isBrowserExe('C:\\Program Files\\Mozilla Firefox\\firefox.exe') && lp.isBrowserExe('C:\\Program Files\\Zen Browser\\zen.exe')
+      && !lp.isBrowserExe('C:\\Windows\\System32\\cmd.exe') && !lp.isBrowserExe('C:\\x\\firefox.exe.bat') && !lp.isBrowserExe('') && !lp.isBrowserExe('C:\\x\\node.exe'));
+    const saved = { local: process.env.LOCALAPPDATA, pf: process.env.ProgramFiles, pf86: process.env['ProgramFiles(x86)'] };
+    const apps = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-apps-'));
+    fs.mkdirSync(path.join(apps, 'Mozilla Firefox'));
+    fs.writeFileSync(path.join(apps, 'Mozilla Firefox', 'firefox.exe'), '');
+    process.env.LOCALAPPDATA = apps; delete process.env.ProgramFiles; delete process.env['ProgramFiles(x86)'];
+    const ff = lp.findFirefox(), zz = lp.findZen();
+    process.env.LOCALAPPDATA = saved.local;
+    if (saved.pf !== undefined) process.env.ProgramFiles = saved.pf;
+    if (saved.pf86 !== undefined) process.env['ProgramFiles(x86)'] = saved.pf86;
+    fs.rmSync(apps, { recursive: true, force: true });
+    check('without Zen, Firefox is found where it is usually installed', ff === path.join(apps, 'Mozilla Firefox', 'firefox.exe') && zz === '', JSON.stringify({ ff, zz }));
+    const keep = process.env.CLAUDE_IN_ZEN_ZEN_EXE;
+    process.env.CLAUDE_IN_ZEN_ZEN_EXE = '/opt/test/firefox';
+    const fb = await lp.findBrowser();
+    if (keep === undefined) delete process.env.CLAUDE_IN_ZEN_ZEN_EXE; else process.env.CLAUDE_IN_ZEN_ZEN_EXE = keep;
+    check('the test override names the browser', fb === '/opt/test/firefox', fb);
   } catch (e) {
     check('no unexpected errors', false, e.stack || e.message);
   } finally {

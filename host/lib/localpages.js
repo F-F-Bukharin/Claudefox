@@ -6,12 +6,13 @@
 //
 // Every path is followed to its real place first (links and junctions), and the real place is what the user is asked
 // about, so a link inside an allowed folder never reaches outside it. Protected places (lib/guard.js) are refused
-// before anyone is asked. Firefox does not let add-ons open file: tabs, so local_page_open asks Zen to open the page
-// the way a desktop shortcut does: zen.exe -new-tab <file: URL>. Army workers never get here (lib/armyguard.js).
+// before anyone is asked. Firefox does not let add-ons open file: tabs, so local_page_open asks the browser to open the
+// page the way a desktop shortcut does: <browser>.exe -new-tab <file: URL>, with the browser that started this helper
+// (Zen or Firefox). Army workers never get here (lib/armyguard.js).
 
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const { pathToFileURL, fileURLToPath } = require('url');
 const guard = require('./guard');
 const log = require('./log');
@@ -26,13 +27,38 @@ const PART = 60000;                       // characters per part
 // to Windows to "open", so it is refused; local_file_read gives the text of those.
 const SHOWN = /\.(html?|xhtml?|shtml|svg|xml|txt|text|md|markdown|json|css|m?js|log|csv|tsv|pdf|png|jpe?g|gif|webp|bmp|ico|avif|apng|mp4|webm|og[gva]|mp3|wav|flac|m4a|opus)$/i;
 
-// zen.exe: CLAUDE_IN_ZEN_ZEN_EXE (tests), else the usual install places (as tools\xpi-tools.ps1 looks).
-function findZen() {
-  if (process.env.CLAUDE_IN_ZEN_ZEN_EXE) return process.env.CLAUDE_IN_ZEN_ZEN_EXE;
+// Browsers that take -new-tab like Firefox does. Only these are ever started to show a page.
+const BROWSER = /^(firefox|zen|librewolf|waterfox|floorp|mullvadbrowser)\.exe$/i;
+const isBrowserExe = p => BROWSER.test(path.win32.basename(String(p || '')));
+
+function installed(folder, exe) {
   const pf = process.env.ProgramFiles, pf86 = process.env['ProgramFiles(x86)'], local = process.env.LOCALAPPDATA;
-  const places = [pf && path.join(pf, 'Zen Browser', 'zen.exe'), pf86 && path.join(pf86, 'Zen Browser', 'zen.exe'),
-    local && path.join(local, 'Zen Browser', 'zen.exe'), local && path.join(local, 'Programs', 'Zen Browser', 'zen.exe')];
+  const places = [pf && path.join(pf, folder, exe), pf86 && path.join(pf86, folder, exe),
+    local && path.join(local, folder, exe), local && path.join(local, 'Programs', folder, exe)];
   return places.find(p => p && fs.existsSync(p)) || '';
+}
+// zen.exe and firefox.exe in the usual install places (as tools\xpi-tools.ps1 looks for Zen).
+function findZen() { return installed('Zen Browser', 'zen.exe'); }
+function findFirefox() { return installed('Mozilla Firefox', 'firefox.exe'); }
+
+// The browser that started this helper: on Windows its parent's parent (browser -> cmd.exe -> node), read from the
+// process table. '' when it is not a known browser or cannot be read.
+function parentBrowser() {
+  if (process.platform !== 'win32') return Promise.resolve('');
+  const ps = `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${Number(process.ppid)}"; if ($p) { (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.ParentProcessId)").ExecutablePath }`;
+  return new Promise(resolve => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, timeout: 15000 }, (err, out) => {
+    const exe = String(out || '').trim();
+    resolve(!err && isBrowserExe(exe) && fs.existsSync(exe) ? exe : '');
+  }));
+}
+
+// The browser to show local pages in: CLAUDE_IN_ZEN_ZEN_EXE (tests), else the one that started this helper, so Zen
+// opens them in Zen and Firefox in Firefox, else Zen or Firefox where they usually are installed.
+let browserFound = null;
+async function findBrowser() {
+  if (process.env.CLAUDE_IN_ZEN_ZEN_EXE) return process.env.CLAUDE_IN_ZEN_ZEN_EXE;
+  if (!browserFound) browserFound = (await parentBrowser()) || findZen() || findFirefox();
+  return browserFound;
 }
 
 // A path as Claude gave it (a full path or a file: URL) -> a full path. Network shares and device paths are refused.
@@ -152,24 +178,24 @@ function createLocalPages(deps) {
     const f = await allow(raw, 'any');
     let url = pathToFileURL(f.real).href;
     if (f.dir && !url.endsWith('/')) url += '/';
-    const exe = findZen();
-    if (!exe) throw new Error(`Could not find zen.exe, so nothing was opened. Ask the user to open ${f.real} in Zen (drag it onto Zen), then use its tab.`);
-    // Zen gives its child processes (this helper included) variables that change how a new zen.exe starts. Without
-    // them it hands the URL to the Zen that is already running, as a desktop shortcut would.
+    const exe = await findBrowser();
+    if (!exe) throw new Error(`Could not find the browser (Zen or Firefox), so nothing was opened. Ask the user to open ${f.real} in the browser (drag it onto a tab), then use its tab.`);
+    // The browser gives its child processes (this helper included) variables that change how a new browser process
+    // starts. Without them it hands the URL to the browser that is already running, as a desktop shortcut would.
     const env = { ...process.env };
     for (const k of Object.keys(env)) if (/^(MOZ_|XRE_|XUL_|MOZILLA_)/i.test(k)) delete env[k];
     try {
       const child = spawn(exe, ['-new-tab', url], { env, detached: true, stdio: 'ignore' });
-      child.on('error', e => log.warn('zen -new-tab', e.message));
+      child.on('error', e => log.warn('browser -new-tab', e.message));
       child.unref();
     } catch (e) {
-      throw new Error(`Could not ask Zen to open the page (${e.message}).`);
+      throw new Error(`Could not ask the browser to open the page (${e.message}).`);
     }
     log.info(`local page: ${f.real}`);
     const t = await deps.askAddon('local_tab', { url }, TAB_MS);
-    if (!t || !t.ok || !Number.isInteger(t.tab_id)) throw new Error((t && t.error) || 'Zen did not show the page.');
+    if (!t || !t.ok || !Number.isInteger(t.tab_id)) throw new Error((t && t.error) || 'The browser did not show the page.');
     return { tab_id: t.tab_id, title: t.title || '', url, path: f.real, allowed_folder: f.folder,
-      note: 'Open in a new Zen tab, in front. Use screenshot, get_page_text, find, click and press_key with this tab_id.' };
+      note: 'Open in a new tab, in front. Use screenshot, get_page_text, find, click and press_key with this tab_id.' };
   }
 
   // local_files: what is in a folder, folders first. Protected folders and secret files are left out.
@@ -215,4 +241,4 @@ function createLocalPages(deps) {
   return { open, list, read, allowFolder };
 }
 
-module.exports = { createLocalPages, createGrants, toPath, findZen };
+module.exports = { createLocalPages, createGrants, toPath, findZen, findFirefox, findBrowser, isBrowserExe };
