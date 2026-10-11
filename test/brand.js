@@ -110,6 +110,8 @@ const sign = read('tools/sign-claudefox.ps1'), signBat = read('tools/Sign add-on
 check('signing uploads only the clean Claudefox copy, unlisted, and has a dry run', /New-ClaudefoxStage \$root \$stage/.test(sign) && /\$src = Join-Path \$stage 'extension'/.test(sign)
   && /Push-Location \$src/.test(sign) && /web-ext@8 sign --channel=unlisted --artifacts-dir \$out/.test(sign) && /param\(\[switch\]\$DryRun\)/.test(sign)
   && /sign-claudefox\.ps1/.test(signBat) && !/cd \/d "%~dp0\.\.\\extension"/.test(signBat));
+check('signing finds keys set after its window opened (the account\'s user variables)', /\[Environment\]::GetEnvironmentVariable\(\$n, 'User'\)/.test(sign)
+  && sign.indexOf("GetEnvironmentVariable($n, 'User')") < sign.indexOf('if (-not $env:WEB_EXT_API_KEY -or -not $env:WEB_EXT_API_SECRET)'));
 check('signing never prints the API keys', !/Write-Host[^\r\n]*\$env:WEB_EXT/.test(sign) && !/echo[^\r\n]*%WEB_EXT/i.test(signBat));
 check('the zip has forward-slash paths (New-FolderZip, not Compress-Archive)', /New-FolderZip \$stage \$zip/.test(friends) && !/Compress-Archive/.test(friends)
   && /\$rel = \$top \+ '\/' \+ \$_\.FullName\.Substring\(\$Folder\.Length \+ 1\)\.Replace\('\\', '\/'\)/.test(read('tools/xpi-tools.ps1')));

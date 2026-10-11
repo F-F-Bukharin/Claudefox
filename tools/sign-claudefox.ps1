@@ -19,6 +19,13 @@ if ($DryRun) {
   Remove-Item $work -Recurse -Force
   exit 0
 }
+# A window opened before the keys were set still has the old environment: take them from the account's settings.
+foreach ($n in 'WEB_EXT_API_KEY', 'WEB_EXT_API_SECRET') {
+  if (-not [Environment]::GetEnvironmentVariable($n, 'Process')) {
+    $u = [Environment]::GetEnvironmentVariable($n, 'User')
+    if ($u) { [Environment]::SetEnvironmentVariable($n, $u, 'Process') }
+  }
+}
 if (-not $env:WEB_EXT_API_KEY -or -not $env:WEB_EXT_API_SECRET) {
   Remove-Item $work -Recurse -Force
   throw 'The API key variables are not set. See README.md, section "Mozilla API keys".'
