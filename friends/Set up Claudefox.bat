@@ -49,6 +49,10 @@ goto finish
 echo  Firefox was not found where it usually is. Open Firefox and type %PAGE% in the address bar.
 echo  Then: %HOW%
 :finish
+echo  Video watching (optional), checking what it needs:
+py -3 --version >nul 2>&1 || echo    - Python 3.10 or newer is missing: see "Video watching" in START HERE.txt.
+py -3 -m yt_dlp --version >nul 2>&1 || echo    - yt-dlp is missing: run  py -3 -m pip install -U yt-dlp
+ffmpeg -version >nul 2>&1 || echo    - ffmpeg is missing: run  winget install Gyan.FFmpeg
 echo.
 echo  Setup finished. START HERE.txt has the last steps.
 pause

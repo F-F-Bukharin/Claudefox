@@ -43,8 +43,9 @@ Using it
     (Opus) is slower and better. Click the Speed / Quality button under the message box to
     switch. In Speed, the + on its left turns on Speed Plus.
   - Stop (top right) cuts everything off at once. Start brings it back.
-  - Unsafe mode, file tools, tools that run programs and plugin installs each ask first in a
-    small Claudefox window outside Firefox. If you did not ask for it, press Cancel or Deny.
+  - Unsafe mode, file tools, watching videos, tools that run programs and plugin installs
+    each ask first in a small Claudefox window outside Firefox. If you did not ask for it,
+    press Cancel or Deny.
   - Army (Quality only): the octopus beside Quality opens a card with an On/Off switch. With
     it on, Opus leads up to five Haiku workers in background tabs for jobs that need many
     pages. A run uses much more of your plan than a normal reply: 5 a day is plenty.
@@ -54,6 +55,18 @@ Using it
   - Local pages (an HTML game, a saved page): Claude opens them only in folders you allow in
     the small Claudefox window. Firefox also needs this switch on, once: about:addons ->
     Claudefox -> Permissions and data -> Access local files on your computer.
+
+Video watching (optional)
+  Claude can watch a video: a web address, or a video file in a folder you allowed under
+  Local folders (Profile, Permissions). It needs Python 3.10 or newer, yt-dlp and ffmpeg
+  on this PC. Install them once:
+    winget install Python.Python.3.12
+    py -3 -m pip install -U yt-dlp
+    winget install Gyan.FFmpeg
+  Open a new window and check: py -3 --version, py -3 -m yt_dlp --version, ffmpeg -version.
+  Then switch it on: Profile -> Permissions -> Watch videos, and press Yes in the small
+  Claudefox window. Stop turns it off. The captions and frames Claude reads go to Claude
+  like any page it reads.
 
 Remove it
   about:addons -> remove Claudefox (a temporary one is gone when Firefox closes), then in

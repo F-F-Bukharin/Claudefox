@@ -38,11 +38,14 @@ function Find-SignedXpi([string]$Root, [string]$Version, [string]$Name) {
 function New-ClaudefoxStage([string]$Root, [string]$Stage) {
   if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
   New-Item -ItemType Directory -Force (Join-Path $Stage 'host\lib'), (Join-Path $Stage 'tools') | Out-Null
+  New-Item -ItemType Directory -Force (Join-Path $Stage 'host\vendor') | Out-Null
   Copy-Item (Join-Path $Root 'extension') (Join-Path $Stage 'extension') -Recurse
   Get-ChildItem (Join-Path $Stage 'extension\mods') -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
   Get-ChildItem (Join-Path $Stage 'extension\output') -Exclude 'README.txt' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
   foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1') { Copy-Item (Join-Path $Root "host\$f") (Join-Path $Stage "host\$f") }
   Copy-Item (Join-Path $Root 'host\lib\*.js') (Join-Path $Stage 'host\lib')
+  # The trimmed claude-video engine of the watch tool (its LICENSE and NOTICE.md come along).
+  Copy-Item (Join-Path $Root 'host\vendor\claude-video') (Join-Path $Stage 'host\vendor\claude-video') -Recurse
   # Friends get the Firefox setup and instructions (friends\); Zen's own profile settings stay out.
   foreach ($f in 'Set up Claudefox.bat', 'START HERE.txt') { Copy-Item (Join-Path $Root "friends\$f") (Join-Path $Stage $f) }
   Copy-Item (Join-Path $Root 'tools\Sign in Claude Code.bat') (Join-Path $Stage 'tools\Sign in Claude Code.bat')
