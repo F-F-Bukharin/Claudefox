@@ -1,5 +1,5 @@
 'use strict';
-// Watch tool helper checks, one section per task of the watch-tool plan. So far: args (Task 3).   node host/test/watch-smoke.js
+// Watch tool helper checks, one section per task of the watch-tool plan: args and python (Tasks 3, 4), run (Task 5).   node host/test/watch-smoke.js
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
@@ -35,6 +35,7 @@ try {
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
+
 // section python
 async function pythonSection() {
   const { findPython } = require('../lib/watchvideo');
@@ -45,7 +46,52 @@ async function pythonSection() {
   check('nothing installed gives one plain message', /Python 3\.10 or newer was not found/.test((await findPython(fakeProbe({}))).error));
 }
 
-pythonSection().then(() => {
+// section run (Task 5): child process lifecycle
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function waitFor(cond, ms = 5000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (cond()) return true; await sleep(20); }
+  return false;
+}
+async function goneWithin(pid, ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    let gone = false;
+    try { process.kill(pid, 0); } catch (e) { gone = e.code === 'ESRCH'; }
+    // A killed child can stay a zombie until its parent reaps it; a zombie has exited.
+    if (!gone && fs.existsSync(`/proc/${pid}/stat`)) gone = /\) Z /.test(fs.readFileSync(`/proc/${pid}/stat`, 'utf8'));
+    if (gone) return true;
+    await sleep(50);
+  }
+  return false;
+}
+async function runSection() {
+  const { createWatchRuns, makeRunDir, removeRunDir } = require('../lib/watchrun');
+  const { killTree } = require('../lib/army');
+  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-run-'));
+  try {
+    const runs = createWatchRuns({ killTree });
+    const node = code => ({ exe: process.execPath, args: ['-e', code], cwd: t, env: process.env });
+    check('the deadline ends a run and marks it timed out', (await runs.run({ ...node('setInterval(() => {}, 1000)'), deadlineMs: 300 })).timedOut === true);
+    // The child starts a grandchild, records its pid, then waits. Stop must take both.
+    const pidFile = path.join(t, 'pid.txt');
+    const tree = "const c=require('child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});require('fs').writeFileSync(process.env.PIDFILE,String(c.pid));setInterval(()=>{},1000)";
+    const pending = runs.run({ exe: process.execPath, args: ['-e', tree], cwd: t, env: { ...process.env, PIDFILE: pidFile }, deadlineMs: 20000 });
+    await waitFor(() => fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8').length > 0);
+    runs.stopAll(true);
+    const result = await pending;
+    check('Stop marks the run stopped', result.stopped === true);
+    check('the grandchild is gone too', await goneWithin(Number(fs.readFileSync(pidFile, 'utf8')), 3000));
+    const dir = makeRunDir(path.join(t, 'watch'));
+    check('a run folder is created under the base folder', fs.existsSync(dir) && path.basename(dir).startsWith('run-'));
+    removeRunDir(dir);
+    check('a run folder is removed, and removing a missing one does not throw', !fs.existsSync(dir) && (removeRunDir(dir), true));
+  } finally {
+    fs.rmSync(t, { recursive: true, force: true });
+  }
+}
+
+pythonSection().then(runSection).then(() => {
   console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);
   process.exit(failed ? 1 : 0);
 });
