@@ -9,7 +9,7 @@ const TESTS = [
   'host/test/smoke.js', 'host/test/mcp-smoke.js', 'host/test/chat-smoke.js', 'host/test/selfimprove-smoke.js', 'host/test/mods-smoke.js', 'host/test/output-smoke.js', 'host/test/army-smoke.js', 'host/test/local-smoke.js',
   'test/addon-smoke.js', 'test/army-addon.js', 'test/local-addon.js', 'test/dom-page-tools.js', 'test/dom-panel.js', 'test/dom-mods.js', 'test/docx.js',
   'test/menu-static.js', 'test/wall-ink.js', 'test/brand.js', 'test/injection-page.js',
-  'test/watch-static.js', 'host/test/watch-engine-smoke.js',
+  'test/watch-static.js', 'host/test/watch-engine-smoke.js', 'host/test/watch-smoke.js',
 ];
 // A test that cannot run here (no jsdom, or a POSIX-only test on Windows) prints SKIP and exits 0: it counts as
 // skipped, never as passed.
