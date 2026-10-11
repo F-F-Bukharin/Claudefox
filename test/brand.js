@@ -70,6 +70,12 @@ try {
   check('panel texts friends read say Firefox', /already open in Firefox\./.test(panel) && /Firefox remembers it after that/.test(panel) && />Using Firefox now</.test(panel)
     && /The panel opens in the sidebar\./.test(panel) && !/title bar above the panel/.test(panel)
     && fs.readFileSync(path.join(s, 'extension', 'background.js'), 'utf8').includes("'Firefox opened: the agent is on.'"));
+  const pj = fs.readFileSync(path.join(s, 'extension', 'panel.js'), 'utf8');
+  check('the panel itself titles the empty chat "What should Claude do in Firefox?"', pj.includes("'What should Claude do in Firefox?'") && !pj.includes('What should I do in Zen?')
+    && pj.includes('Firefox remembers it after that.') && pj.includes('restart Firefox.'));
+  const mcp = fs.readFileSync(path.join(s, 'host', 'zen-mcp.js'), 'utf8'), args = fs.readFileSync(path.join(s, 'host', 'lib', 'chatargs.js'), 'utf8');
+  check('Claude is told it works in Firefox, and its errors say Firefox', mcp.includes("real Firefox browser") && !mcp.includes('real Zen browser') && args.includes('which field to fill in Firefox.')
+    && fs.readFileSync(path.join(s, 'host', 'lib', 'tools.js'), 'utf8').includes('in a new tab, in front') && !/Zen did not answer|No answer from Zen|No Zen tab/.test(walk(s).filter(f => /\.js$/.test(f)).map(f => fs.readFileSync(f, 'utf8')).join('\n')));
   check('the helper\'s windows say Claudefox', /Claudefox: switch on something that runs programs\?/.test(fs.readFileSync(path.join(s, 'host', 'lib', 'toolbox.js'), 'utf8')));
   check('inside names stay: the helper\'s registry name and the data folder', /NATIVE_HOST: 'claude_in_zen'/.test(fs.readFileSync(path.join(s, 'extension', 'lib', 'policy.js'), 'utf8'))
     && /\$name\s+= 'claude_in_zen'/.test(fs.readFileSync(path.join(s, 'host', 'install.ps1'), 'latin1')) && /path\.join\(LOCAL, 'claude-in-zen'\)/.test(fs.readFileSync(path.join(s, 'host', 'lib', 'paths.js'), 'utf8')));

@@ -22,6 +22,22 @@ const RULES = [
   { file: 'extension/panel.html', from: 'The panel docks on the right. ', to: 'The panel opens in the sidebar. ' },
   { file: 'extension/panel.html', from: "Zen's title bar above the panel is hidden, so the panel has no header menu. ", to: '' },
   { file: 'extension/background.js', from: "'Zen opened: the agent is on.'", to: "'Firefox opened: the agent is on.'" },
+  // The panel sets the empty chat's title and some notes itself.
+  { file: 'extension/panel.js', from: "'What should I do in Zen?'", to: "'What should Claude do in Firefox?'" },
+  { file: 'extension/panel.js', from: 'then press Sign in. Zen remembers it after that.', to: 'then press Sign in. Firefox remembers it after that.' },
+  { file: 'extension/panel.js', from: 'until you press Stop or restart Zen.', to: 'until you press Stop or restart Firefox.' },
+  { file: 'extension/panel.js', from: 'the claude.ai account signed in to Zen.', to: 'the claude.ai account signed in to Firefox.' },
+  // What Claude is told and the errors it reads: it works in Firefox there.
+  { from: 'real Zen browser', to: 'real Firefox browser' },
+  { from: 'ask the user to type it in Zen.', to: 'ask the user to type it in Firefox.' },
+  { from: 'which field to fill in Zen.', to: 'which field to fill in Firefox.' },
+  { from: 'in a new Zen tab', to: 'in a new tab' },
+  { from: 'Zen did not answer within', to: 'Firefox did not answer within' },
+  { from: 'No answer from Zen within', to: 'No answer from Firefox within' },
+  { from: 'The link to Zen closed: the agent was stopped or Zen quit.', to: 'The link to Firefox closed: the agent was stopped or Firefox quit.' },
+  { from: 'No Zen tab showed', to: 'No Firefox tab showed' },
+  { from: 'message too large for Zen', to: 'message too large for Firefox' },
+  { from: 'or Zen or the helper restarted', to: 'or Firefox or the helper restarted' },
   { from: 'Claude in Zen', to: NAME },
 ];
 const TEXT = /\.(js|json|html|css|svg|txt|md|bat|cmd|ps1)$/i;
