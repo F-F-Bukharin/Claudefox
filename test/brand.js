@@ -34,9 +34,8 @@ function stage() {
   }
   for (const f of ['claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1']) copy(path.join(root, 'host', f), path.join(s, 'host', f));
   for (const f of fs.readdirSync(path.join(root, 'host', 'lib')).filter(f => f.endsWith('.js'))) copy(path.join(root, 'host', 'lib', f), path.join(s, 'host', 'lib', f));
-  copy(path.join(root, 'zen-profile'), path.join(s, 'zen-profile'));
-  for (const f of ['Set up Claude in Zen.bat', 'START HERE.txt']) copy(path.join(root, f), path.join(s, f));
-  for (const f of ['Apply Zen settings.bat', 'Sign in Claude Code.bat']) copy(path.join(root, 'tools', f), path.join(s, 'tools', f));
+  for (const f of ['Set up Claudefox.bat', 'START HERE.txt']) copy(path.join(root, 'friends', f), path.join(s, f));
+  copy(path.join(root, 'tools', 'Sign in Claude Code.bat'), path.join(s, 'tools', 'Sign in Claude Code.bat'));
   return s;
 }
 const run = dir => spawnSync(process.execPath, [path.join(root, 'tools', 'brand.js'), dir], { encoding: 'utf8' });
@@ -53,17 +52,31 @@ try {
   const left = walk(s).filter(f => fs.readFileSync(f, 'latin1').includes('Claude in Zen')).map(f => path.relative(s, f));
   check('no "Claude in Zen" is left anywhere in the copy', left.length === 0, left.join(', '));
   const bat = path.join(s, 'Set up Claudefox.bat');
-  check('the setup file is "Set up Claudefox.bat" and looks for claudefox.xpi', fs.existsSync(bat) && !fs.existsSync(path.join(s, 'Set up Claude in Zen.bat'))
-    && fs.readFileSync(bat, 'latin1').includes('claudefox.xpi') && !fs.readFileSync(bat, 'latin1').includes('claude-in-zen.xpi'));
-  check('START HERE names Claudefox and claudefox.xpi', /^Claudefox - setup for friends/.test(fs.readFileSync(path.join(s, 'START HERE.txt'), 'latin1')) && fs.readFileSync(path.join(s, 'START HERE.txt'), 'latin1').includes('claudefox.xpi'));
+  const batText = fs.readFileSync(bat, 'latin1');
+  check('the setup finds Firefox and opens about:debugging, or about:addons for a signed build, with claudefox.xpi copied', /Mozilla Firefox\\firefox\.exe/.test(batText)
+    && batText.includes('set "PAGE=about:debugging#/runtime/this-firefox"') && /if exist "%~dp0SIGNED" set "PAGE=about:addons"/.test(batText)
+    && /for %%I in \("%~dp0claudefox\.xpi"\) do .*\| clip/.test(batText) && !/zen/i.test(batText));
+  // In cmd, a ")" printed inside a ( ... ) block ends the block early: parentheses in messages stay outside blocks.
+  const inBlock = []; let depth = 0;
+  for (const line of batText.split('\r\n')) {
+    if (depth && /^\s*echo .*[()]/.test(line)) inBlock.push(line.trim());
+    if (/\($/.test(line.trim())) depth++;
+    if (/^\s*\)/.test(line)) depth--;
+  }
+  check('the setup prints no parentheses inside an if block', inBlock.length === 0, inBlock.join(' | '));
+  const startHere = fs.readFileSync(path.join(s, 'START HERE.txt'), 'latin1');
+  check('START HERE is the Firefox one: Claudefox, about:debugging, claudefox.xpi, no Zen', /^Claudefox - setup for friends/.test(startHere) && startHere.includes('about:debugging')
+    && startHere.includes('claudefox.xpi') && !/zen/i.test(startHere));
+  check('panel texts friends read say Firefox', /already open in Firefox\./.test(panel) && /Firefox remembers it after that/.test(panel) && />Using Firefox now</.test(panel)
+    && /The panel opens in the sidebar\./.test(panel) && !/title bar above the panel/.test(panel)
+    && fs.readFileSync(path.join(s, 'extension', 'background.js'), 'utf8').includes("'Firefox opened: the agent is on.'"));
   check('the helper\'s windows say Claudefox', /Claudefox: switch on something that runs programs\?/.test(fs.readFileSync(path.join(s, 'host', 'lib', 'toolbox.js'), 'utf8')));
   check('inside names stay: the helper\'s registry name and the data folder', /NATIVE_HOST: 'claude_in_zen'/.test(fs.readFileSync(path.join(s, 'extension', 'lib', 'policy.js'), 'utf8'))
     && /\$name\s+= 'claude_in_zen'/.test(fs.readFileSync(path.join(s, 'host', 'install.ps1'), 'latin1')) && /path\.join\(LOCAL, 'claude-in-zen'\)/.test(fs.readFileSync(path.join(s, 'host', 'lib', 'paths.js'), 'utf8')));
   check('a file without the old name keeps every byte', fs.readFileSync(path.join(s, 'extension', 'lib', 'state.js')).equals(fs.readFileSync(path.join(root, 'extension', 'lib', 'state.js'))));
-  const b = fs.readFileSync(bat, 'latin1');
-  check('Windows files keep their CRLF line endings', b.includes('\r\n') && !/[^\r]\n/.test(b));
+  check('Windows files keep their CRLF line endings', [batText, startHere, fs.readFileSync(path.join(s, 'host', 'install.ps1'), 'latin1')].every(b => b.includes('\r\n') && !/[^\r]\n/.test(b)));
   check('the source and this PC\'s install stay Claude in Zen', JSON.parse(read('extension/manifest.json')).name === 'Claude in Zen' && read('extension/panel.html').includes('What should I do in Zen?')
-    && fs.existsSync(path.join(root, 'Set up Claude in Zen.bat')));
+    && fs.existsSync(path.join(root, 'Set up Claude in Zen.bat')) && read('START HERE.txt').startsWith('Claude in Zen'));
 } finally { fs.rmSync(s, { recursive: true, force: true }); }
 
 // A rule that stops matching (someone changed the text) stops the build, naming the rule.
@@ -81,6 +94,10 @@ const friends = read('tools/build-friends.ps1');
 check('build-friends brands its copy with brand.js and stops when that fails', /& node \(Join-Path \$PSScriptRoot 'brand\.js'\) \$stage/.test(friends) && /if \(\$LASTEXITCODE -ne 0\) \{ throw/.test(friends));
 check('build-friends packs the branded copy as claudefox.xpi into Claudefox-v<version>.zip', /build-xpi\.ps1'\) -Source \(Join-Path \$stage 'extension'\) -Out \$xpi/.test(friends)
   && /'claudefox\.xpi'/.test(friends) && /"Claudefox-v\$v\.zip"/.test(friends) && /Remove-Item \(Join-Path \$stage 'extension'\) -Recurse -Force/.test(friends));
+check('friends get the Firefox setup and START HERE, without Zen\'s profile settings', /'Set up Claudefox\.bat', 'START HERE\.txt'\) \{ Copy-Item \(Join-Path \$root "friends\\\$f"\)/.test(friends)
+  && !/zen-profile|Apply Zen settings/.test(friends) && /Set-Content -Path \(Join-Path \$stage 'SIGNED'\)/.test(friends));
+check('the zip has forward-slash paths (New-FolderZip, not Compress-Archive)', /New-FolderZip \$stage \$zip/.test(friends) && !/Compress-Archive/.test(friends)
+  && /\$rel = \$top \+ '\/' \+ \$_\.FullName\.Substring\(\$Folder\.Length \+ 1\)\.Replace\('\\', '\/'\)/.test(read('tools/xpi-tools.ps1')));
 check('signed builds are matched by name: Claudefox for friends, Claude in Zen for this PC', /Find-SignedXpi \$root \$v 'Claudefox'/.test(friends)
   && /Find-SignedXpi \$root \$version 'Claude in Zen'/.test(read('tools/install-xpi.ps1')) && /\$m\.name -eq \$Name/.test(read('tools/xpi-tools.ps1')));
 check('build-xpi packs another folder when asked, and this PC\'s build by default', /param\(\[string\]\$Source, \[string\]\$Out\)/.test(read('tools/build-xpi.ps1'))

@@ -124,6 +124,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `Set up Claude in Zen.bat` (root) | The friends' one-double-click setup. The friends zip ships it with `host\`, `zen-profile\`, `tools\Sign in Claude Code.bat` and `tools\Apply Zen settings.bat`. |
 | `tools\` | The scripts you run while developing (`.bat` and `.ps1`), listed in the next table. |
 | `tools\menu.ps1` | The menu window (Windows PowerShell 5.1, Windows Forms). It runs the ticked steps in the background, one after another, and writes their output to its log. |
+| `friends\` | What the Claudefox zip ships instead of the Zen setup: `Set up Claudefox.bat` (installs the helper, signs Claude Code in, opens Firefox on about:debugging, or on about:addons when the zip has a `SIGNED` file) and a Firefox `START HERE.txt`. |
 | `build\` | Build output, kept out of git except `build\README.txt`: `claude-in-zen.xpi`, `signed\` (signed builds) and `friends\` (the zip to send). |
 
 | Script | What it does |

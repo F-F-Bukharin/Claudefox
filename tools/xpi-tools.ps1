@@ -32,6 +32,21 @@ function Find-SignedXpi([string]$Root, [string]$Version, [string]$Name) {
   return $null
 }
 
+# Zips a folder, with the folder itself as the top entry and forward-slash paths as the zip standard wants. Windows
+# PowerShell's Compress-Archive writes backslashes, which other unzip tools and macOS turn into odd file names.
+function New-FolderZip([string]$Folder, [string]$Zip) {
+  $Folder = (Resolve-Path $Folder).Path.TrimEnd('\')
+  $top = Split-Path $Folder -Leaf
+  if (Test-Path $Zip) { Remove-Item $Zip -Force }
+  $z = [IO.Compression.ZipFile]::Open($Zip, 'Create')
+  try {
+    Get-ChildItem $Folder -Recurse -File | ForEach-Object {
+      $rel = $top + '/' + $_.FullName.Substring($Folder.Length + 1).Replace('\', '/')
+      [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($z, $_.FullName, $rel, 'Optimal') | Out-Null
+    }
+  } finally { $z.Dispose() }
+}
+
 # True when a Zen profile loads the add-on straight from this folder (zen-profile\link.ps1).
 function Test-Linked([string]$Root) {
   $want = (Resolve-Path (Join-Path $Root 'extension')).Path.TrimEnd('\', '/').ToLower()

@@ -9,15 +9,21 @@ const fs = require('fs');
 const path = require('path');
 
 const NAME = 'Claudefox';
-// file: the one file a rule is for (relative, forward slashes); without it, every text file.
+// file: the one file a rule is for (relative, forward slashes); without it, every text file. The friends' own setup
+// file and START HERE come from friends\ and already say Claudefox; these rules cover the add-on and the helper.
 const RULES = [
   { file: 'extension/manifest.json', from: 'act on pages in Zen. Not affiliated with or endorsed by Anthropic or Zen.',
     to: 'act on pages in Firefox. Not affiliated with or endorsed by Anthropic or Mozilla.' },
   { file: 'extension/panel.html', from: 'What should I do in Zen?', to: 'What should Claude do in Firefox?' },
-  { from: 'claude-in-zen.xpi', to: 'claudefox.xpi' },
+  { file: 'extension/panel.html', from: 'already open in Zen.', to: 'already open in Firefox.' },
+  { file: 'extension/panel.html', from: 'Zen remembers it after that', to: 'Firefox remembers it after that' },
+  { file: 'extension/panel.html', from: '>Using Zen now<', to: '>Using Firefox now<' },
+  // Zen-only layout notes: Firefox keeps its sidebar header, and the sidebar sits where the user put it.
+  { file: 'extension/panel.html', from: 'The panel docks on the right. ', to: 'The panel opens in the sidebar. ' },
+  { file: 'extension/panel.html', from: "Zen's title bar above the panel is hidden, so the panel has no header menu. ", to: '' },
+  { file: 'extension/background.js', from: "'Zen opened: the agent is on.'", to: "'Firefox opened: the agent is on.'" },
   { from: 'Claude in Zen', to: NAME },
 ];
-const RENAMES = [['Set up Claude in Zen.bat', `Set up ${NAME}.bat`]];
 const TEXT = /\.(js|json|html|css|svg|txt|md|bat|cmd|ps1)$/i;
 
 function files(dir, base = dir, out = []) {
@@ -48,11 +54,6 @@ function brand(stage) {
     if (text.includes('Claude in Zen')) problems.push(`"Claude in Zen" is still in ${rel}`);
   }
   RULES.forEach((r, i) => { if (!hits[i]) problems.push(`no match for "${r.from}"${r.file ? ` in ${r.file}` : ''}`); });
-  for (const [from, to] of RENAMES) {
-    const a = path.join(stage, from), b = path.join(stage, to);
-    if (!fs.existsSync(a)) { problems.push(`${from} is missing`); continue; }
-    fs.renameSync(a, b);
-  }
   try {
     const m = JSON.parse(fs.readFileSync(path.join(stage, 'extension', 'manifest.json'), 'utf8'));
     if (m.name !== NAME) problems.push(`the manifest's name is ${JSON.stringify(m.name)}`);
@@ -71,4 +72,4 @@ if (require.main === module) {
   console.log(`Branded ${stage} as ${NAME}.`);
 }
 
-module.exports = { brand, NAME, RULES, RENAMES };
+module.exports = { brand, NAME, RULES };
