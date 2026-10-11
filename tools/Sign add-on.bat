@@ -1,18 +1,16 @@
 @echo off
-rem Claude in Zen - signs the add-on with Mozilla (unlisted, personal use).
+rem Claude in Zen - signs Claudefox (the friends build) with Mozilla (unlisted, for sharing).
+rem It signs a clean, branded copy, so this PC's own mods and saved files never leave it (tools\sign-claudefox.ps1).
 rem Reads your keys from the WEB_EXT_API_KEY and WEB_EXT_API_SECRET user environment variables.
 rem The keys never appear in this file or in the chat.
-if "%WEB_EXT_API_KEY%"=="" goto nokeys
-if "%WEB_EXT_API_SECRET%"=="" goto nokeys
-cd /d "%~dp0..\extension"
-echo Signing... this usually takes 1 to 5 minutes.
-call npx --yes web-ext@8 sign --channel=unlisted --artifacts-dir "%~dp0..\build\signed"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0sign-claudefox.ps1"
+if errorlevel 1 goto failed
 echo.
-echo Done if no errors above. The signed .xpi is in the build\signed folder.
-echo Install it in Zen: about:addons, gear icon, Install Add-on From File.
+echo Done. Run "Build friends zip.bat" to put the signed add-on in the zip.
 pause
 exit /b 0
-:nokeys
-echo The API key variables are not set. See README.md, section "Mozilla API keys".
+:failed
+echo.
+echo Signing did not finish. Read the message above.
 pause
 exit /b 1

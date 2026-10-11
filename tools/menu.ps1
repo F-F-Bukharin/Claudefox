@@ -205,10 +205,10 @@ $script:steps = @(
     Jobs = @( (New-PsJob (Join-Path $tools 'install-xpi.ps1') '' @(0, 2)) )
   },
   @{
-    Title = 'Sign the add-on with Mozilla'
+    Title = 'Sign Claudefox with Mozilla'
     Recommended = $false
     NeedsZen = $false
-    Detail = 'Needs the WEB_EXT_API_KEY and WEB_EXT_API_SECRET variables (README, Mozilla API keys). Opens its own window: press a key there when it says done. Takes 1 to 5 minutes. Makes: build\signed.'
+    Detail = 'Signs Claudefox, the friends build, from a clean copy (no local mods or saved files). Needs the WEB_EXT_API_KEY and WEB_EXT_API_SECRET variables (README, Mozilla API keys). Opens its own window: press a key there when it says done. Takes 1 to 5 minutes. Makes: build\signed.'
     Before = {
       if (-not $env:WEB_EXT_API_KEY -or -not $env:WEB_EXT_API_SECRET) {
         return @{ Status = 'skipped'; Note = 'The API key variables are not set in this session. Set them (README, Mozilla API keys), then open this menu again.' }

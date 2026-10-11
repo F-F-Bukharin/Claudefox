@@ -32,6 +32,25 @@ function Find-SignedXpi([string]$Root, [string]$Version, [string]$Name) {
   return $null
 }
 
+# A clean copy for people outside this PC, branded Claudefox (tools\brand.js): the add-on (without this PC's own mods
+# and saved files: of those two folders only the READMEs go), the helper, and the friends' setup and START HERE.
+# Used by build-friends.ps1 (the zip) and sign-claudefox.ps1 (what Mozilla signs). Throws when branding fails.
+function New-ClaudefoxStage([string]$Root, [string]$Stage) {
+  if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
+  New-Item -ItemType Directory -Force (Join-Path $Stage 'host\lib'), (Join-Path $Stage 'tools') | Out-Null
+  Copy-Item (Join-Path $Root 'extension') (Join-Path $Stage 'extension') -Recurse
+  Get-ChildItem (Join-Path $Stage 'extension\mods') -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+  Get-ChildItem (Join-Path $Stage 'extension\output') -Exclude 'README.txt' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+  foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1') { Copy-Item (Join-Path $Root "host\$f") (Join-Path $Stage "host\$f") }
+  Copy-Item (Join-Path $Root 'host\lib\*.js') (Join-Path $Stage 'host\lib')
+  # Friends get the Firefox setup and instructions (friends\); Zen's own profile settings stay out.
+  foreach ($f in 'Set up Claudefox.bat', 'START HERE.txt') { Copy-Item (Join-Path $Root "friends\$f") (Join-Path $Stage $f) }
+  Copy-Item (Join-Path $Root 'tools\Sign in Claude Code.bat') (Join-Path $Stage 'tools\Sign in Claude Code.bat')
+  # Claudefox: the name, the file names and the texts friends read. A rule that no longer matches stops here.
+  & node (Join-Path $Root 'tools\brand.js') $Stage
+  if ($LASTEXITCODE -ne 0) { throw 'tools\brand.js could not brand the copy (see above).' }
+}
+
 # Zips a folder, with the folder itself as the top entry and forward-slash paths as the zip standard wants. Windows
 # PowerShell's Compress-Archive writes backslashes, which other unzip tools and macOS turn into odd file names.
 function New-FolderZip([string]$Folder, [string]$Zip) {

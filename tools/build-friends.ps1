@@ -8,23 +8,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $v = Get-SourceVersion $root
 $dist = Join-Path $root 'build\friends'
 $stage = Join-Path $dist 'Claudefox'
-if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
-New-Item -ItemType Directory -Force (Join-Path $stage 'host\lib'), (Join-Path $stage 'tools') | Out-Null
-
-# A copy of the add-on to brand. Mods made on this PC and files Claude saved stay here: of those two folders only
-# the READMEs go.
-Copy-Item (Join-Path $root 'extension') (Join-Path $stage 'extension') -Recurse
-Get-ChildItem (Join-Path $stage 'extension\mods') -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
-Get-ChildItem (Join-Path $stage 'extension\output') -Exclude 'README.txt' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
-foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1') { Copy-Item (Join-Path $root "host\$f") (Join-Path $stage "host\$f") }
-Copy-Item (Join-Path $root 'host\lib\*.js') (Join-Path $stage 'host\lib')
-# Friends get the Firefox setup and instructions (friends\); Zen's own profile settings stay out.
-foreach ($f in 'Set up Claudefox.bat', 'START HERE.txt') { Copy-Item (Join-Path $root "friends\$f") (Join-Path $stage $f) }
-Copy-Item (Join-Path $PSScriptRoot 'Sign in Claude Code.bat') (Join-Path $stage 'tools\Sign in Claude Code.bat')
-
-# Claudefox: the name, the file names and the texts friends read. A rule that no longer matches stops the build.
-& node (Join-Path $PSScriptRoot 'brand.js') $stage
-if ($LASTEXITCODE -ne 0) { throw 'tools\brand.js could not brand the copy (see above), so no zip was built.' }
+New-ClaudefoxStage $root $stage
 
 $xpi = Join-Path $stage 'claudefox.xpi'
 $signed = Find-SignedXpi $root $v 'Claudefox'

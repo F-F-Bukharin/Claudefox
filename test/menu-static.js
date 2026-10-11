@@ -34,7 +34,7 @@ for (const rel of scripts) {
 // The confirm window (host/confirm.ps1) ships to friends, and its no button is the default.
 const friends = fs.readFileSync(path.join(root, 'tools', 'build-friends.ps1'), 'utf8');
 const confirmPs = fs.readFileSync(path.join(root, 'host', 'confirm.ps1'), 'utf8');
-check('the friends zip ships the confirm window', /'confirm\.ps1'/.test(friends));
+check('the friends zip ships the confirm window', /'confirm\.ps1'/.test(friends + fs.readFileSync(path.join(root, 'tools', 'xpi-tools.ps1'), 'utf8')));
 check('the confirm window uses CRLF, says no on Enter and Esc, and stays on top', confirmPs.includes('\r\n') && !/[^\r]\n/.test(confirmPs)
   && /\$form\.AcceptButton = \$no/.test(confirmPs) && /\$form\.CancelButton = \$no/.test(confirmPs) && /\$form\.TopMost = \$true/.test(confirmPs));
 // Local mods and saved files stay out of the .xpi.

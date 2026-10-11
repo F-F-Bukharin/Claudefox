@@ -97,11 +97,20 @@ try {
 // The PowerShell side (no PowerShell here): the friends build brands its copy and packs that copy; the two builds
 // never pick up each other's signed file.
 const friends = read('tools/build-friends.ps1');
-check('build-friends brands its copy with brand.js and stops when that fails', /& node \(Join-Path \$PSScriptRoot 'brand\.js'\) \$stage/.test(friends) && /if \(\$LASTEXITCODE -ne 0\) \{ throw/.test(friends));
+const tools = read('tools/xpi-tools.ps1');
+const stageFn = tools.slice(tools.indexOf('function New-ClaudefoxStage'), tools.indexOf('function New-FolderZip'));
+check('the friends zip and signing share one clean, branded copy (New-ClaudefoxStage), which stops when branding fails', /New-ClaudefoxStage \$root \$stage/.test(friends)
+  && /& node \(Join-Path \$Root 'tools\\brand\.js'\) \$Stage/.test(stageFn) && /if \(\$LASTEXITCODE -ne 0\) \{ throw/.test(stageFn)
+  && /extension\\mods'\) -Directory/.test(stageFn) && /extension\\output'\) -Exclude 'README\.txt'/.test(stageFn));
 check('build-friends packs the branded copy as claudefox.xpi into Claudefox-v<version>.zip', /build-xpi\.ps1'\) -Source \(Join-Path \$stage 'extension'\) -Out \$xpi/.test(friends)
   && /'claudefox\.xpi'/.test(friends) && /"Claudefox-v\$v\.zip"/.test(friends) && /Remove-Item \(Join-Path \$stage 'extension'\) -Recurse -Force/.test(friends));
-check('friends get the Firefox setup and START HERE, without Zen\'s profile settings', /'Set up Claudefox\.bat', 'START HERE\.txt'\) \{ Copy-Item \(Join-Path \$root "friends\\\$f"\)/.test(friends)
-  && !/zen-profile|Apply Zen settings/.test(friends) && /Set-Content -Path \(Join-Path \$stage 'SIGNED'\)/.test(friends));
+check('friends get the Firefox setup and START HERE, without Zen\'s profile settings', /'Set up Claudefox\.bat', 'START HERE\.txt'\) \{ Copy-Item \(Join-Path \$Root "friends\\\$f"\)/.test(stageFn)
+  && !/zen-profile|Apply Zen settings/.test(stageFn + friends) && /Set-Content -Path \(Join-Path \$stage 'SIGNED'\)/.test(friends) && /'confirm\.ps1'/.test(stageFn));
+const sign = read('tools/sign-claudefox.ps1'), signBat = read('tools/Sign add-on.bat');
+check('signing uploads only the clean Claudefox copy, unlisted, and has a dry run', /New-ClaudefoxStage \$root \$stage/.test(sign) && /\$src = Join-Path \$stage 'extension'/.test(sign)
+  && /Push-Location \$src/.test(sign) && /web-ext@8 sign --channel=unlisted --artifacts-dir \$out/.test(sign) && /param\(\[switch\]\$DryRun\)/.test(sign)
+  && /sign-claudefox\.ps1/.test(signBat) && !/cd \/d "%~dp0\.\.\\extension"/.test(signBat));
+check('signing never prints the API keys', !/Write-Host[^\r\n]*\$env:WEB_EXT/.test(sign) && !/echo[^\r\n]*%WEB_EXT/i.test(signBat));
 check('the zip has forward-slash paths (New-FolderZip, not Compress-Archive)', /New-FolderZip \$stage \$zip/.test(friends) && !/Compress-Archive/.test(friends)
   && /\$rel = \$top \+ '\/' \+ \$_\.FullName\.Substring\(\$Folder\.Length \+ 1\)\.Replace\('\\', '\/'\)/.test(read('tools/xpi-tools.ps1')));
 check('signed builds are matched by name: Claudefox for friends, Claude in Zen for this PC', /Find-SignedXpi \$root \$v 'Claudefox'/.test(friends)
