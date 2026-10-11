@@ -1,5 +1,5 @@
 'use strict';
-// Watch tool helper checks, one section per task of the watch-tool plan: args and python (Tasks 3, 4), run (Task 5).   node host/test/watch-smoke.js
+// Watch tool helper checks, one section per task of the watch-tool plan: args and python (Tasks 3, 4), run (Task 5), result (Task 6).   node host/test/watch-smoke.js
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
@@ -91,7 +91,39 @@ async function runSection() {
   }
 }
 
-pythonSection().then(runSection).then(() => {
+// section result (Task 6): report assembly
+async function resultSection() {
+  const { assembleResult } = require('../lib/watchvideo');
+  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-result-'));
+  try {
+    const work = path.join(t, 'run-1', 'watch-x', 'frames');
+    fs.mkdirSync(work, { recursive: true });
+    const lines = [];
+    for (let i = 1; i <= 26; i++) {
+      const name = `frame_${String(i).padStart(4, '0')}.jpg`;
+      if (i !== 3) fs.writeFileSync(path.join(work, name), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]));
+      lines.push(`- \`${path.join(work, name)}\` (t=00:${String(i).padStart(2, '0')}, reason=keyframe)`);
+    }
+    const report = ['# watch: video report', '', '## Frames', '', ...lines, '', '## Transcript', '', '_No transcript._'].join('\n');
+    const read = p => (fs.existsSync(p) ? fs.readFileSync(p) : null);
+    const runDir = path.join(t, 'run-1');
+    const r = assembleResult({ stdout: report, stderr: '', code: 0, runDir, readFile: read });
+    check('frames come back as JPEG images, at most 24, and the missing one is counted', r.frames.length === 23 && r.frames[0].mimeType === 'image/jpeg'
+      && /could not be read/.test(r.text) && /beyond 24/.test(r.text));
+    const outside = assembleResult({ stdout: '## Frames\n- `/etc/passwd` (t=00:00, reason=x)', stderr: '', code: 0, runDir, readFile: read });
+    check('a path outside the run folder is never read', outside.frames.length === 0);
+    const big = assembleResult({ stdout: 'a'.repeat(70 * 1024), stderr: '', code: 0, runDir, readFile: read });
+    check('a report over 60 KB is cut and says so', Buffer.byteLength(big.text) <= 60 * 1024 + 60 && /cut at 60 KB/.test(big.text));
+    const failed = assembleResult({ stdout: '', stderr: 'boom', code: 3, runDir, readFile: read });
+    check('a failed run says so and returns no frames', failed.text.startsWith('watch failed (exit code 3)') && failed.frames.length === 0);
+    const notJpeg = assembleResult({ stdout: '## Frames\n- `' + path.join(work, 'frame_0001.jpg') + '` (t=00:01, reason=x)', stderr: '', code: 0, runDir, readFile: () => Buffer.from('PNG') });
+    check('a file that does not start with FF D8 FF is not returned as a frame', notJpeg.frames.length === 0);
+  } finally {
+    fs.rmSync(t, { recursive: true, force: true });
+  }
+}
+
+pythonSection().then(runSection).then(resultSection).then(() => {
   console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);
   process.exit(failed ? 1 : 0);
 });

@@ -78,4 +78,38 @@ async function findPython(probe) {
   return { error: PY_HINT };
 }
 
-module.exports = { checkSource, checkQuestion, checkTime, buildArgv, buildEnv, findPython };
+// Result assembly (Task 6). The report lists frames as ``- `<path>` (t=..., reason=...)``; only files inside the run folder are read.
+function parseFrames(stdout, runDir) {
+  const root = path.resolve(runDir) + path.sep;
+  const frames = [];
+  for (const line of String(stdout || '').split(/\r?\n/)) {
+    const m = /^- `([^`]+)` \(t=([^,)]*)/.exec(line);
+    if (!m) continue;
+    const p = path.resolve(m[1]);
+    if (p.startsWith(root)) frames.push({ path: p, t: m[2] });
+  }
+  return frames;
+}
+
+function isJpeg(buf) {
+  return !!buf && buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+}
+
+function assembleResult({ stdout, stderr, code, runDir, readFile, maxFrames = 24, maxText = 60 * 1024 }) {
+  if (code !== 0) return { text: `watch failed (exit code ${code}): ${String(stderr || '').slice(-600)}`, frames: [] };
+  const listed = parseFrames(stdout, runDir);
+  const frames = [];
+  let unreadable = 0;
+  for (const f of listed.slice(0, maxFrames)) {
+    const buf = readFile(f.path);
+    if (isJpeg(buf)) frames.push({ mimeType: 'image/jpeg', data: buf.toString('base64') });
+    else unreadable++;
+  }
+  let text = String(stdout || '');
+  if (Buffer.byteLength(text) > maxText) text = Buffer.from(text).subarray(0, maxText).toString('utf8') + '\n(report cut at 60 KB)';
+  if (unreadable) text += `\n(${unreadable} frame(s) could not be read)`;
+  if (listed.length > maxFrames) text += `\n(frames beyond ${maxFrames} are not returned)`;
+  return { text, frames };
+}
+
+module.exports = { checkSource, checkQuestion, checkTime, buildArgv, buildEnv, findPython, parseFrames, assembleResult };
