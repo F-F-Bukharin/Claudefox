@@ -2,12 +2,15 @@
 // Mods: small add-ons for the panel, one folder each under extension/mods/<id>/. The core never changes them.
 // A mod has panel.js and/or style.css, and an optional mod.json with a name and a description. Whether a mod is on,
 // and any error the panel reported for it, is kept in mods.json beside the helper's other files, not in the add-on.
+// A new mod starts off: a mod runs with the panel's own rights, so the user turns each one on in Settings, Mods.
+// Mods that were already there before this rule (a state file from before, without "_v") keep the old default, on.
 const fs = require('fs');
 const path = require('path');
 
 const ID = /^[a-z0-9][a-z0-9-]{1,39}$/;
 const MAX_JS = 256 * 1024;   // bytes
 const MAX_CSS = 128 * 1024;
+const STATE_V = 2;   // from this version on, a mod with no saved state is off
 
 function readJson(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
@@ -29,7 +32,7 @@ function sizeOf(file) {
 // One mod folder, as the panel needs it. `broken` says why it cannot load ('' when it can).
 function describeMod(modsDir, id, saved) {
   const dir = path.join(modsDir, id);
-  const mod = { id, name: id, description: '', panel: false, style: false, enabled: saved.enabled !== false, broken: '' };
+  const mod = { id, name: id, description: '', panel: false, style: false, enabled: saved.enabled === true, broken: '' };
   const hasMeta = fs.existsSync(path.join(dir, 'mod.json'));
   const meta = hasMeta ? readJson(path.join(dir, 'mod.json')) : null;
   if (hasMeta && (!meta || typeof meta !== 'object' || Array.isArray(meta))) mod.broken = 'mod.json is not valid JSON';
@@ -53,8 +56,20 @@ function scanMods(modsDir, stateFile) {
     ids = fs.readdirSync(modsDir, { withFileTypes: true })
       .filter(d => d.isDirectory() && ID.test(d.name)).map(d => d.name).sort();
   } catch { return []; }
-  const state = readState(stateFile);
+  const state = migrate(stateFile, readState(stateFile), ids);
   return ids.map(id => describeMod(modsDir, id, state[id] && typeof state[id] === 'object' ? state[id] : {}));
+}
+
+// Once: the mods already there keep the old default (on) unless they were turned off; later ones start off.
+function migrate(stateFile, state, ids) {
+  if (state._v === STATE_V) return state;
+  for (const id of ids) {
+    const s = state[id] && typeof state[id] === 'object' ? state[id] : {};
+    if (typeof s.enabled !== 'boolean') state[id] = { ...s, enabled: !s.broken };
+  }
+  state._v = STATE_V;
+  try { writeState(stateFile, state); } catch {}
+  return state;
 }
 
 // Changes one mod's saved state. Turning a mod on clears its error: that is how "try again" works.

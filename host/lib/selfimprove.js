@@ -451,6 +451,9 @@ function apply(id, root) {
     return now && was ? !now.equals(was) : !!now !== !!was;
   }).map(c => c.path);
   if (conflicts.length) return { ok: false, text: `These files changed since Claude made the change, so nothing was applied: ${conflicts.join(', ')}. Discard it and ask again.` };
+  // A mod folder that does not exist yet: the mod starts off (lib/mods.js), so the user is told where to turn it on.
+  const newMods = [...new Set(p.changes.map(c => (/^extension\/mods\/([^/]+)\//.exec(c.path) || [])[1]).filter(Boolean))]
+    .filter(id => !fs.existsSync(path.join(root, 'extension', 'mods', id)));
   // Two steps: every new file is written beside its target first, so a failure there changes nothing. Then the files
   // are renamed into place.
   const staged = [];
@@ -477,7 +480,8 @@ function apply(id, root) {
   return {
     ok: true,
     files: p.changes.map(c => c.path),
-    text: `Applied ${n} file${n === 1 ? '' : 's'}. Reload Claude in Zen to use the change${helper ? '; the helper changes need Zen restarted' : ''}.`,
+    text: `Applied ${n} file${n === 1 ? '' : 's'}. Reload Claude in Zen to use the change${helper ? '; the helper changes need Zen restarted' : ''}.`
+      + (newMods.length ? ` New mods start off: turn ${newMods.length === 1 ? `${newMods[0]} on` : `${newMods.join(', ')} on`} in Settings, Mods, then Reload panel.` : ''),
   };
 }
 
