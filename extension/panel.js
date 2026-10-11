@@ -321,6 +321,24 @@ $('unsafeToggle').addEventListener('change', e => {
   else send('setUnsafe', { value: false });
 });
 
+// Watch videos (the watch_video tool). Turning the switch on asks in the helper's confirm window (a Windows window outside
+// Zen), so it is set back here until the state says on. Turning it off needs no question.
+$('watchToggle').addEventListener('change', e => {
+  if (e.target.checked) { e.target.checked = !!state.watch; send('setWatch', { value: true }); }
+  else send('setWatch', { value: false });
+});
+// The saved option "Start with watching on": On asks the same way, and the helper's reply sets it. Off is saved at once.
+$('watchOnLoadToggle').addEventListener('change', e => {
+  if (e.target.checked) { e.target.checked = state.watchOnLoad === true; send('setWatchOnLoad', { value: true }); }
+  else send('setWatchOnLoad', { value: false });
+});
+// The card: Claude asks to watch a video. Allow and Deny answer it; Allow opens the helper's confirm window, where the
+// switch is really turned on.
+$('watchAllow').addEventListener('click', () => answerWatch(true));
+$('watchDeny').addEventListener('click', () => answerWatch(false));
+function answerWatch(allow) { if (state.watchAsk) send('watchAnswer', { id: state.watchAsk.id, allow }); }
+let watchShownId = '';   // the card id last shown to the helper: watchShown goes once per id
+
 // ------------------------------------------------------------ render state
 
 const NATIVE_LABEL = {
@@ -415,6 +433,19 @@ function render(s, log) {
     : s.unsafe ? 'On. Claude may act on Google sign-in pages until you press Stop or restart Zen.'
       : 'Off. Claude does not act on Google sign-in pages.';
   $('unsafeNote').classList.toggle('warnnote', waiting === 'unsafe');
+  // watch videos: session only (Stop turns it off). The card is the helper's question about one video; Claude cannot answer it.
+  $('watchToggle').checked = !!s.watch;
+  $('watchToggle').disabled = s.agent === 'stopped';
+  $('watchNote').textContent = waiting === 'watch' ? CONFIRM_WAIT
+    : s.watch ? 'On. Claude may watch videos until you press Stop.'
+      : 'Off. Claude asks in the chat before it watches.';
+  $('watchNote').classList.toggle('warnnote', waiting === 'watch');
+  $('watchOnLoadToggle').checked = s.watchOnLoad === true;
+  $('watchCard').hidden = !s.watchAsk;
+  if (s.watchAsk) {
+    $('watchCardSource').textContent = String(s.watchAsk.source || '').slice(0, 200);
+    if (watchShownId !== s.watchAsk.id) { watchShownId = s.watchAsk.id; send('watchShown', { id: s.watchAsk.id }); }
+  }
   $('googleVal').textContent = s.unsafe ? 'allowed (Unsafe mode)' : 'always hands-off';
   $('googleVal').classList.toggle('warn', !!s.unsafe);
   $('filesToggle').checked = !!s.filesEnabled;

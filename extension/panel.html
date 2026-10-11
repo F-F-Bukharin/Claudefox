@@ -54,6 +54,13 @@
         <button class="chip" data-fill="/tabs">/tabs</button>
         <button class="chip" data-fill="/help">/help</button>
       </div>
+      <!-- Claude asks to watch a video: only Allow and Deny answer it, and Allow opens the helper's confirm window -->
+      <div id="watchCard" class="card" hidden>
+        <p><strong>Claude wants to watch a video</strong></p>
+        <p id="watchCardSource" class="mono small"></p>
+        <p class="muted small">Watching runs Python, yt-dlp and ffmpeg on this PC.</p>
+        <div class="row"><button id="watchAllow" type="button">Allow</button> <button id="watchDeny" type="button">Deny</button></div>
+      </div>
       <!-- Claude asks to look in a folder on this computer: the answer is given in the helper's confirm window -->
       <div id="grantAsk" class="confirm grant-ask" role="status" aria-labelledby="grantTitle" aria-describedby="grantFolder" hidden>
         <p id="grantTitle"><b>Claude asks to look in this folder</b></p>
@@ -202,6 +209,15 @@
         <span class="val"><input type="checkbox" id="unsafeToggle" class="switch"></span>
       </div>
       <p id="unsafeNote" class="muted small unsafe-note"></p>
+      <div class="row">
+        <label for="watchToggle">Watch videos</label>
+        <span class="val"><input type="checkbox" id="watchToggle" class="switch"></span>
+      </div>
+      <p id="watchNote" class="muted small"></p>
+      <div class="row">
+        <label for="watchOnLoadToggle">Start with watching on</label>
+        <span class="val"><input type="checkbox" id="watchOnLoadToggle" class="switch"></span>
+      </div>
       <div class="row">
         <span>Local folders</span>
         <span class="val" id="localCount">none allowed</span>
