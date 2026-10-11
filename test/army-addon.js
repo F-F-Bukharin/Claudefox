@@ -73,7 +73,7 @@ const browser = {
 };
 const fetch = async url => {
   if (String(url).includes('9222')) throw new Error('refused');
-  return { status: 200, ok: true, json: async () => ({ account: { email_address: 'personalworksacc@gmail.com', full_name: 'F', uuid: 'u-1' } }) };
+  return { status: 200, ok: true, json: async () => ({ account: { email_address: 'f.work@example.com', full_name: 'F', uuid: 'u-1' } }) };
 };
 const makeCtx = () => { const c = vm.createContext({ browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, Blob: require('buffer').Blob, btoa: s => Buffer.from(s, 'binary').toString('base64'), setTimeout, clearTimeout, setInterval: () => 0, Promise }); c.window = c; return c; };
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')).background.scripts;   // the real load order
@@ -109,7 +109,7 @@ const tabOf = id => tabs.find(t => t.id === id);
     connectEv.fire(panel);
     await fromPanel({ type: 'signIn' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
-    await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'personalworksacc@gmail.com' });
+    await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'f.work@example.com' });
     const army = g('cizArmy');
 
     // 1. tools a worker may not use
@@ -258,7 +258,7 @@ const tabOf = id => tabs.find(t => t.id === id);
     check('the helper going away closes every army tab', removed.slice(rm).includes(s3) && army.tabs.size === 0);
     await fromPanel({ type: 'retryNative' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
-    await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'personalworksacc@gmail.com' });
+    await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'f.work@example.com' });
 
     // 11. the army switch
     await fromPanel({ type: 'setArmy', value: true });

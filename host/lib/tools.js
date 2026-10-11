@@ -309,7 +309,7 @@ const TOOLS = [
 
 // Tools whose results carry page content, which the tool server labels as untrusted.
 // army_wait carries the workers' reports, which come from web pages.
-// local_files and local_file_read carry file names and file text from this computer.
-const PAGE_CONTENT = new Set(['army_wait', 'read_page', 'get_page_text', 'find', 'analyze_page', 'get_selection', 'read_document', 'local_files', 'local_file_read', 'network_log', 'console_log']);
+// local_files and local_file_read carry file names and file text from this computer; tabs_list carries page titles.
+const PAGE_CONTENT = new Set(['tabs_list', 'army_wait', 'read_page', 'get_page_text', 'find', 'analyze_page', 'get_selection', 'read_document', 'local_files', 'local_file_read', 'network_log', 'console_log']);
 
 module.exports = { TOOLS, PAGE_CONTENT };

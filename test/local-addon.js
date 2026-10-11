@@ -80,7 +80,7 @@ const browser = {
 };
 const fetch = async url => {
   if (String(url).includes('9222')) throw new Error('refused');
-  return { status: 200, ok: true, json: async () => ({ account: { email_address: 'personalworksacc@gmail.com', full_name: 'F', uuid: 'u-1' } }) };
+  return { status: 200, ok: true, json: async () => ({ account: { email_address: 'f.work@example.com', full_name: 'F', uuid: 'u-1' } }) };
 };
 const makeCtx = () => { const c = vm.createContext({ browser, navigator: nav, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, Blob: require('buffer').Blob, btoa: s => Buffer.from(s, 'binary').toString('base64'), setTimeout, clearTimeout, setInterval: () => 0, Promise }); c.window = c; return c; };
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')).background.scripts;   // the real load order

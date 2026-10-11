@@ -66,7 +66,7 @@ const browser = {
     getAll: async o => normalWindows.filter(w => !o || !o.windowTypes || o.windowTypes.includes(w.type)) },
 };
 const fetched = [];
-let claudeEmail = 'personalworksacc@gmail.com';   // the claude.ai session the add-on reads
+let claudeEmail = 'f.work@example.com';   // the claude.ai session the add-on reads
 const fetch = async url => {
   fetched.push(String(url));
   if (String(url).includes('9222')) throw new Error('refused');
@@ -103,8 +103,8 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     let r = await call('tabs_list');
     check('tools refused before sign-in', !r.ok && /Not signed in/.test(r.error));
     await fromPanel({ type: 'signIn' });
-    check('sign-in from the claude.ai session', g('cizState').get().signedIn && g('cizState').get().account.email === 'personalworksacc@gmail.com');
-    check('sign-in is remembered, without cookies', local.rememberedAccount && local.rememberedAccount.email === 'personalworksacc@gmail.com' && Object.keys(local.rememberedAccount).sort().join() === 'at,email,name,uuid');
+    check('sign-in from the claude.ai session', g('cizState').get().signedIn && g('cizState').get().account.email === 'f.work@example.com');
+    check('sign-in is remembered, without cookies', local.rememberedAccount && local.rememberedAccount.email === 'f.work@example.com' && Object.keys(local.rememberedAccount).sort().join() === 'at,email,name,uuid');
 
     // a fresh start (new session storage) signs back in on its own
     const ctx2 = vm.createContext({ browser: Object.assign({}, browser, { storage: { local: browser.storage.local, session: (() => { const s2 = {}; return {
@@ -121,8 +121,8 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     await helperSays({ type: 'hello', version: '0.4.0', clients: [] });
     check('helper connected, Claude Code status asked', g('cizState').get().native === 'connected' && native.sent.some(m => m.type === 'claude_status'));
     await fromPanel({ type: 'checkClaude' });
-    await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'personalworksacc@gmail.com', configDirectory: 'C:\\x\\claude' });
-    check('check link logs what it found', g('cizState').log().some(e => /signed in as personalworksacc@gmail.com \(profile: C:\\x\\claude\)/.test(e.text)));
+    await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'f.work@example.com', configDirectory: 'C:\\x\\claude' });
+    check('check link logs what it found', g('cizState').log().some(e => /signed in as f.work@example.com \(profile: C:\\x\\claude\)/.test(e.text)));
 
     r = await call('tabs_list');
     check('tabs_list works', r.ok && r.result.length === 6);
@@ -206,24 +206,24 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
     await fromPanel({ type: 'accountUse', id: 'a1' });
     await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: true, email: 'other@example.com' });
     check('a switch re-reads claude.ai, so the add-on follows an account already signed in there', addonEmail() === 'other@example.com', addonEmail());
-    claudeEmail = 'personalworksacc@gmail.com';
+    claudeEmail = 'f.work@example.com';
     browser.tabs.onUpdated.fire(1, { status: 'loading' }, { url: 'https://claude.ai/chats' });
     await tick();
     check('a claude.ai page still loading changes nothing', addonEmail() === 'other@example.com');
     browser.tabs.onUpdated.fire(1, { status: 'complete' }, { url: 'https://claude.ai/chats' });
     await tick();
-    check('a claude.ai page that loads moves the add-on to the account claude.ai is on', addonEmail() === 'personalworksacc@gmail.com', addonEmail());
+    check('a claude.ai page that loads moves the add-on to the account claude.ai is on', addonEmail() === 'f.work@example.com', addonEmail());
     claudeEmail = 'other@example.com';
     browser.tabs.onUpdated.fire(1, { status: 'complete' }, { url: 'https://example.com/' });
     await tick();
-    check('a page that is not claude.ai does not change the add-on', addonEmail() === 'personalworksacc@gmail.com');
+    check('a page that is not claude.ai does not change the add-on', addonEmail() === 'f.work@example.com');
     browser.tabs.onUpdated.fire(1, { status: 'complete' }, { url: 'https://claude.ai/chats' });
     await tick();
     check('the next claude.ai page follows the account again', addonEmail() === 'other@example.com', addonEmail());
-    claudeEmail = 'personalworksacc@gmail.com';
+    claudeEmail = 'f.work@example.com';
     await fromPanel({ type: 'accountUse', id: 'a1' });
     await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: true, email: 'other@example.com' });
-    check('the chat switch leaves the add-on as the account claude.ai is on, and says the note', addonEmail() === 'personalworksacc@gmail.com' && g('cizState').get().accountNote.ok === true);
+    check('the chat switch leaves the add-on as the account claude.ai is on, and says the note', addonEmail() === 'f.work@example.com' && g('cizState').get().accountNote.ok === true);
     await fromPanel({ type: 'accountAdd' });
     check('add asks the helper', native.sent.some(m => m.type === 'account_add'));
     await helperSays({ type: 'account_result', action: 'login_started', id: 'a2', ok: true, isNew: true });

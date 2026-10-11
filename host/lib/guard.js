@@ -44,6 +44,11 @@ function protectedPlaces() {
 
 const win = () => process.platform === 'win32';
 
+// Claude in Zen's own code: the folder this helper runs from, with the add-on, its mods and the tools. File tools may
+// read it but never change it, whatever folder the user picks; changes go through Improve Claude in Zen, which works
+// on a copy and needs the user's Apply.
+const OWN = path.resolve(__dirname, '..', '..');
+
 // The real spelling of a path (case and links resolved) when it exists; Claude Code checks both.
 function real(p) {
   try { return fs.realpathSync.native(p); } catch { return path.resolve(p); }
@@ -72,6 +77,7 @@ function denyRules() {
     }
   }
   for (const f of SECRET_FILES) rules.add(`Read(//**/${escapeRule(f)})`);
+  for (const v of new Set([OWN, real(OWN)])) rules.add(`Edit(/${escapeRule(posix(v))}/**)`);   // Edit rules cover Write too
   return [...rules];
 }
 
@@ -84,8 +90,8 @@ function within(child, parent) {
   return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
-// Why a folder may not be used for file tools, or '' when it may.
-function folderProblem(folder) {
+// Why a folder may not be used for file tools, or '' when it may. mode 'write': also not inside Claude in Zen's code.
+function folderProblem(folder, mode) {
   const f = real(folder);
   for (const place of protectedPlaces()) {
     if (within(f, place) || within(f, real(place))) {
@@ -93,6 +99,7 @@ function folderProblem(folder) {
     }
   }
   if (within(f, P.BASE) && !within(f, P.WORKSPACE)) return "it is Claude in Zen's own data folder";
+  if (mode === 'write' && (within(f, OWN) || within(f, real(OWN)))) return "it holds Claude in Zen's own code, which file tools never change (use Read only, or Improve Claude in Zen)";
   return '';
 }
 
@@ -120,4 +127,4 @@ function localProblem(realPath, isDir) {
   return '';
 }
 
-module.exports = { denyRules, folderProblem, readable, localProblem, secretFile, within, protectedPlaces, posix, SECRET_FILES };
+module.exports = { denyRules, folderProblem, readable, localProblem, secretFile, within, protectedPlaces, posix, SECRET_FILES, OWN };

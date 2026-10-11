@@ -10,15 +10,21 @@ const TESTS = [
   'test/addon-smoke.js', 'test/army-addon.js', 'test/local-addon.js', 'test/dom-page-tools.js', 'test/dom-panel.js', 'test/dom-mods.js', 'test/docx.js',
   'test/menu-static.js', 'test/wall-ink.js',
 ];
-let failed = 0;
+// A test that cannot run here (no jsdom, or a POSIX-only test on Windows) prints SKIP and exits 0: it counts as
+// skipped, never as passed.
+let failed = 0, skipped = 0;
 for (const t of TESTS) {
   const r = spawnSync(process.execPath, [path.join(root, t)], { encoding: 'utf8', timeout: 120000 });
   const out = `${r.stdout || ''}${r.stderr || ''}`.trim().split('\n');
-  const last = out.filter(l => l.trim()).pop() || '(no output)';
+  const lines = out.filter(l => l.trim());
+  const last = lines[lines.length - 1] || '(no output)';
   const ok = r.status === 0;
+  const skip = ok && /^SKIP\b/.test(lines[0] || '');
   if (!ok) failed++;
-  console.log(`${ok ? 'ok  ' : 'FAIL'}  ${t.padEnd(26)} ${last.trim()}`);
+  if (skip) skipped++;
+  console.log(`${!ok ? 'FAIL' : skip ? 'skip' : 'ok  '}  ${t.padEnd(26)} ${last.trim()}`);
   if (!ok) console.log(out.filter(l => /FAIL/.test(l)).map(l => '        ' + l).join('\n'));
 }
-console.log(failed ? `\n${failed} test file(s) failed` : '\nAll test files passed');
+const ran = TESTS.length - skipped - failed;
+console.log(failed ? `\n${failed} test file(s) failed` : `\n${ran} test file(s) passed${skipped ? `, ${skipped} skipped (they did not run here)` : ''}`);
 process.exit(failed ? 1 : 0);
