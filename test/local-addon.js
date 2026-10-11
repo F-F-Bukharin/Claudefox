@@ -137,6 +137,8 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
       fp('file:///C:/a/b/../c.html') === 'C:\\a\\c.html' && fp('file:///C:/a/./b/%2e%2e/c.html') === 'C:\\a\\c.html' && fp('file:///C:/a/%2e%2e/%2e%2e/x') === 'C:\\x' && fp('file:///C:/a%5C..%5Cb.html') === 'C:\\b.html');
     check('cizFilePath: localhost is this computer, another host (a network share) is null',
       fp('file://localhost/home/f/x.html') === '/home/f/x.html' && fp('file://server/share/x.html') === null && fp('file:////server/share/x.html') === null);
+    check('cizFilePath: encoded backslashes cannot spell a network share', fp('file:///%5C%5Cserver/share/x.html') === null && fp('file:///%5Cserver/x.html') === null
+      && g('cizUrlBlocked')('file:///%5C%5Cserver/share/x.html', { localGrants: [] }).needGrant === undefined, fp('file:///%5C%5Cserver/share/x.html'));
     check('cizFilePath: NUL and non-file URLs are null', fp('file:///home/f/a%00b.html') === null && fp('https://example.com/x.html') === null && fp('about:config') === null);
     const inF = (p, f) => g('cizInFolder')(p, f);
     check('cizInFolder: drive paths ignore case and slash direction', inF('c:/users/h/downloads/game/x.html', 'C:\\Users\\H\\Downloads\\game') && inF('C:\\A\\b', 'c:/a/'));
@@ -280,6 +282,43 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
     const to = await call('tab_open', { url: F + 'game/index.html' });
     check('navigate and tab_open to a file: URL are refused, pointing to local_page_open',
       !nv.ok && /off-limits to tab_open and navigate.*local_page_open/.test(nv.error) && !to.ok && /off-limits/.test(to.error) && tabOf(1).url === 'https://shop.example/', `${nv.error} | ${to.error}`);
+
+    // ---- the tab moves while the user is asked: after the answer it is read again and checked from the start
+    tabs.push({ id: 20, windowId: 1, active: false, title: 'G2', url: F + 'game2/index.html', status: 'complete' });
+    n = injected.length;
+    p = call('read_page', { tab_id: 20 });
+    await tick();
+    const mv1 = lastAsk();
+    tabOf(20).url = 'file:///C:/Users/H/Documents/private.txt';
+    await helperAnswers(true);
+    await tick();
+    const mv2 = lastAsk();
+    check('a tab that moves to another folder during the question is asked about again, and nothing runs yet',
+      mv1 && mv1.folder === W + 'game2' && mv2 && mv2.id !== mv1.id && mv2.folder === 'C:\\Users\\H\\Documents' && injected.length === n, JSON.stringify([mv1, mv2]));
+    await helperAnswers(false);
+    r = await p;
+    check('a no about the new folder means the tool never ran on the new page', !r.ok && /did not allow Claude to look in C:\\Users\\H\\Documents/.test(r.error) && injected.length === n, r.error);
+    tabs.push({ id: 21, windowId: 1, active: false, title: 'G3', url: F + 'game3/index.html', status: 'complete' });
+    n = injected.length;
+    p = call('read_page', { tab_id: 21 });
+    await tick();
+    tabOf(21).url = 'https://accounts.google.com/signin/v2';
+    await helperAnswers(true);
+    r = await p;
+    check('a tab that moves to Google sign-in during the question is refused after the yes', !r.ok && /Google sign-in/.test(r.error) && injected.length === n, r.error);
+    tabs.push({ id: 22, windowId: 1, active: false, title: 'G4', url: F + 'game4/index.html', status: 'complete' });
+    let shots = 0;
+    const cap0 = capture;
+    capture = async () => { shots++; return 'data:image/png;base64,AAAA'; };
+    p = call('screenshot', { tab_id: 22 });
+    await tick();
+    tabOf(22).url = F + 'secret/plan.html';
+    await helperAnswers(true);
+    await tick();
+    await helperAnswers(false);
+    r = await p;
+    capture = cap0;
+    check('screenshot checks the tab again after the question: no picture of a folder that was not allowed', !r.ok && shots === 0, r.error);
 
     // ---- the helper's local_tab
     let m;

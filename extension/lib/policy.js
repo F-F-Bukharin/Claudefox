@@ -77,7 +77,8 @@ function cizPathParts(path) {
   const m = /^([A-Za-z]):[\\/]([\s\S]*)$/.exec(s);
   let drive = '', rest;
   if (m) { drive = m[1].toUpperCase(); rest = m[2].split(/[\\/]/); }
-  else if (s[0] === '/' && s[1] !== '/') rest = s.slice(1).split('/');
+  // A POSIX path never holds a backslash here: file:///%5C%5Cserver/share would otherwise reach a network share on Windows.
+  else if (s[0] === '/' && s[1] !== '/' && !s.includes('\\')) rest = s.slice(1).split('/');
   else return null;
   const segs = [];
   for (const seg of rest) {

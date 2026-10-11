@@ -780,12 +780,25 @@ async function cizLocalGate(gate) {
   if (!r.ok) throw new Error(r.error);
 }
 
+// The tab a tool will use, and the gate it passed (view: the looser screenshot rule). A file: tab outside the allowed
+// folders waits for the user's answer in the confirm window, up to two minutes, and the page or the user may move the
+// tab meanwhile. So after an answer the tab is read again and checked from the start: the tool only ever acts on what
+// was allowed, never on whatever the tab shows by then.
+async function cizGatedTab(args, view) {
+  for (let round = 0; ; round++) {
+    const tab = await cizTabFor(args);
+    if (args && args.__army) { cizArmyRefuse(tab.url); return { tab, gate: { blocked: false } }; }
+    const gate = (view ? cizViewBlocked : cizUrlBlocked)(tab.url || '', cizGateOpts());
+    if (!gate.local && !gate.needGrant) return { tab, gate };
+    await cizLocalGate(gate);
+    if (!gate.needGrant) return { tab, gate };
+    if (round >= 2) throw new Error(`Tab ${tab.id} kept moving to other folders while the user was asked, so Claude did not use it.`);
+  }
+}
+
 // A tab Claude may read or act on: not a non-web page, and not a Google sign-in page unless Unsafe mode is on.
 async function cizPageTab(args) {
-  const tab = await cizTabFor(args);
-  if (args && args.__army) { cizArmyRefuse(tab.url); return tab; }
-  const gate = cizUrlBlocked(tab.url || '', cizGateOpts());
-  if (gate.local || gate.needGrant) { await cizLocalGate(gate); return tab; }
+  const { tab, gate } = await cizGatedTab(args, false);
   if (gate.blocked) {
     if (/^about:/i.test(tab.url || '') && !cizViewBlocked(tab.url).blocked) {
       throw new Error(`Tab ${tab.id} is a browser page (${String(tab.url).split(/[?#]/)[0]}): add-ons can't read or click inside those, but screenshot shows it.`);
@@ -1027,11 +1040,8 @@ const CIZ_TOOLS = {
 
   async screenshot(args) {
     // Looking is allowed on more pages than acting: about: pages too (see cizViewBlocked).
-    const tab = await cizTabFor(args);
-    if (args.__army) cizArmyRefuse(tab.url);
-    const gate = cizViewBlocked(tab.url || '', cizGateOpts());
-    if (gate.local || gate.needGrant) await cizLocalGate(gate);
-    else if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
+    const { tab, gate } = await cizGatedTab(args, true);
+    if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
     // captureTab only: bringing the tab to the front to capture it would take the user's tab away from them.
     // scale 1: one image pixel per CSS pixel, so click x/y can be read straight off the picture.
     let dataUrl, why = 'Zen returned no image';
