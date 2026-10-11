@@ -268,6 +268,23 @@ const answerConfirm = async ok => {
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
     await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'f.work@example.com' });
 
+    // 9b. Stop cuts everything before it waits: a worker's call already on its way finds the agent stopped
+    const c0 = created.length;
+    panelOnMsg.fire({ type: 'stop' });   // not awaited: Stop is busy closing tabs now
+    native.onMessage.fire({ type: 'call', id: 'late1', tool: 'tab_open', args: { url: 'https://late.example/' }, source: 'Army worker w1', army: { run: 'r6', worker: 'w1' } });
+    await tick(60);
+    check('a worker call that arrives while Stop runs opens no tab', created.length === c0, JSON.stringify(created.slice(c0)));
+    await fromPanel({ type: 'start' });
+    await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
+
+    // 17. only the helper's army field makes a worker call
+    native.onMessage.fire({ type: 'call', id: 'bad1', tool: 'tab_open', args: { url: 'https://bad.example/' }, source: 'x', army: 'w1' });
+    await tick();
+    const badArmy = native.sent.find(m => m.type === 'result' && m.id === 'bad1');
+    check('an army field that is not a run and a worker is refused, and nothing runs', badArmy && badArmy.ok === false && badArmy.error === 'Bad army call.' && !created.some(o => /bad\.example/.test(o.url || '')), JSON.stringify(badArmy));
+    const spoof = await call('tab_open', { url: 'https://spoof.example/', __army: { run: 'r1', worker: 'w1' } });
+    check('a normal call cannot pass its own __army: its tab is not an army tab', spoof.ok && !army.owner(spoof.result.tab_id), JSON.stringify(spoof));
+
     // 11. the army switch
     await fromPanel({ type: 'setArmy', value: true });
     let s = g('cizState').get();
@@ -294,6 +311,24 @@ const answerConfirm = async ok => {
     s = g('cizState').get();
     check('after setArmy false the chat is plain Quality', !s.chatArmy && local.armyOn === false && native.sent.find(m => m.type === 'chat' && m.id === 'a2').model === 'quality');
     await helperSays({ type: 'chat_done', id: 'a2', ok: true });
+
+    // 13b. the count starts over at midnight while Zen stays open: a panel that opens reads it again
+    local.armyRuns = { day: '2000-01-01', count: 6 };
+    await g('cizState').set({ armyToday: 6 });
+    connectEv.fire({ name: 'panel', onMessage: ev(), onDisconnect: ev(), postMessage: () => {} });
+    await tick(30);
+    check('a panel that opens on a new day sees the count start over', g('cizState').get().armyToday === 0, String(g('cizState').get().armyToday));
+
+    // 11b. the switch remembers the mode it was left in, so Speed is not turned back into Quality at the next start
+    await fromPanel({ type: 'setArmy', value: true });
+    await fromPanel({ type: 'setModel', value: 'speed' });
+    check('Speed with the army on is remembered as Speed', local.armyOn === true && local.armyModel === 'speed', JSON.stringify([local.armyOn, local.armyModel]));
+    const ctx3 = makeCtx();
+    for (const f of SCRIPTS) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx3, { filename: f });
+    await tick(80);
+    const s3s = vm.runInContext('cizState', ctx3).get();
+    check('a fresh start comes back in Speed with the switch still on (the octopus waits in Quality)', s3s.chatArmy === true && s3s.chatModel === 'speed', JSON.stringify({ a: s3s.chatArmy, m: s3s.chatModel }));
+    local.armyModel = 'quality';
 
     // 12. a fresh start remembers the switch and today's count (last: the second copy shares the mocked browser)
     local.armyOn = true;

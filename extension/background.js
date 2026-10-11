@@ -19,8 +19,15 @@ const booted = (async function init() {
   await cizState.set({ pending: 0 });
   cizArmy.install();
   try { const pref = await browser.storage.local.get('caveman'); await cizState.set({ caveman: !!pref.caveman }); } catch {}
-  try { const a = await browser.storage.local.get('armyOn'); await cizState.set(a.armyOn === true ? { chatArmy: true, chatModel: 'quality' } : { chatArmy: false }); } catch {}
-  try { const r = (await browser.storage.local.get('armyRuns')).armyRuns; await cizState.set({ armyToday: r && r.day === localDay() ? Number(r.count) || 0 : 0 }); } catch {}
+  // The army switch comes back as it was left: on, in the mode it was in (Speed hides the octopus, so the army waits
+  // there until the user picks Quality again).
+  try {
+    const on = (await browser.storage.local.get('armyOn')).armyOn === true;
+    const model = (await browser.storage.local.get('armyModel')).armyModel;
+    await cizState.set(on ? { chatArmy: true, chatModel: model === 'speed' ? 'speed' : 'quality' } : { chatArmy: false });
+  } catch {}
+  await refreshArmyToday();
+  setInterval(refreshArmyToday, 30 * 60 * 1000);
   try { await cizLocal.init(); } catch {}   // the allowed folders, and whether Zen lets the add-on into file: pages
   try { const o = await browser.storage.local.get('outputMode'); await cizState.set({ outputMode: o.outputMode === 'store' ? 'store' : 'download' }); } catch {}
   cizNetStart();
@@ -64,6 +71,7 @@ browser.runtime.onConnect.addListener(port => {
   }));
   port.postMessage({ type: 'state', state: cizState.get(), log: cizState.log() });
   port.postMessage({ type: 'chatRuns', ids: [...chatRuns.keys()] });
+  refreshArmyToday();   // the army card shows today's runs, even when Zen stayed open past midnight
 });
 
 function postToPanels(msg) {
@@ -142,7 +150,7 @@ async function handlePanel(msg, port) {
     case 'selfApply':   return sendNative({ type: 'self_apply', id: String(msg.id || '') });
     case 'selfDiscard': return sendNative({ type: 'self_discard', id: String(msg.id || '') });
     case 'newChat':    return cizState.set({ chatSession: '' });
-    case 'setModel':   return cizState.set({ chatModel: msg.value === 'quality' ? 'quality' : 'speed' });
+    case 'setModel':   return setModel(msg.value === 'quality' ? 'quality' : 'speed');
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
     case 'setArmy':    return setArmy(!!msg.value);
     case 'setUnsafe': return setUnsafe(!!msg.value);
@@ -460,17 +468,21 @@ async function signOut() {
 // disables file tools. Nothing else.
 
 async function stopAll(source) {
+  // Everything is cut in this first step, before any await: a tool call, a worker's call or a folder question that
+  // arrives while the tabs close below already finds the agent stopped and the helper gone. (set() changes the state
+  // at once; only saving it waits.)
+  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, pending: 0 });
   for (const [id, a] of pendingActions) {
     try { a.controller.abort(new Error('Stopped')); } catch {}
     pendingActions.delete(id);
   }
-  await cizArmy.closeAll();      // every army worker's tab goes too
-  await cizLocal.cancelAll();    // an open folder question counts as no
-  endConfirms('Stopped.');       // and so does an open confirm window (the helper closes it)
+  disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
+  endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)
   failChats('Stopped.');
   cizNetReset();                 // forget recorded requests, stop watching consoles
-  disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
-  await cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, pending: 0 });
+  await stopped;
+  await cizLocal.cancelAll();    // an open folder question counts as no
+  await cizArmy.closeAll();      // every army worker's tab goes too
   await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, army tabs closed, folder questions answered no, helper disconnected, file tools off, Unsafe mode off, network log cleared.`);
 }
 
@@ -556,7 +568,7 @@ async function setUnsafe(value) {
 // The army switch (Quality only): Opus 5.5 at max effort may send up to five Haiku workers to background tabs.
 // Remembered across restarts. Turning it on picks Quality.
 async function setArmy(value) {
-  try { await browser.storage.local.set({ armyOn: value }); } catch {}
+  try { await browser.storage.local.set(value ? { armyOn: true, armyModel: 'quality' } : { armyOn: false }); } catch {}
   await cizState.set({ chatArmy: value, ...(value ? { chatModel: 'quality' } : {}) });
   return cizState.addLog('info', value ? 'Army on: Opus 5.5 may send Haiku workers to background tabs' : 'Army off');
 }
@@ -565,6 +577,23 @@ async function setArmy(value) {
 function localDay() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Speed or Quality. With the army switch on, the mode is remembered with it, so a restart comes back as it was left.
+async function setModel(model) {
+  await cizState.set({ chatModel: model });
+  if (cizState.get().chatArmy) { try { await browser.storage.local.set({ armyModel: model }); } catch {} }
+}
+
+// Today's army runs, read again: the count starts over at midnight even while Zen stays open (startup, every half
+// hour, and whenever a panel opens).
+async function refreshArmyToday() {
+  let count;
+  try {
+    const r = (await browser.storage.local.get('armyRuns')).armyRuns;
+    count = r && r.day === localDay() ? Number(r.count) || 0 : 0;
+  } catch { return; }
+  if (cizState.get().armyToday !== count) await cizState.set({ armyToday: count });
 }
 
 // A new army run: count it for today. 5 a day is the recommended most; the panel warns past that, nothing blocks.
@@ -859,7 +888,13 @@ async function onNativeMessage(msg) {
 
     case 'call': {
       // An army worker's call names its run and worker; lib/army.js holds it to that worker's own tabs.
-      const army = msg.army && typeof msg.army === 'object' ? { run: String(msg.army.run || '').slice(0, 40), worker: String(msg.army.worker || '').slice(0, 40) } : null;
+      // An army field that is there but not a run and a worker is refused, never read as a normal call.
+      const a = msg.army;
+      if (a != null && !(a && typeof a === 'object' && typeof a.run === 'string' && a.run && typeof a.worker === 'string' && a.worker)) {
+        sendNative({ type: 'result', id: msg.id, ok: false, error: 'Bad army call.' });
+        return;
+      }
+      const army = a != null ? { run: a.run.slice(0, 40), worker: a.worker.slice(0, 40) } : null;
       const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'), army);
       sendNative({ type: 'result', id: msg.id, ...out });
       return;
@@ -997,6 +1032,8 @@ async function dispatch(tool, args, source, army) {
   const s = cizState.get();
   if (s.agent !== 'active') return { ok: false, error: 'Agent is stopped. Press Start in the Claude in Zen panel.' };
   if (!s.signedIn) return { ok: false, error: 'Not signed in. Press "Sign in with Claude" in the panel.' };
+  // Only the helper's army field says a worker is calling: a caller's own __army in the arguments is dropped.
+  if (!army && args && Object.prototype.hasOwnProperty.call(args, '__army')) { args = Object.assign({}, args); delete args.__army; }
   if (army) {
     try { cizArmy.check(tool, args, army); } catch (e) { return { ok: false, error: e.message }; }
     // The tools see which worker calls; a worker's new tab always opens in the background.
