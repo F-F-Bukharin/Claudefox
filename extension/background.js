@@ -975,13 +975,13 @@ async function onNativeMessage(msg) {
 function cleanTools(m) {
   const str = (v, n) => String(v == null ? '' : v).slice(0, n || 200);
   const server = s => ({ name: str(s.name, 120), label: str(s.label, 80), status: str(s.status, 20), detail: str(s.detail, 160), transport: str(s.transport, 10),
-    local: !!s.local, target: str(s.target, 200), on: !!s.on });
+    local: !!s.local, target: str(s.target, 200), on: !!s.on, blocked: str(s.blocked, 200) });
   const list = (v, max) => (Array.isArray(v) ? v.slice(0, max || 300) : []);
   return {
     busy: m.busy ? str(m.busy, 20) : null, scanned: Number(m.scanned) || 0, checked: Number(m.checked) || 0,
     plugins: list(m.plugins).map(p => ({ id: str(p.id, 120), label: str(p.label, 60), version: str(p.version, 20), scope: str(p.scope, 20),
-      description: str(p.description, 220), skills: !!p.skills, local: !!p.local, recommended: !!p.recommended, on: !!p.on, status: str(p.status, 20),
-      servers: list(p.servers, 20).map(server) })),
+      description: str(p.description, 220), skills: !!p.skills, local: !!p.local, recommended: !!p.recommended, on: !!p.on, blocked: str(p.blocked, 200),
+      status: str(p.status, 20), servers: list(p.servers, 20).map(server) })),
     connectors: list(m.connectors).map(server),
     added: list(m.added).map(server),
   };
@@ -999,6 +999,7 @@ async function onToolResult(msg) {
     case 'remove': return cizState.addLog(ok ? 'info' : 'error', ok ? `Removed ${name}.` : `Remove: ${err}`);
     case 'install': return cizState.addLog(ok ? 'info' : 'error', ok ? `Installed ${name}. Switch it on below to use it in the chat.` : `Install: ${err}`);
     case 'uninstall': return cizState.addLog(ok ? 'info' : 'error', ok ? `Removed plugin ${name}.` : `Remove plugin: ${err}`);
+    case 'set': return ok ? undefined : cizState.addLog('error', err);
     default: if (!ok && err) return cizState.addLog('error', `Tools: ${err}`);
   }
 }

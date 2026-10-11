@@ -31,7 +31,8 @@ Friends: see `START HERE.txt` (it ships in the friends zip).
 - **Tools and plugins** (Settings): your Claude Code plugins (synced from claude.ai or installed from a marketplace),
   claude.ai connectors and MCP servers you add by address or command, each with a switch. **vidIQ** and **Caveman**
   are on by default; everything else stays off and out of the chat until you switch it on. **Sign in** opens a
-  window for tools that need their own sign-in (vidIQ). Tools that run programs on this PC ask before turning on.
+  window for tools that need their own sign-in (vidIQ). Tools that run programs on this PC (local tool servers, plugin
+  hooks) ask in the confirm window before turning on. Shells (Desktop Commander and similar) are never on.
 - **Page tools**: list, open, switch and close tabs; navigate; read the page outline (with element refs) or its text;
   find, click (by ref, selector, or x and y from a screenshot, with real pointer events), fill, type, hover, press
   keys, scroll, wait, play/pause/seek video and audio, screenshot.
@@ -71,8 +72,8 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 ```
 
 ## Rules (always on)
-- **Confirm window**: Unsafe mode, file tools, a folder for local pages, a tool that runs a program and a plugin install
-  each need a yes in a small Windows window the helper opens outside Zen. Nothing in the add-on or the panel, a mod
+- **Confirm window**: Unsafe mode, file tools, a folder for local pages, adding or switching on a tool or plugin that
+  runs programs on this PC, and a plugin install each need a yes in a small Windows window the helper opens outside Zen. Nothing in the add-on or the panel, a mod
   included, can answer it; no answer in two minutes, or Stop, counts as no. **Mods** start off: turn each one on in
   Settings (Mods).
 - Google sign-in pages are hands-off unless you turn on **Unsafe mode** in Profile (Permissions). It lasts until Stop or a Zen restart. `about:` pages can be seen in screenshots but never read or touched (the saved-password pages not even seen). `file:` pages only inside folders you allowed, never by army workers.
@@ -82,6 +83,9 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
   (`.ssh`, `.aws`, `.gnupg`...) and secret files (`.env`, private keys, password databases) are denied to every file
   tool in every chat turn, whatever folder you pick; a folder inside one of them is refused.
 - Plugins and connectors that are switched off never load into the chat, so their skills, agents and hooks can't run.
+- **No shell, in any mode**: a tool server that gives Claude a shell (Desktop Commander and similar) is never switched
+  on, added or installed, and stays out of every chat turn even if an older setting lists it as on. The file guard
+  covers Claude Code's own file tools only, so a shell would get past it.
 - No "ask before doing" step for now. Later, only actions flagged as Important will ask first.
 - **Army workers** work only in their own background tabs and on web pages: they can't switch tabs, list tabs, use
   files, local pages or a shell, and Google sign-in is hands-off for them even in Unsafe mode. They run with every

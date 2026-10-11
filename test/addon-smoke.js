@@ -130,6 +130,13 @@ const answerConfirm = async ok => {
     await fromPanel({ type: 'checkClaude' });
     await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'f.work@example.com', configDirectory: 'C:\\x\\claude' });
     check('check link logs what it found', g('cizState').log().some(e => /signed in as f.work@example.com \(profile: C:\\x\\claude\)/.test(e.text)));
+    // The tools list reaches the panel with the helper's reason for a blocked shell; a refused switch is logged.
+    await helperSays({ type: 'tools', plugins: [{ id: 'desktop-commander@test', label: 'Desktop Commander', local: true, on: false, blocked: 'It gives Claude a shell.',
+      servers: [{ name: 'plugin:desktop-commander:desktop-commander', label: 'desktop-commander', transport: 'stdio', local: true, on: false, blocked: 'It gives Claude a shell.' }] }], connectors: [], added: [] });
+    await helperSays({ type: 'tool_result', action: 'set', ok: false, error: 'Desktop Commander: It gives Claude a shell.', name: 'desktop-commander@test', label: 'Desktop Commander' });
+    const tl = g('cizState').get().tools;
+    check('tools: a blocked shell keeps its reason on the way to the panel, and a refused switch is logged', tl && tl.plugins[0].blocked === 'It gives Claude a shell.' && tl.plugins[0].servers[0].blocked === 'It gives Claude a shell.'
+      && !tl.plugins[0].on && g('cizState').log().some(e => e.kind === 'error' && /^Desktop Commander: It gives Claude a shell\.$/.test(e.text)), JSON.stringify(tl && tl.plugins[0]));
 
     r = await call('tabs_list');
     check('tabs_list works', r.ok && r.result.length === 6);

@@ -163,11 +163,13 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  ok('turning it off needs no question', sent.some(m=>m.type==='setUnsafe'&&m.value===false));
  onMsg({type:'state',state:{...ready,unsafe:false},log:[]});
  ok('badge hidden and Google row back to hands-off when off', $('unsafeBadge').hidden && $('googleVal').textContent==='always hands-off');
- // Tools and plugins card: essentials first, local tools ask first, sign-in from the row
+ // Tools and plugins card: essentials first, shells blocked, what runs programs asks in the helper's window, sign-in from the row
+ const SHELL='It gives Claude a shell: it can run any command and read or change any file on this PC, so Claude in Zen never switches it on.';
  const tools={busy:null,scanned:1,checked:0,
   plugins:[{id:'vidiq@synced',label:'vidIQ',version:'0.1.6',scope:'synced',skills:true,local:false,recommended:true,on:true,status:'needs-auth',servers:[{name:'plugin:vidiq:vidiq',label:'vidiq',status:'needs-auth',transport:'http'}]},
    {id:'caveman@x',label:'caveman',version:'1.1.2',scope:'user',skills:true,local:false,recommended:true,on:true,status:'none',servers:[]},
-   {id:'desktop-commander@synced',label:'Desktop Commander',version:'0.2.0',scope:'synced',skills:false,local:true,recommended:false,on:false,status:'unknown',servers:[{name:'plugin:desktop-commander:desktop-commander',label:'desktop-commander',status:'unknown',transport:'stdio',local:true}]}],
+   {id:'desktop-commander@synced',label:'Desktop Commander',version:'0.2.0',scope:'synced',skills:false,local:true,recommended:false,on:false,blocked:SHELL,status:'unknown',servers:[{name:'plugin:desktop-commander:desktop-commander',label:'desktop-commander',status:'unknown',transport:'stdio',local:true,blocked:SHELL}]},
+   {id:'notes@synced',label:'Notes',version:'1.0.0',scope:'synced',skills:false,local:true,recommended:false,on:false,status:'unknown',servers:[{name:'plugin:notes:notes',label:'notes',status:'unknown',transport:'stdio',local:true}]}],
   connectors:[],added:[{name:'my-api',label:'my-api',status:'connected',transport:'http',target:'https://example.com/mcp',on:true}]};
  onMsg({type:'state',state:{...ready,tools},log:[]});
  const rows=[...$('toolsList').querySelectorAll('.trow')];
@@ -178,9 +180,15 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  ok('tools: vidIQ shows needs sign-in with a button', /needs sign-in/.test(vrow.textContent) && !!signBtn);
  signBtn.click(); ok('tools: sign in asks the helper for that server', sent.some(m=>m.type==='toolSignIn'&&m.name==='plugin:vidiq:vidiq'));
  const drow=rows.find(r=>/Desktop Commander/.test(r.textContent)); const dsw=drow.querySelector('.switch');
- const mk=sent.length; dsw.checked=true; dsw.dispatchEvent(new w.Event('change'));
- ok('tools: a local tool asks before turning on', !$('toolConfirm').hidden && /runs programs on this PC/.test($('toolConfirmText').textContent) && !sent.slice(mk).some(m=>m.type==='toolSet'));
- $('toolYes').click(); ok('tools: confirm turns it on', sent.slice(mk).some(m=>m.type==='toolSet'&&m.kind==='plugin'&&m.id==='desktop-commander@synced'&&m.value===true));
+ ok('tools: a shell is shown blocked, with the reason, and its switch cannot be turned on', dsw.disabled && !dsw.checked && /blocked/.test(drow.querySelector('.tname').textContent)
+  && drow.querySelector('.tblocked') && /gives Claude a shell/.test(drow.querySelector('.tblocked').textContent) && !/runs on this PC/.test(drow.textContent));
+ const nrow=rows.find(r=>/Notes/.test(r.textContent)); const nsw=nrow.querySelector('.switch');
+ const mk=sent.length; nsw.checked=true; nsw.dispatchEvent(new w.Event('change'));
+ ok('tools: switching on what runs programs goes to the helper at once (it asks in its own window), and the switch waits for the answer',
+  sent.slice(mk).some(m=>m.type==='toolSet'&&m.kind==='plugin'&&m.id==='notes@synced'&&m.value===true) && !nsw.checked && $('toolConfirm').hidden && /runs on this PC/.test(nrow.textContent));
+ onMsg({type:'toolResult',action:'set',ok:false,error:'Notes stays off: The answer in the confirm window was no.',name:'notes@synced',label:'Notes'});
+ const nrow2=[...$('toolsList').querySelectorAll('.trow')].find(r=>/Notes/.test(r.textContent));
+ ok('tools: a switch the helper refused says why, and stays off', !$('toolsNote').hidden && /stays off/.test($('toolsNote').textContent) && !nrow2.querySelector('.switch').checked);
  const csw=rows[1].querySelector('.switch'); csw.checked=false; csw.dispatchEvent(new w.Event('change'));
  ok('tools: switching off needs no question', sent.some(m=>m.type==='toolSet'&&m.id==='caveman@x'&&m.value===false));
  $('toolsCheck').click(); ok('tools: check asks the helper', sent.some(m=>m.type==='toolsCheck'));

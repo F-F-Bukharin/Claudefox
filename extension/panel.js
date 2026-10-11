@@ -310,6 +310,8 @@ $('toolNo').addEventListener('click', () => { $('toolConfirm').hidden = true; co
 function onToolResult(m) {
   if (m.action === 'add' && m.ok) { $('addName').value = ''; $('addTarget').value = ''; $('addHeader').value = ''; }
   if (m.action === 'install' && m.ok) { $('pluginSpec').value = ''; $('pluginSource').value = ''; }
+  // A switch the helper refused (a shell, a no in the confirm window): say why, and put the switches back as they are.
+  if (m.action === 'set' && !m.ok) { $('toolsNote').textContent = m.error; $('toolsNote').hidden = false; lastToolsSig = ''; render(state, null); }
 }
 
 // Unsafe mode: turning it on asks in the helper's confirm window (a Windows window outside Zen); the switch follows
@@ -643,22 +645,20 @@ function renderTools(s) {
 function toolRow(kind, item, s) {
   const row = el('div', 'trow' + (item.on ? ' on' : ''));
   const sw = el('input');
-  sw.type = 'checkbox'; sw.className = 'switch'; sw.checked = !!item.on; sw.disabled = s.agent === 'stopped';
+  sw.type = 'checkbox'; sw.className = 'switch'; sw.checked = !!item.on; sw.disabled = s.agent === 'stopped' || !!item.blocked;
   sw.setAttribute('aria-label', `Use ${item.label} in the chat`);
   const id = kind === 'plugin' ? item.id : item.name;
   sw.addEventListener('change', () => {
-    if (sw.checked && item.local) {
-      sw.checked = false;
-      askConfirm(`${item.label} runs programs on this PC with your permissions. A web page could try to trick Claude into using it. Turn it on only if you need it.`,
-        () => send('toolSet', { kind, id, value: true, label: item.label }));
-      return;
-    }
+    $('toolsNote').hidden = true;
+    // What runs programs on this PC is asked in the helper's confirm window (outside Zen): the switch follows the answer.
+    if (sw.checked && item.local) { sw.checked = !!item.on; send('toolSet', { kind, id, value: true, label: item.label }); return; }
     send('toolSet', { kind, id, value: sw.checked, label: item.label });
   });
   const info = el('div', 'tinfo');
   const name = el('div', 'tname', item.label);
   if (item.recommended) name.appendChild(el('span', 'tag star', 'essential'));
-  if (item.local) name.appendChild(el('span', 'tag warn', 'runs on this PC'));
+  if (item.blocked) name.appendChild(el('span', 'tag bad', 'blocked'));
+  else if (item.local) name.appendChild(el('span', 'tag warn', 'runs on this PC'));
   const sub = [];
   if (kind === 'plugin') {
     if (item.version && item.version !== 'unknown') sub.push('v' + item.version);
@@ -668,6 +668,7 @@ function toolRow(kind, item, s) {
   } else sub.push(item.transport === 'stdio' ? `command: ${item.target}` : String(item.target || '').replace(/^https?:\/\//, ''));
   const subline = el('div', 'tsub', sub.filter(Boolean).join(' · '));
   info.append(name, subline);
+  if (item.blocked) info.appendChild(el('div', 'tblocked', item.blocked));
   info.title = item.description || item.detail || '';
   const stat = el('div', 'tstat');
   const [cls, text] = STATUS_TEXT[item.status] || ['', ''];

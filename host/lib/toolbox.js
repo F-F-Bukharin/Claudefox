@@ -22,8 +22,22 @@ const PLUGIN_SPEC = /^[A-Za-z0-9][\w.-]{0,80}(@[A-Za-z0-9][\w.-]{0,80})?$/;
 const LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
 const RESCAN_MS = 30 * 60 * 1000;
 const RANK = { 'needs-auth': 5, failed: 4, 'not-configured': 3, pending: 2, unknown: 1, connected: 0 };
-// Plugins the user called essential: listed first, and on until the user turns them off.
+// Plugins the user called essential: listed first, and on until the user turns them off (unless they run programs
+// on this PC: those wait for the user's yes, like any other).
 const RECOMMENDED = ['vidiq', 'caveman'];
+
+// Tool servers that give Claude a shell: any command, and any file on this PC, past the guard's deny rules (those
+// cover Claude Code's own file tools only). The panel chat never gets one, whatever its switch says: no shell in any
+// mode. Matched as whole names in a plugin's name or label, a server's name, or the command or address that starts it.
+const SHELL_TOOLS = ['desktop-commander', 'mcp-server-commands', 'server-win-cli', 'win-cli-mcp-server', 'cli-mcp-server',
+  'mcp-shell', 'mcp-shell-server', 'shell-mcp-server', 'mcp-server-shell', 'terminal-mcp', 'iterm-mcp'];
+const SHELL_WHY = 'It gives Claude a shell: it can run any command and read or change any file on this PC, so Claude in Zen never switches it on.';
+function shellText(...texts) {
+  return texts.some(t => {
+    const s = String(t || '').toLowerCase().replace(/_/g, '-');
+    return SHELL_TOOLS.includes(s.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')) || s.split(/[^a-z0-9-]+/).some(w => SHELL_TOOLS.includes(w));
+  });
+}
 
 // How Claude Code names a server's tools: mcp__<name with anything but letters, digits, _ and - turned to _>__<tool>.
 const norm = name => String(name).replace(/[^A-Za-z0-9_-]/g, '_');
@@ -36,6 +50,7 @@ function readJson(file, max) {
 }
 
 function isDir(p) { try { return fs.statSync(p).isDirectory(); } catch { return false; } }
+function isFile(p) { try { return fs.statSync(p).isFile(); } catch { return false; } }
 
 function inside(child, parent) {
   const rel = path.relative(parent, child);
@@ -218,6 +233,8 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
             skills: !!(man.skills || (dir && isDir(path.join(dir, 'skills')))),
             servers: servers.map(s => `plugin:${name}:${s.key}`),
             local: servers.some(s => s.transport === 'stdio'),
+            // Hooks are commands Claude Code runs at chat events, so they run programs on this PC too.
+            hooks: !!(man.hooks || (dir && path.isAbsolute(dir) && isFile(path.join(dir, 'hooks', 'hooks.json')))),
           });
           for (const s of servers) {
             const full = `plugin:${name}:${s.key}`;
@@ -229,7 +246,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
         c.plugins = plugins;
         c.servers = c.servers.filter(s => s.kind !== 'plugin').concat(rows);
         for (const p of plugins) {
-          if (RECOMMENDED.includes(p.name) && !st.decided.includes(p.id) && !st.on.plugins.includes(p.id)) st.on.plugins.push(p.id);
+          if (RECOMMENDED.includes(p.name) && !runsOf(p, c).length && !shellPlugin(p, c) && !st.decided.includes(p.id) && !st.on.plugins.includes(p.id)) st.on.plugins.push(p.id);
         }
       } else if (!r.ok) {
         log.warn('tools: plugin list failed', firstLine(r.err).slice(0, 200));
@@ -319,21 +336,38 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
     return s ? labelOf(c, s.name) : String(normalized).replace(/^plugin_[^_]+_/, '').replace(/^claude_ai_/, '').replace(/_/g, ' ');
   }
 
+  // A shell (see SHELL_TOOLS): the plugin itself, or any tool server it brings.
+  function shellPlugin(p, c) {
+    if (shellText(p.id, p.name, p.label)) return true;
+    return (p.servers || []).some(n => { const s = c.servers.find(x => x.name === n); return shellText(n, s && s.label, s && s.target); });
+  }
+  function shellServer(s) { return shellText(s.name, s.label, s.target); }
+
+  // What a plugin runs on this PC, for the confirm window: the commands that start its local tool servers, and its
+  // hooks. Empty when it runs nothing here (skills, and servers reached by address).
+  function runsOf(p, c) {
+    const out = (p.servers || []).map(n => c.servers.find(s => s.name === n)).filter(s => s && s.transport === 'stdio').map(s => s.target || s.label);
+    if (!out.length && p.local) out.push('its tool server');
+    if (p.hooks) out.push('its hooks (commands that run at chat events)');
+    return out;
+  }
+
   function chatOptions(key) {
     const c = cat(key);
     const onP = new Set(st.on.plugins), onS = new Set(st.on.servers);
     const enabledPlugins = {};
-    for (const p of c.plugins) enabledPlugins[p.id] = onP.has(p.id);
+    // A shell stays off and out even when tools.json says it is on (switched on before shells were refused).
+    for (const p of c.plugins) enabledPlugins[p.id] = onP.has(p.id) && !shellPlugin(p, c);
     const allow = [], deny = [], extras = [];
     let connector = false;
     for (const p of c.plugins) {
-      if (!onP.has(p.id)) continue;
+      if (!enabledPlugins[p.id]) continue;
       allow.push(...p.servers);
       extras.push({ label: p.label, kind: 'plugin', skills: !!p.skills, description: p.description });
     }
     for (const s of c.servers) {
       if (s.kind === 'plugin') continue;   // plugin servers come and go with their plugin
-      if (onS.has(s.name)) {
+      if (onS.has(s.name) && !shellServer(s)) {
         allow.push(s.name);
         extras.push({ label: s.label, kind: s.kind });
         if (s.kind === 'connector') connector = true;
@@ -386,15 +420,20 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
   function view(key) {
     const c = cat(key);
     const onP = new Set(st.on.plugins), onS = new Set(st.on.servers);
-    const sv = s => ({ name: s.name, label: s.label, status: s.status || 'unknown', detail: s.detail || '', transport: s.transport || '',
-      local: !!s.local, target: s.target || '', on: onS.has(s.name) });
+    const sv = s => {
+      const blocked = shellServer(s) ? SHELL_WHY : '';
+      return { name: s.name, label: s.label, status: s.status || 'unknown', detail: s.detail || '', transport: s.transport || '',
+        local: !!s.local, target: s.target || '', on: onS.has(s.name) && !blocked, blocked };
+    };
     return {
       type: 'tools', account: key, busy, scanned: c.scanned || 0, checked: c.checked || 0,
       login: login ? { name: login.name, label: login.label } : null,
       plugins: c.plugins.map(p => {
         const rows = p.servers.map(n => c.servers.find(s => s.name === n) || { name: n, label: n.split(':').pop(), status: 'unknown' });
-        return { id: p.id, label: p.label, version: p.version, scope: p.scope, description: p.description, skills: p.skills, local: p.local,
-          recommended: RECOMMENDED.includes(p.name), on: onP.has(p.id), status: worst(rows.map(s => s.status || 'unknown')), servers: rows.map(sv) };
+        const blocked = shellPlugin(p, c) ? SHELL_WHY : '';
+        // local: it runs programs on this PC (local tool servers or hooks).
+        return { id: p.id, label: p.label, version: p.version, scope: p.scope, description: p.description, skills: p.skills, local: !!(p.local || p.hooks),
+          recommended: RECOMMENDED.includes(p.name), on: onP.has(p.id) && !blocked, blocked, status: worst(rows.map(s => s.status || 'unknown')), servers: rows.map(sv) };
       }).sort((a, b) => (b.recommended - a.recommended) || (b.on - a.on) || a.label.localeCompare(b.label)),
       connectors: c.servers.filter(s => s.kind === 'connector').map(sv),
       added: c.servers.filter(s => s.kind === 'added').map(sv),
@@ -404,9 +443,27 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
   function push(key) { emit(view(key)); }
   function emitResult(action, ok, error, extra) { emit(Object.assign({ type: 'tool_result', action, ok: !!ok, error: error || '' }, extra || {})); }
 
+  // Switching on: a shell is refused outright; anything else that runs a program on this PC (a local tool server, a
+  // plugin's hooks) waits for a yes in the confirm window, which the panel (a mod included) cannot answer. Switching
+  // off never asks.
   async function set(key, kind, id, value) {
     const list = kind === 'plugin' ? st.on.plugins : kind === 'server' ? st.on.servers : null;
     if (!list || typeof id !== 'string' || !SAFE_NAME.test(id)) return;
+    if (value) {
+      const c = cat(key);
+      const item = kind === 'plugin' ? c.plugins.find(p => p.id === id) : c.servers.find(s => s.name === id && s.kind !== 'plugin');
+      const label = item ? (kind === 'plugin' ? item.label : labelOf(c, item.name)) : id;
+      const refuse = error => { emitResult('set', false, error, { name: id, label }); push(key); };
+      if (!item) return refuse(`${label}: that tool is not on the list any more. Press check.`);
+      if (kind === 'plugin' ? shellPlugin(item, c) : shellServer(item)) return refuse(`${label}: ${SHELL_WHY}`);
+      const runs = kind === 'plugin' ? runsOf(item, c) : item.kind === 'added' && item.local ? [item.target || item.name] : [];
+      if (runs.length && !list.includes(id)) {
+        const ok = confirm ? await confirm({ title: 'Claude in Zen: switch on something that runs programs?',
+          text: `Switch on ${label}? Every chat with it on runs this on your PC, with your permissions:\n\n${runs.join('\n')}\n\nA web page could try to trick Claude into using it. Only switch on what you trust.`,
+          yes: 'Switch on', no: 'Cancel' }) : { ok: false, error: 'There is no confirm window.' };
+        if (!ok.ok) return refuse(`${label} stays off: ${ok.error}`);
+      }
+    }
     const at = list.indexOf(id);
     if (value && at === -1) list.push(id);
     if (!value && at !== -1) list.splice(at, 1);
@@ -493,6 +550,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
     const name = String((spec && spec.name) || '').trim();
     const target = String((spec && spec.target) || '').trim();
     if (!NEW_NAME.test(name)) return emitResult('add', false, 'Name: up to 40 letters, digits, - or _, starting with a letter or digit.');
+    if (shellText(name, target)) return emitResult('add', false, `Not added. ${SHELL_WHY}`);
     const c = cat(key);
     if (c.servers.some(s => s.name.toLowerCase() === name.toLowerCase()) || name.toLowerCase() === 'claude-in-zen') {
       return emitResult('add', false, `There is already a tool called ${name}.`);
@@ -564,6 +622,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
     if (busy) return emitResult('install', false, 'Wait for the last change to finish.');
     const s = String(spec || '').trim();
     if (!PLUGIN_SPEC.test(s)) return emitResult('install', false, 'Write the plugin as name@marketplace, for example vidiq@vidiq.');
+    if (shellText(s.split('@')[0])) return emitResult('install', false, `Not installed. ${SHELL_WHY}`);
     const src = String(source || '').trim();
     if (src && !/^([\w.-]+\/[\w.-]+|https:\/\/[^\s"]{1,500})$/.test(src)) return emitResult('install', false, 'Marketplace: owner/repo or an https:// address.');
     const args = ['plugin', 'install', s, '--scope', 'user', '--json'];
@@ -632,4 +691,4 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
   };
 }
 
-module.exports = { createToolbox, parseList, splitCommand, norm, statusOf, kindOf };
+module.exports = { createToolbox, parseList, splitCommand, norm, statusOf, kindOf, shellText, SHELL_TOOLS };

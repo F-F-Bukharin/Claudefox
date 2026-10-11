@@ -140,6 +140,10 @@ function makeDocx(title, paras) {
   });
 }
 
+// A shell plugin switched on before shells were refused: tools.json still lists it as on, and it must stay off and out.
+fs.mkdirSync(path.join(tmp, 'claude-in-zen'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'claude-in-zen', 'tools.json'), JSON.stringify({ on: { plugins: ['desktop-commander@test'], servers: [] }, decided: ['desktop-commander@test'], cat: {} }));
+
 const helper = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
 const inbox = []; let waiters = []; let hbuf = Buffer.alloc(0);
 const calls = [];
@@ -173,6 +177,8 @@ function next(pred, ms = 8000) {
   });
 }
 const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id).map(m => m.event);
+// Older tools lists still in the inbox would answer a wait for the next one.
+const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[i].type === 'tools') inbox.splice(i, 1); };
 
 (async () => {
   try {
@@ -309,16 +315,28 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     fs.mkdirSync(path.join(cd, 'skills', 'caveman'), { recursive: true });
     fs.writeFileSync(path.join(cd, 'skills', 'caveman', 'SKILL.md'), '---\nname: caveman\n---\n# Caveman Mode\nShort word good.');
     const dc = plugDir('desktop-commander');
-    fs.writeFileSync(path.join(dc, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'desktop-commander', mcpServers: { 'desktop-commander': { command: 'npx', args: ['-y', 'x'] } } }));
+    fs.writeFileSync(path.join(dc, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'desktop-commander', displayName: 'Desktop Commander',
+      mcpServers: { 'desktop-commander': { command: 'npx', args: ['-y', '@wonderwhy-er/desktop-commander@latest'] } } }));
+    const nd = plugDir('notes');
+    fs.writeFileSync(path.join(nd, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'notes', mcpServers: { notes: { command: 'node', args: ['notes.js'] } } }));
+    const hd = plugDir('autosave');
+    fs.writeFileSync(path.join(hd, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'autosave' }));
+    fs.mkdirSync(path.join(hd, 'hooks'));
+    fs.writeFileSync(path.join(hd, 'hooks', 'hooks.json'), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'node save.js' }] }] } }));
     fs.writeFileSync(record + '.plugins', JSON.stringify([
       { id: 'desktop-commander@test', version: '0.2.0', scope: 'synced', enabled: true, installPath: dc },
       { id: 'vidiq@test', version: '0.1.6', scope: 'synced', enabled: true, installPath: vd },
       { id: 'caveman@test', version: '1.1.2', scope: 'user', enabled: true, installPath: cd },
+      { id: 'notes@test', version: '1.0.0', scope: 'synced', enabled: true, installPath: nd },
+      { id: 'autosave@test', version: '1.0.0', scope: 'synced', enabled: true, installPath: hd },
     ]));
     toHelper({ type: 'tools' });
-    const tv = await next(m => m.type === 'tools' && m.plugins.length === 3, 8000);
+    const tv = await next(m => m.type === 'tools' && m.plugins.length === 5, 8000);
+    const dcRow = tv.plugins.find(p => p.id === 'desktop-commander@test') || {};
     check('tools: essentials first and on, the rest off', tv.plugins[0].recommended && tv.plugins[1].recommended && tv.plugins.filter(p => p.on).map(p => p.id).sort().join() === 'caveman@test,vidiq@test'
-      && tv.plugins[2].id === 'desktop-commander@test' && tv.plugins[2].local && !tv.plugins[2].on, JSON.stringify(tv.plugins.map(p => [p.id, p.on, p.recommended])));
+      && dcRow.local && !dcRow.on, JSON.stringify(tv.plugins.map(p => [p.id, p.on, p.recommended])));
+    check('tools: a shell is listed as blocked, with the reason, even though tools.json says it is on', /gives Claude a shell/.test(dcRow.blocked || '')
+      && tv.plugins.filter(p => p.blocked).length === 1 && tv.plugins.find(p => p.id === 'notes@test').local && tv.plugins.find(p => p.id === 'autosave@test').local, JSON.stringify(dcRow));
     toHelper({ type: 'chat', id: 'ct', text: 'transcript please' });
     await next(m => m.type === 'chat_done' && m.id === 'ct', 15000);
     const rt = JSON.parse(fs.readFileSync(record, 'utf8'));
@@ -326,6 +344,12 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     check('tools on: not strict, vidIQ and skills allowed, other plugins off', !at.includes('--strict-mcp-config') && av('--allowedTools').split(',').includes('mcp__plugin_vidiq_vidiq')
       && av('--allowedTools').split(',').includes('Skill') && av('--tools').split(',').includes('Skill') && av('--tools').split(',').includes('ToolSearch') && rt.settings.enabledPlugins['vidiq@test'] === true
       && rt.settings.enabledPlugins['desktop-commander@test'] === false && rt.settings.disableClaudeAiConnectors === true, av('--allowedTools'));
+    check('no shell in the turn: the shell plugin is disabled and none of its tools are allowed', rt.settings.enabledPlugins['desktop-commander@test'] === false
+      && !av('--allowedTools').includes('desktop-commander') && !av('--tools').split(',').includes('Bash'), av('--allowedTools'));
+    const qShell = questions().length;
+    toHelper({ type: 'tool_set', kind: 'plugin', id: 'desktop-commander@test', value: true });
+    const dcSet = await next(m => m.type === 'tool_result' && m.action === 'set', 8000).catch(() => ({ ok: true, error: 'the helper sent no answer' }));
+    check('a shell cannot be switched on, and the confirm window is not even asked', !dcSet.ok && /gives Claude a shell/.test(dcSet.error) && questions().length === qShell, dcSet.error);
     const note = eventsFor('ct').find(e => e.kind === 'notice');
     check('vidIQ needing sign-in shows a Sign in button in the chat', note && note.action && note.action.type === 'tool_signin' && note.action.name === 'plugin:vidiq:vidiq', JSON.stringify(note));
     check('prompt names the switched-on tools', /vidIQ \(plugin\)/.test(av('--append-system-prompt')));
@@ -345,6 +369,46 @@ const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id
     const ro = JSON.parse(fs.readFileSync(record, 'utf8'));
     check('vidIQ off: strict again, caveman skills stay', ro.argv.includes('--strict-mcp-config') && !ro.argv.join(' ').includes('mcp__plugin_vidiq') && !ro.argv[ro.argv.indexOf('--tools') + 1].includes('ToolSearch')
       && ro.settings.enabledPlugins['vidiq@test'] === false && ro.argv[ro.argv.indexOf('--tools') + 1].split(',').includes('Skill'));
+
+    // Switching on what runs programs on this PC (a local tool server, hooks) needs a yes in the confirm window.
+    fs.writeFileSync(confirmAnswer, 'no');
+    const qp0 = questions().length;
+    toHelper({ type: 'tool_set', kind: 'plugin', id: 'notes@test', value: true });
+    const nNo = await next(m => m.type === 'tool_result' && m.action === 'set', 8000).catch(() => ({ ok: true, error: 'the helper sent no answer' }));
+    const nq = questions().pop() || {};
+    check('a plugin with a local tool server asks in the confirm window first, and a no keeps it off', !nNo.ok && /^notes stays off/.test(nNo.error)
+      && questions().length === qp0 + 1 && String(nq.text).includes('node notes.js') && nq.yes === 'Switch on', nNo.error);
+    fs.writeFileSync(confirmAnswer, 'yes');
+    dropTools();
+    toHelper({ type: 'tool_set', kind: 'plugin', id: 'notes@test', value: true });
+    await next(m => m.type === 'tools' && m.plugins.some(p => p.id === 'notes@test' && p.on), 8000);
+    toHelper({ type: 'chat', id: 'cn', text: 'hi' });
+    await next(m => m.type === 'chat_done' && m.id === 'cn', 15000);
+    const rn = JSON.parse(fs.readFileSync(record, 'utf8'));
+    check('after a yes it is on: enabled and allowed in the next turn', rn.settings.enabledPlugins['notes@test'] === true
+      && rn.argv[rn.argv.indexOf('--allowedTools') + 1].split(',').includes('mcp__plugin_notes_notes') && questions().length === qp0 + 2);
+    fs.writeFileSync(confirmAnswer, 'no');
+    toHelper({ type: 'tool_set', kind: 'plugin', id: 'autosave@test', value: true });
+    const hNo = await next(m => m.type === 'tool_result' && m.action === 'set', 8000).catch(() => ({ ok: true, error: 'the helper sent no answer' }));
+    check('a plugin with hooks asks too', !hNo.ok && /hooks/.test((questions().pop() || {}).text) && questions().length === qp0 + 3, hNo.error);
+    const qp1 = questions().length;
+    dropTools();
+    toHelper({ type: 'tool_set', kind: 'plugin', id: 'notes@test', value: false });
+    await next(m => m.type === 'tools' && m.plugins.some(p => p.id === 'notes@test' && !p.on), 8000);
+    dropTools();
+    toHelper({ type: 'tool_set', kind: 'plugin', id: 'vidiq@test', value: true });
+    await next(m => m.type === 'tools' && m.plugins.some(p => p.id === 'vidiq@test' && p.on), 8000);
+    check('switching off, and switching on a plugin reached by address, ask nothing', questions().length === qp1);
+    dropTools();
+    toHelper({ type: 'tool_set', kind: 'plugin', id: 'vidiq@test', value: false });
+    await next(m => m.type === 'tools' && m.plugins.some(p => p.id === 'vidiq@test' && !p.on), 8000);
+    fs.writeFileSync(confirmAnswer, 'yes');
+    toHelper({ type: 'tool_add', name: 'dc', target: 'npx -y @wonderwhy-er/desktop-commander@latest' });
+    const dcAdd = await next(m => m.type === 'tool_result' && m.action === 'add', 8000);
+    toHelper({ type: 'plugin_install', spec: 'desktop-commander@market' });
+    const dcInst = await next(m => m.type === 'tool_result' && m.action === 'install', 8000);
+    check('a shell is not added or installed either, and nothing is asked', !dcAdd.ok && /shell/.test(dcAdd.error) && !dcInst.ok && /shell/.test(dcInst.error)
+      && questions().length === qp1 && !fs.readFileSync(record + '.cmds', 'utf8').includes('desktop-commander'), `${dcAdd.error} | ${dcInst.error}`);
     toHelper({ type: 'tool_add', name: 'my-api', target: 'https://example.com/mcp', on: true });
     const ad = await next(m => m.type === 'tool_result' && m.action === 'add', 15000);
     check('add a tool server by address', ad.ok && fs.readFileSync(record + '.cmds', 'utf8').includes('mcp add --scope user --transport http my-api https://example.com/mcp'), ad.error);
