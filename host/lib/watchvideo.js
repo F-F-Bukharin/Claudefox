@@ -64,4 +64,18 @@ function buildEnv(base) {
   return env;
 }
 
-module.exports = { checkSource, checkQuestion, checkTime, buildArgv, buildEnv };
+const PY_CANDIDATES = [['py', ['-3']], ['python', []], ['python3', []]];
+const PY_CHECK = "import sys; print('%d.%d' % sys.version_info[:2])";
+const PY_HINT = 'Python 3.10 or newer was not found. Install it from python.org with "Add python.exe to PATH" ticked, then run Set up Claudefox.bat again.';
+
+// probe(exe, args) -> { code, stdout }, injected so the tests can fake the interpreters.
+async function findPython(probe) {
+  for (const [exe, args] of PY_CANDIDATES) {
+    const r = await probe(exe, [...args, '-c', PY_CHECK]);
+    const m = r && r.code === 0 ? /^3\.(\d+)$/.exec(String(r.stdout).trim()) : null;
+    if (m && Number(m[1]) >= 10) return { exe, args };
+  }
+  return { error: PY_HINT };
+}
+
+module.exports = { checkSource, checkQuestion, checkTime, buildArgv, buildEnv, findPython };

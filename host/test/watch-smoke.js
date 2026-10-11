@@ -35,5 +35,17 @@ try {
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
-console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);
-process.exit(failed ? 1 : 0);
+// section python
+async function pythonSection() {
+  const { findPython } = require('../lib/watchvideo');
+  const fakeProbe = table => async exe => table[exe] || { code: 9009, stdout: '' };
+  check('py -3 is chosen when it reports 3.12', deepEqual(await findPython(fakeProbe({ py: { code: 0, stdout: '3.12\n' } })), { exe: 'py', args: ['-3'] }));
+  check('a 3.9 python is skipped for a 3.10 python3', deepEqual(await findPython(fakeProbe({ python: { code: 0, stdout: '3.9' }, python3: { code: 0, stdout: '3.10' } })), { exe: 'python3', args: [] }));
+  check('the Windows Store stub (exit 0, no version) is skipped', (await findPython(fakeProbe({ python: { code: 0, stdout: '' } }))).error !== undefined);
+  check('nothing installed gives one plain message', /Python 3\.10 or newer was not found/.test((await findPython(fakeProbe({}))).error));
+}
+
+pythonSection().then(() => {
+  console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);
+  process.exit(failed ? 1 : 0);
+});
