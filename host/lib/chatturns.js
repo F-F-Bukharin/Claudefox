@@ -56,11 +56,14 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     callAddon, sendAddon, emit: (run, event) => emitChat(run, event), currentChat: () => chat, findClaude,
     envFor: key => claudeEnv(accountDir(key)), mcpServer: path.join(__dirname, '..', 'zen-mcp.js'), limitRe: LIMIT_RE,
     // Workers get none of the account's plugins or connectors (their hooks would run shell commands in every worker).
-    workerSettings: key => {
-      const on = toolbox.chatOptions(key).settings.enabledPlugins || {};
-      return { enabledPlugins: Object.fromEntries(Object.keys(on).map(id => [id, false])), disableClaudeAiConnectors: true };
-    },
+    workerSettings: key => strictToolbox(key).settings,
   });
+  // No plugin, no connector, no extra tool server: the army's workers and scheduled macros run on this.
+  function strictToolbox(key) {
+    const on = toolbox.chatOptions(key).settings.enabledPlugins || {};
+    return { strict: true, settings: { enabledPlugins: Object.fromEntries(Object.keys(on).map(id => [id, false])), disableClaudeAiConnectors: true },
+      allowTools: [], skills: false, extras: [], servers: [] };
+  }
 
   // An improve run keeps the first 2,000 characters of what Claude says, for its note (lib/selfimprove.js).
   function emitChat(run, event) {
@@ -172,6 +175,8 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     const refuse = error => sendAddon({ type: 'chat_done', id, ok: false, error, limit: false, sessionId: '' });
     // Improve Claude in Zen: Claude edits a copy of the add-on and the user approves the change (lib/selfimprove.js).
     const improve = msg.improve === true;
+    // A scheduled macro's turn (E8): it only reads pages. No file tools, no attachments, no plugin or connector tools, no helper tools.
+    const scheduled = !improve && msg.scheduled === true;
     if (chat) return refuse('Claude is still answering the last message.');
     const text = typeof msg.text === 'string' ? msg.text : '';
     const attached = Array.isArray(msg.attachments) && msg.attachments.length > 0;
@@ -185,7 +190,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     let sandbox = null;
     if (improve) {
       try { sandbox = selfimprove.prepare(ROOT); } catch (e) { return refuse(`Could not make a copy of Claude in Zen to change: ${e.message}`); }
-    } else if (msg.files === 'read' || msg.files === 'write') {
+    } else if (!scheduled && (msg.files === 'read' || msg.files === 'write')) {
       const folder = String(msg.folder || '').trim();
       if (!folder || !path.isAbsolute(folder) || !isDir(folder)) {
         return refuse(`File tools are on, but this folder was not found: ${folder || '(none)'}. Fix it in Settings or turn file tools off.`);
@@ -198,16 +203,16 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
       files.folder = path.resolve(folder);
     }
     const choice = improve ? MODELS.selfimprove : chatModel(msg.model);
-    const armyOn = !improve && (msg.model === 'army' || msg.model === 'armymax');
-    const unsafe = !improve && msg.unsafe === true && confirmed.unsafe;   // only when the user allowed it in the confirm window
-    const trusted = !improve && msg.trusted === true && confirmed.trusted === true;   // Trusted mode: only when the user allowed it too
-    const caveman = !improve && msg.caveman === true;
+    const armyOn = !improve && !scheduled && (msg.model === 'army' || msg.model === 'armymax');
+    const unsafe = !improve && !scheduled && msg.unsafe === true && confirmed.unsafe;   // only when the user allowed it in the confirm window
+    const trusted = !improve && !scheduled && msg.trusted === true && confirmed.trusted === true;   // Trusted mode: only when the user allowed it too
+    const caveman = !improve && !scheduled && msg.caveman === true;
     const resume = !improve && typeof msg.resume === 'string' && /^[0-9a-f-]{36}$/i.test(msg.resume) ? msg.resume : '';
     const key = activeId();
 
     // The turn is reserved now (one at a time); it starts after the tool list is fresh and the uploads are saved.
     const run = { id, child: null, key, files, effort: choice.effort, sessionId: resume, finished: false, stderr: '', resultError: '', started: Date.now(), timer: null,
-      wroteText: false, actedSinceText: false, progressIds: new Set(), improve, sandbox, army: armyOn, armyRuns: [],
+      wroteText: false, actedSinceText: false, progressIds: new Set(), improve, scheduled, sandbox, army: armyOn, armyRuns: [],
       sites: Array.isArray(msg.sites) ? msg.sites.map(String) : [], msgTrusted: msg.trusted === true, localRead: false };
     chat = run;
     emitChat(run, { kind: 'meta', model: choice.model, effort: choice.effort });   // what the helper asked for
@@ -217,9 +222,10 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     ready.then(() => {
       if (run.finished) return;
       let saved = { files: [], errors: [] };
-      if (!improve) { try { saved = uploads.save(msg.attachments); } catch (e) { saved.errors.push(`attachments: ${e.message}`); } }
-      const tb = improve ? { servers: [], settings: {} } : toolbox.chatOptions(key);
-      const opts = { unsafe, trusted, caveman, tb, watch: !improve, cavemanText: caveman ? toolbox.skillText(key, 'caveman', 'caveman') : '' };
+      if (!improve && !scheduled) { try { saved = uploads.save(msg.attachments); } catch (e) { saved.errors.push(`attachments: ${e.message}`); } }
+      // A scheduled turn gets the strict toolbox the army's workers get: every plugin off, no connectors, no other tool servers.
+      const tb = improve ? { servers: [], settings: {} } : scheduled ? strictToolbox(key) : toolbox.chatOptions(key);
+      const opts = { unsafe, trusted, caveman, tb, scheduled, watch: !improve && !scheduled, cavemanText: caveman ? toolbox.skillText(key, 'caveman', 'caveman') : '' };
       if (armyOn) Object.assign(opts, { army: true, mcpConfig: P.MCP_ARMY_CONFIG });
       let prompt;
       if (improve) { prompt = selfimprove.request(text); selfimprove.recordStart(run.sandbox, text); }
@@ -229,7 +235,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
       }
       // Everything that makes a process different from the one before it: when one of these changes, the chat gets a new one.
       const sig = JSON.stringify([choice.model, choice.effort, caveman, unsafe, trusted, files.mode, files.folder, opts.mcpConfig || P.MCP_CONFIG,
-        tb.settings, tb.servers, tb.allowTools, tb.skills, key, opts.watch, armyOn]);
+        tb.settings, tb.servers, tb.allowTools, tb.skills, key, opts.watch, armyOn, scheduled]);
       const c = { exe, id, key, choice, files, resume, opts, tb, saved, prompt, sig, improve, armyOn, unsafe, caveman, probe: false };
       if (improve || streamUnsupported) oneShot(run, c); else streamTurn(run, c);
     });

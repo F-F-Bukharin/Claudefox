@@ -408,6 +408,12 @@ function onClient(c, m) {
   }
 
   if (m.type === 'call' && HELPER_TOOLS[m.tool]) {
+    const turn = chatTurns.current();
+    if (turn && turn.scheduled) {   // a scheduled macro only reads pages: no documents, files, local pages, videos, images or army
+      log.info(`call ${m.tool} from "${c.name}" refused: scheduled macro`);
+      sendLine(c.sock, { type: 'result', id: m.id, ok: false, error: 'Scheduled macros only read pages.' });
+      return;
+    }
     log.info(`call ${m.tool} from "${c.name}" (answered by the helper)`);
     Promise.resolve().then(() => HELPER_TOOLS[m.tool](m.args || {}, c))
       .then(result => {
