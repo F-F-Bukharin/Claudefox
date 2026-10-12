@@ -141,6 +141,7 @@ function workerArgs(mcpConfig, settingsFile, limits) {
     '-p', '--output-format', 'stream-json', '--verbose',
     '--mcp-config', mcpConfig,
     '--strict-mcp-config',
+    '--setting-sources', 'user',
     '--settings', settingsFile,
     '--append-system-prompt', workerPrompt(limits),
     '--permission-mode', 'dontAsk',
@@ -170,6 +171,7 @@ function chatArgs(files, resume, choice, opts) {
   ];
   if (tb.strict) args.push('--strict-mcp-config');   // nothing extra switched on: only the Zen tools load
   args.push(
+    '--setting-sources', 'user',   // the user's own Claude Code settings only: a folder's project settings never load
     '--settings', settingsFile,
     '--append-system-prompt', chatPrompt(files, o),
     // Read and write: file edits inside the working folders go through without asking.

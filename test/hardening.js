@@ -69,6 +69,43 @@ const rules = guard.denyRules();
 check('the chat file tools deny every new folder and file pattern', NEW_FOLDERS.every(dir => rules.some(r => r.endsWith(`${path.basename(dir)}/**)`)))
   && ['*.key', '*.ovpn', 'wallet.dat'].every(p => rules.includes(`Read(//**/${p})`)));
 
+// ---- Broad folders, the deny rules and the chat's settings sources (B1). Documents comes from an injected lookup.
+const P = require('../host/lib/paths');
+const chatargs = require('../host/lib/chatargs');
+fs.mkdirSync(path.join(home, 'AppData', 'Local'), { recursive: true });
+const tooBroad = dir => `${path.resolve(dir)} is too broad for Claude: pick a folder inside it`;
+const BROAD = [['a drive root', path.parse(tmp).root], ['the home folder', home], ['%APPDATA%', appData],
+  ['%LOCALAPPDATA%', path.join(home, 'AppData', 'Local')], ['a folder that holds the data folder', path.join(home, 'AppData')], ['a folder above the data folder', tmp]];
+for (const [what, dir] of BROAD) {
+  const real = fs.realpathSync(dir);
+  check(`${what} is too broad for file tools`, guard.folderProblem(real, 'read') === tooBroad(real), guard.folderProblem(real, 'read'));
+  check(`${what} is too broad for local pages`, guard.localProblem(real, true) === tooBroad(real), guard.localProblem(real, true));
+}
+const INSIDE = [path.join(appData, 'Notes'), path.join(home, 'AppData', 'Local', 'Other'), path.join(home, 'Projects', 'site'), docs];
+for (const dir of INSIDE) fs.mkdirSync(dir, { recursive: true });
+check('folders inside them stay allowed', INSIDE.every(d => guard.folderProblem(fs.realpathSync(d), 'write') === '' && guard.localProblem(fs.realpathSync(d), true) === ''));
+
+// Deny rules: a Read deny of a protected place has Edit and Write denies for the same path; the data folder, the Startup
+// folder and the PowerShell profiles get Edit and Write denies. Documents comes from the lookup, or %USERPROFILE%\Documents.
+const W = dir => [`Edit(/${guard.posix(dir)}/**)`, `Write(/${guard.posix(dir)}/**)`];
+const custom = guard.denyRules(() => path.join('%USERPROFILE%', 'Docs Custom'));
+const fallback = guard.denyRules(() => '');
+const reads = custom.filter(r => r.startsWith('Read(/') && !r.startsWith('Read(//**/'));
+check('every Read deny of a protected place has Edit and Write denies for the same path', reads.length > 0
+  && guard.protectedPlaces().every(p => reads.some(r => r.includes(guard.posix(p))))
+  && reads.every(r => custom.includes('Edit' + r.slice(4)) && custom.includes('Write' + r.slice(4))));
+const STARTUP = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+check('the data folder, the Startup folder and the PowerShell profiles are denied Edit and Write', W(P.BASE).every(r => custom.includes(r))
+  && W(STARTUP).every(r => custom.includes(r)) && ['WindowsPowerShell', 'PowerShell'].every(n => W(path.join(home, 'Docs Custom', n)).every(r => custom.includes(r))));
+check('without a registry value the profiles are under %USERPROFILE%\\Documents', ['WindowsPowerShell', 'PowerShell'].every(n => W(path.join(docs, n)).every(r => fallback.includes(r))));
+
+// Chat turns and army workers load only the user's own Claude Code settings.
+const chatA = chatargs.chatArgs({ mode: 'write', folder: docs }, null, chatargs.MODELS.speed,
+  { settingsFile: path.join(tmp, 'chat-settings.json'), mcpConfig: path.join(tmp, 'mcp.json') });
+const workerA = chatargs.workerArgs(path.join(tmp, 'mcp-army.json'), path.join(tmp, 'worker-settings.json'), { extraTabs: 2, calls: 40, navs: 10, softMs: 600000 });
+check('a chat turn passes --setting-sources user', chatA[chatA.indexOf('--setting-sources') + 1] === 'user', chatA.join(' '));
+check('an army worker passes --setting-sources user', workerA[workerA.indexOf('--setting-sources') + 1] === 'user', workerA.join(' '));
+
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log(`${passed} checks passed${failed ? `, ${failed} failed` : ''}`);
