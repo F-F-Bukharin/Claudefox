@@ -11,6 +11,7 @@ const TESTS = [
   'test/dom-classify.js',
   'test/menu-static.js', 'test/wall-ink.js', 'test/brand.js', 'test/shared-code.js', 'test/injection-page.js', 'test/hardening.js', 'test/harden-confirm.js', 'test/harden-turns.js', 'test/harden-native.js',
   'test/watch-static.js', 'test/site-gate.js', 'test/site-wiring.js', 'host/test/watch-engine-smoke.js', 'host/test/watch-smoke.js',
+  'host/test/scope-smoke.js',
 ];
 // A test that cannot run here (no jsdom, or a POSIX-only test on Windows) prints SKIP and exits 0: it counts as
 // skipped, never as passed.

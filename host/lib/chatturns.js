@@ -12,6 +12,7 @@ const uploads = require('./uploads');
 const { killTree } = require('./army');
 const { splitLines } = require('./jsonlines');
 const { MODELS, chatArgs, chatModel } = require('./chatargs');
+const { decide, LOCAL_READ_TOOLS } = require('./sites');
 const children = require('./children');
 const selfimprove = require('./selfimprove');
 
@@ -108,6 +109,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
         for (const b of (ev.message && ev.message.content) || []) {
           if (!b || b.type !== 'tool_use') continue;
           run.actedSinceText = true;
+          if (LOCAL_READ_TOOLS.includes(b.name)) run.localRead = true;   // WebFetch is off for the rest of the message
           const t = toolName(run, b.name);
           if (t.name === 'progress' && !t.server) {
             run.progressIds.add(b.id);
@@ -189,7 +191,8 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
 
     // The turn is reserved now (one at a time); it starts after the tool list is fresh and the uploads are saved.
     const run = { id, child: null, key, files, effort: choice.effort, sessionId: resume, finished: false, stderr: '', resultError: '', started: Date.now(), timer: null,
-      wroteText: false, actedSinceText: false, progressIds: new Set(), improve, sandbox, army: armyOn, armyRuns: [] };
+      wroteText: false, actedSinceText: false, progressIds: new Set(), improve, sandbox, army: armyOn, armyRuns: [],
+      sites: Array.isArray(msg.sites) ? msg.sites.map(String) : [], msgTrusted: msg.trusted === true, localRead: false };
     chat = run;
     emitChat(run, { kind: 'meta', model: choice.model, effort: choice.effort });   // what the helper asked for
     run.timer = setTimeout(() => cancelChat(id, 'The answer took longer than an hour and was stopped.'), CHAT_TIMEOUT_MS);
@@ -286,10 +289,26 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     finishChat(run, false, reason || 'Stopped.');
   }
 
+  // The add-on's scope for the running turn: its sites and whether the message is trusted. Another turn's is ignored.
+  function setScope(msg) {
+    if (!chat || chat.id !== msg.id) return;
+    chat.sites = Array.isArray(msg.sites) ? msg.sites.map(String) : [];
+    chat.msgTrusted = msg.trusted === true;
+  }
+  // The add-on's report that Claude read a local page: WebFetch is off for the rest of the message.
+  function setLocalRead(id) {
+    if (chat && chat.id === id) chat.localRead = true;
+  }
+  // The WebFetch hook's question: may this address go on in the running turn of this session?
+  function webfetchCheck(session, url) {
+    const run = chat && session && chat.sessionId === session ? chat : null;
+    return decide(run, url, !!run && run.msgTrusted === true && confirmed.trusted === true);
+  }
+
   const busy = () => !!chat;
   const current = () => chat;
 
-  return { army, startChat, cancelChat, selfApply, selfDiscard, busy, current };
+  return { army, startChat, cancelChat, selfApply, selfDiscard, busy, current, setScope, setLocalRead, webfetchCheck };
 }
 
 module.exports = { createChatTurns };

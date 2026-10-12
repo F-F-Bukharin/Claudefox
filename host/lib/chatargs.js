@@ -162,7 +162,11 @@ function chatArgs(files, resume, choice, opts) {
   const o = opts || {};
   const tb = o.tb || { strict: true, settings: {}, allowTools: [], skills: false, extras: [] };
   // Turned-off plugins and connectors stay out, and the guard's deny rules hold for every file tool.
-  const settings = Object.assign({}, tb.settings, { permissions: { deny: guard.denyRules() } });
+  // The WebFetch hook (webfetch-hook.js) asks the helper before each fetch; lib/sites.js decides.
+  const base = tb.settings || {};
+  const hookCmd = `"${process.execPath}" "${path.join(__dirname, '..', 'webfetch-hook.js')}"`;
+  const preTool = [...((base.hooks && base.hooks.PreToolUse) || []), { matcher: 'WebFetch', hooks: [{ type: 'command', command: hookCmd }] }];
+  const settings = Object.assign({}, base, { hooks: Object.assign({}, base.hooks, { PreToolUse: preTool }), permissions: { deny: guard.denyRules() } });
   const settingsFile = o.settingsFile || SETTINGS_FILE;
   try { fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 1)); } catch (e) { log.error('chat-settings.json', e.message); }
   const skill = tb.skills ? ['Skill'] : [];

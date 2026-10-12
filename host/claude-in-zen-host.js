@@ -262,6 +262,12 @@ function onAddon(msg) {
     case 'chat':
       startChat(msg);
       return;
+    case 'scope':
+      chatTurns.setScope(msg);
+      return;
+    case 'local_read':
+      chatTurns.setLocalRead(msg.id);
+      return;
 
     case 'self_apply':   return selfApply(msg);
     case 'self_discard': return selfDiscard(msg);
@@ -413,6 +419,11 @@ function onClient(c, m) {
     return;
   }
 
+  // The WebFetch hook (webfetch-hook.js) asks before each fetch; the reply is the decision for this session's turn.
+  if (m.type === 'webfetch_check') {
+    sendLine(c.sock, { type: 'webfetch_result', ...chatTurns.webfetchCheck(m.session, m.url) });
+    return;
+  }
   if (m.type === 'status') {
     sendLine(c.sock, { type: 'status', id: m.id, version: VERSION, addon: addonVersion, clients: clientNames() });
   }
@@ -450,7 +461,8 @@ function askAddon(type, payload, ms) {
 }
 
 function clientNames() {
-  return [...clients.values()].filter(c => c.authed && !c.worker).map(c => c.name);
+  // The WebFetch hook asks once per fetch (webfetch-hook.js): it is not a client to list.
+  return [...clients.values()].filter(c => c.authed && !c.worker && c.name !== 'webfetch-hook').map(c => c.name);
 }
 
 function announceClients() {
