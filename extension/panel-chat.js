@@ -179,7 +179,7 @@ function doAct(act) {
   else if (act === 'caveman') send('setCaveman', { value: !state.caveman });
   else if (act === 'tools') { showPage('settings'); setSection('toolsHead', 'toolsBody', true); setTimeout(() => { const c = $('toolsCard'); if (c.scrollIntoView) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); }
   else if (act === 'improve') startImprove();
-  else if (act === 'new') { leaveImprove(); chat = []; saveChat(); send('newChat'); renderChat(); input.focus(); }
+  else if (act === 'new') { leaveImprove(); histNewChat(); chat = []; saveChat(); send('newChat'); renderChat(); input.focus(); }
 }
 for (const b of menu.querySelectorAll('button')) {
   b.addEventListener('click', () => { openMenu(false); doAct(b.dataset.act); });
@@ -266,7 +266,7 @@ async function submit() {
   addMsg({ role: 'user', text: text || (improveOn ? IMPROVE_EMPTY : ''), files: files.map(a => ({ name: a.name, size: a.size })) });
   const id = `p${Date.now().toString(36)}${chatSeq++}`;
   addMsg({ role: 'assistant', id, text: '', steps: [], pending: true, startedAt: Date.now() });
-  const extra = improveOn ? { improve: true } : {};
+  const extra = improveOn ? { improve: true } : histResumeExtra();
   if (!files.length) { send('chat', Object.assign({ id, text }, extra)); return; }
   let payload = [];
   try { payload = await Promise.all(files.map(readAttachment)); }
@@ -299,7 +299,7 @@ async function runSlash(text) {
   if (!known) return addMsg({ role: 'error', text: `Unknown command /${cmd}. Try /help.` });
   if (known.act) return doAct(known.act);
   if (cmd === 'help') return addMsg({ role: 'assistant', text: helpText() });
-  if (cmd === 'clear') { chat = []; saveChat(); send('newChat'); return renderChat(); }
+  if (cmd === 'clear') { histNewChat(); chat = []; saveChat(); send('newChat'); return renderChat(); }
   const tool = { tabs: 'tabs_list', ping: 'ping' }[cmd];
   const out = await call(tool);
   if (!out.ok) return addMsg({ role: 'error', text: out.error });

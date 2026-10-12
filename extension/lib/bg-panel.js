@@ -96,6 +96,7 @@ async function handlePanel(msg, port) {
     case 'selfApply':   return sendNative({ type: 'self_apply', id: String(msg.id || '') });
     case 'selfDiscard': return sendNative({ type: 'self_discard', id: String(msg.id || '') });
     case 'newChat':    return cizState.set({ chatSession: '' });
+    case 'histLog':    return cizState.addLog('info', String(msg.text || '').slice(0, 200));
     case 'setModel':   return setModel(msg.value === 'quality' ? 'quality' : 'speed');
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
     case 'setArmy':    return setArmy(!!msg.value);

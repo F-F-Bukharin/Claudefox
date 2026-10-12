@@ -120,6 +120,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `extension/panel.js` | Switches the sidebar's three pages (chat, profile, settings), its buttons and the rendering of the agent state. Loads first of the panel scripts. |
 | `extension/panel-chat.js` | The chat composer: Speed or Quality and the army, the current tab, the text bar, attachments, the + menu, slash commands, sending, and Improve Claude in Zen. |
 | `extension/panel-stream.js` | The chat stream: answers as they arrive, progress and army trail, file cards, and how each message is drawn. |
+| `extension/panel-history.js` | Chat history: chats kept per account in storage.local, and the drawer that searches, reopens, exports (Markdown) and deletes them. |
 | `extension/panel-settings.js` | The Settings and Profile pages: dark mode and wallpaper, permissions, tools and plugins, accounts, mods and saving files. |
 | `extension/panel-link.js` | Connects the panel to the background page, takes its messages and restores the saved chat. Loads last of the panel scripts. |
 | `host/claude-in-zen-host.js` | The helper: native messaging, pipe server, Claude Code chat turns, accounts, `read_document`. |

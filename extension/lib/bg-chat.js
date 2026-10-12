@@ -66,14 +66,16 @@ async function startChat(msg) {
     } catch {}
   }
   // The sites Claude may use in this message: the open page's, the ones the text names, the chat's, and the ones the user marked allow.
+  // Opening a chat from History sends its Claude session id, so the next message resumes that conversation.
+  const resume = improve ? '' : typeof msg.resume === 'string' ? msg.resume.slice(0, 100) : (s.chatSession || '');
   let sites = [];
   if (!improve) {
     let blocks = {};
     try { blocks = (await browser.storage.local.get('sites')).sites || {}; } catch {}
     const allow = Object.keys(blocks).filter(k => blocks[k] === 'allow');
-    sites = cizSiteGate.begin(id, { tabUrl: tab && tab.url, windowId, text, newChat: !s.chatSession, allow });
+    sites = cizSiteGate.begin(id, { tabUrl: tab && tab.url, windowId, text, newChat: !resume, allow });
   }
-  const sent = sendNative({ type: 'chat', id, text, model, tab, resume: improve ? '' : (s.chatSession || ''), files, folder: files ? s.filesFolder : '',
+  const sent = sendNative({ type: 'chat', id, text, model, tab, resume, files, folder: files ? s.filesFolder : '',
     unsafe: !improve && !!s.unsafe, caveman: !improve && !!s.caveman, attachments, improve,
     sites, trusted: !improve && !!s.trusted });
   if (!sent) { chatRuns.delete(id); cizSiteGate.end(id); return fail('Could not reach the helper.'); }
@@ -101,7 +103,7 @@ async function onChatDone(msg) {
   if (msg.sessionId) await cizState.set({ chatSession: String(msg.sessionId) });
   if (!msg.ok && /No conversation found/i.test(err)) await cizState.set({ chatSession: '' });
   if (!msg.ok) await cizState.addLog(msg.limit ? 'warn' : 'error', `Chat: ${err.split('\n')[0].slice(0, 200)}`);
-  postToPanels({ type: 'chatDone', id, ok: !!msg.ok, error: err, limit: !!msg.limit });
+  postToPanels({ type: 'chatDone', id, ok: !!msg.ok, error: err, limit: !!msg.limit, sessionId: String(msg.sessionId || '') });
 }
 
 // ---------------------------------------------------------------- helper (native host)

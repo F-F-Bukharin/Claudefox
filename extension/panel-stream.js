@@ -73,6 +73,7 @@ function onArmyEvent(m, ev) {
 }
 
 function onChatDone(msg) {
+  histNoteDone(msg);
   const m = chat.find(x => x.id === msg.id);
   if (!m) return;
   m.pending = false;
@@ -114,7 +115,7 @@ function bump(m) { m.rev = (m.rev || 0) + 1; }
 let saveTimer = null;
 function saveChat() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { try { browser.storage.session.set({ chat }); } catch {} }, busyMsg() ? 1000 : 300);
+  saveTimer = setTimeout(() => { const hist = histSave(); try { browser.storage.session.set(Object.assign({ chat }, hist)); } catch {} }, busyMsg() ? 1000 : 300);
 }
 
 let renderQueued = false;

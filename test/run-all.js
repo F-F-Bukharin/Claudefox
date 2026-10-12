@@ -12,7 +12,7 @@ const TESTS = [
   'test/dom-classify.js',
   'test/dom-query.js',
   'test/dom-inject.js',
-  'test/dom-render.js',
+  'test/dom-render.js', 'test/dom-history.js',
   'test/menu-static.js', 'test/wall-ink.js', 'test/brand.js', 'test/shared-code.js', 'test/injection-page.js', 'test/hardening.js', 'test/harden-confirm.js', 'test/harden-turns.js', 'test/harden-native.js',
   'test/watch-static.js', 'test/site-gate.js', 'test/site-wiring.js', 'host/test/watch-engine-smoke.js', 'host/test/watch-smoke.js',
   'host/test/scope-smoke.js',

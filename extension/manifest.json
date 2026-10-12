@@ -17,6 +17,7 @@
   },
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "tabs",
     "activeTab",
     "nativeMessaging",

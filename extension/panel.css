@@ -680,3 +680,21 @@ html[data-wall="picture"] body {
 .locallist .mono { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .locallist button { flex: none; font-size: 12px; }
 .local-note { margin: 0 0 10px; }
+
+/* ---------- history (panel-history.js) ---------- */
+.histchip { display: inline-flex; align-items: center; justify-content: center; padding: 4px; border: 0; background: transparent; color: var(--ink); }
+.histchip svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.histchip[aria-expanded="true"] { background: var(--line); }
+.chat { position: relative; }
+.hist { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto; background: var(--bg); }
+.hist[hidden] { display: none; }
+.hist-head { display: flex; align-items: center; justify-content: space-between; }
+.hist-head h2 { font-size: 15px; }
+.hist-search { width: 100%; padding: 8px 10px; border: 1px solid var(--outline); border-radius: 8px; background: var(--card); color: var(--card-ink); font: inherit; }
+.hist-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hist-item { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--outline); border-radius: 10px; background: var(--card); color: var(--card-ink); box-shadow: var(--shade-1); }
+.hist-open { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 0; border: 0; text-align: left; color: inherit; }
+.hist-title { font-weight: 600; font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-date { font-size: 11.5px; color: var(--card-muted); }
+.hist-acts { display: flex; gap: 12px; }
+.hist-foot { margin-top: auto; }
