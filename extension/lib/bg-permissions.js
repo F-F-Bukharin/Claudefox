@@ -1,0 +1,180 @@
+'use strict';
+// Claude in Zen: Stop and Start, the helper's confirm window, and the permission switches: file tools, unsafe mode,
+// watch, and the army. A question left open in the confirm window counts as no.
+
+// ---------------------------------------------------------------- Stop
+// Rule 1: Stop cancels pending actions, disconnects the native host and
+// disables file tools. Nothing else.
+
+async function stopAll(source) {
+  // Everything is cut in this first step, before any await: a tool call, a worker's call or a folder question that
+  // arrives while the tabs close below already finds the agent stopped and the helper gone. (set() changes the state
+  // at once; only saving it waits.)
+  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, pending: 0 });
+  for (const [id, a] of pendingActions) {
+    try { a.controller.abort(new Error('Stopped')); } catch {}
+    pendingActions.delete(id);
+  }
+  sendNative({ type: 'watch_off' });   // before the helper goes: watching off, and a waiting card is cancelled
+  disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
+  endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)
+  failChats('Stopped.');
+  cizNetReset();                 // forget recorded requests, stop watching consoles
+  await stopped;
+  await cizLocal.cancelAll();    // an open folder question counts as no
+  await cizArmy.closeAll();      // every army worker's tab goes too
+  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, army tabs closed, folder questions answered no, helper disconnected, file tools off, Unsafe mode off, network log cleared.`);
+}
+
+async function startAgent() {
+  await cizState.set({ agent: 'active' });
+  await cizState.addLog('info', 'Agent resumed');
+  connectNative();
+}
+
+// "Choose folder…": the helper opens a folder window and answers with pick_folder_result.
+async function pickFolder() {
+  if (cizState.get().folderPicking) return;
+  if (!sendNative({ type: 'pick_folder' })) return cizState.addLog('error', 'Choosing a folder needs the helper. Type the path instead.');
+  await cizState.set({ folderPicking: true });
+}
+
+// The helper's confirm window (host/lib/confirm.js): a Windows window outside Zen that nothing here can answer for
+// the user, a mod included. Unsafe mode and file tools go on only after a yes there, and the helper gives chat turns
+// only what was allowed. Resolves { ok, error }.
+const confirmWaiters = new Map();   // id -> done(result)
+let confirmSeq = 0;
+function askConfirm(payload) {
+  return new Promise(resolve => {
+    const id = `k${++confirmSeq}`;
+    const done = r => {
+      clearTimeout(timer);
+      confirmWaiters.delete(id);
+      if (!confirmWaiters.size) cizState.set({ confirmPending: null }).catch(() => {});
+      resolve(r);
+    };
+    const timer = setTimeout(() => done({ ok: false, error: 'No answer from the confirm window.' }), 150000);
+    confirmWaiters.set(id, done);
+    if (!sendNative(Object.assign({ type: 'confirm', id }, payload))) return done({ ok: false, error: 'The helper is not connected, and it shows the confirm window. Press Start first.' });
+    cizState.set({ confirmPending: { kind: String(payload.kind) } }).catch(() => {});
+  });
+}
+// Stop, or the helper went away: open questions count as no.
+function endConfirms(why) { for (const done of [...confirmWaiters.values()]) done({ ok: false, error: why }); }
+
+async function setFiles(value, mode, folder) {
+  const m = mode === 'write' ? 'write' : 'read';
+  const f = String(folder == null ? cizState.get().filesFolder : folder).trim().slice(0, 1000);
+  if (!value) {
+    const was = cizState.get().filesEnabled;
+    await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    sendNative({ type: 'files_off' });
+    if (was) await cizState.addLog('info', 'File tools off');
+    return;
+  }
+  if (cizState.get().agent !== 'active') return;
+  if (!/^([A-Za-z]:[\\/]|\\\\|\/)/.test(f)) {
+    await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    return cizState.addLog('error', 'File tools need a full folder path, like C:\\Users\\you\\Documents\\notes. Left off.');
+  }
+  const r = await askConfirm({ kind: 'files', mode: m, folder: f });
+  if (!r.ok) {
+    await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    return cizState.addLog('error', `File tools stay off: ${r.error || 'not allowed in the confirm window.'}`);
+  }
+  await cizState.set({ filesEnabled: true, filesMode: m, filesFolder: f });
+  await cizState.addLog('info', `File tools on (${m === 'write' ? 'read and write' : 'read only'}) for ${f}`);
+}
+
+// Unsafe mode lets Claude act on Google sign-in pages, to debug the sign-in bug. It lasts for this
+// session only: Stop, an add-on restart or a Zen restart turns it off. Passwords, 2FA codes and
+// payment details are refused in every mode.
+async function setUnsafe(value) {
+  if (!value) {
+    sendNative({ type: 'unsafe_off' });
+    if (cizState.get().unsafe) {
+      await cizState.set({ unsafe: false });
+      await cizState.addLog('info', 'Unsafe mode off');
+    }
+    return;
+  }
+  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on Unsafe mode.');
+  const r = await askConfirm({ kind: 'unsafe' });
+  if (!r.ok) return cizState.addLog('info', `Unsafe mode stays off: ${r.error || 'not allowed in the confirm window.'}`);
+  await cizState.set({ unsafe: true });
+  await cizState.addLog('warn', 'Unsafe mode on: Claude may act on Google sign-in pages. It still never types passwords, 2FA codes or payment details.');
+}
+
+// Watch videos (the watch_video tool). The switch lasts for this session: Stop, an add-on restart or a Zen restart turns
+// it off. Turning it on asks the helper's confirm window; the helper keeps the switch in step with watch_state.
+async function setWatch(value) {
+  if (!value) {
+    sendNative({ type: 'watch_off' });
+    if (cizState.get().watch) {
+      await cizState.set({ watch: false });
+      await cizState.addLog('info', 'Watch videos off');
+    }
+    return;
+  }
+  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on watching.');
+  const r = await askConfirm({ kind: 'watch' });
+  if (!r.ok) return cizState.addLog('info', `Watch videos stays off: ${r.error || 'not allowed in the confirm window.'}`);
+  await cizState.set({ watch: true });
+  await cizState.addLog('info', 'Watch videos on for this session.');
+}
+
+// The saved option "Start with watching on". Off is saved at once. On asks the confirm window; the helper saves the answer
+// (a no saves Off) and replies with watch_state, which sets watchOnLoad.
+async function setWatchOnLoad(value) {
+  if (!value) {
+    sendNative({ type: 'watch_set_on_load', value: false });
+    return cizState.set({ watchOnLoad: false });
+  }
+  const r = await askConfirm({ kind: 'watch_on_load' });
+  if (!r.ok) return cizState.addLog('info', `Watching every time the panel opens stays off: ${r.error || 'not allowed in the confirm window.'}`);
+}
+
+// The army switch (Quality only): Opus 5.5 at max effort may send up to five Haiku workers to background tabs.
+// Remembered across restarts. Turning it on picks Quality.
+async function setArmy(value) {
+  try { await browser.storage.local.set(value ? { armyOn: true, armyModel: 'quality' } : { armyOn: false }); } catch {}
+  await cizState.set({ chatArmy: value, ...(value ? { chatModel: 'quality' } : {}) });
+  return cizState.addLog('info', value ? 'Army on: Opus 5.5 may send Haiku workers to background tabs' : 'Army off');
+}
+
+// Today's local date, YYYY-MM-DD: the army run counter starts over each day.
+function localDay() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Speed or Quality. With the army switch on, the mode is remembered with it, so a restart comes back as it was left.
+async function setModel(model) {
+  await cizState.set({ chatModel: model });
+  if (cizState.get().chatArmy) { try { await browser.storage.local.set({ armyModel: model }); } catch {} }
+}
+
+// Today's army runs, read again: the count starts over at midnight even while Zen stays open (startup, every half
+// hour, and whenever a panel opens).
+async function refreshArmyToday() {
+  let count;
+  try {
+    const r = (await browser.storage.local.get('armyRuns')).armyRuns;
+    count = r && r.day === localDay() ? Number(r.count) || 0 : 0;
+  } catch { return; }
+  if (cizState.get().armyToday !== count) await cizState.set({ armyToday: count });
+}
+
+// A new army run: count it for today. 5 a day is the recommended most; the panel warns past that, nothing blocks.
+async function countArmyRun() {
+  const day = localDay();
+  let count = 0;
+  try {
+    const r = (await browser.storage.local.get('armyRuns')).armyRuns;
+    count = r && r.day === day ? Number(r.count) || 0 : 0;
+  } catch { count = cizState.get().armyToday || 0; }
+  count++;
+  try { await browser.storage.local.set({ armyRuns: { day, count } }); } catch {}
+  await cizState.set({ armyToday: count });
+  return count;
+}

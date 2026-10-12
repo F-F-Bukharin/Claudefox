@@ -36,6 +36,11 @@
       "lib/army.js",
       "lib/local.js",
       "lib/tools.js",
+      "lib/bg-panel.js",
+      "lib/bg-accounts.js",
+      "lib/bg-permissions.js",
+      "lib/bg-chat.js",
+      "lib/bg-router.js",
       "background.js"
     ],
     "persistent": true
