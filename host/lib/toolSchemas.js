@@ -61,7 +61,8 @@ const TOOLS = [
       ...TAB,
       scope: { type: 'string', enum: ['main', 'full'], description: '"main" (default): the main content, without menus and footers. "full": everything on the page.' },
       format: { type: 'string', enum: ['markdown', 'text'], description: 'Default "markdown". "text" is plain visible text.' },
-      max_chars: { type: 'integer', description: 'Size of one part (default 40000, max 200000).' },
+      max_chars: { type: 'integer', description: 'Size of one part (default 40000; 12000 for an army worker; max 200000).' },
+      query: { type: 'string', description: 'Only the paragraphs, list items and table rows with a word of this text (3 letters or more, any case), each under its nearest heading. Nothing matches: the first 40 headings.' },
       start_at: { type: 'integer', description: 'Character offset to continue from (next_start of the previous part).' },
       scroll_to_load: { type: 'integer', description: 'Scroll to the bottom this many times first (1 to 10) to load content that appears as you scroll, such as comments or feeds. The page is scrolled back after.' },
     }),
@@ -183,8 +184,8 @@ const TOOLS = [
   {
     name: 'screenshot',
     title: 'Screenshot',
-    description: 'A PNG of the visible part of a tab, one image pixel per CSS pixel, so its coordinates work with click and hover x and y. Use it when layout or images matter or a control cannot be found; to read text, get_page_text is faster.',
-    inputSchema: obj({ ...TAB }),
+    description: 'A JPEG of the visible part of a tab, one image pixel per CSS pixel, so its coordinates work with click and hover x and y. Use it when layout or images matter or a control cannot be found; to read text, get_page_text is faster.',
+    inputSchema: obj({ ...TAB, scale: { type: 'number', enum: [1, 0.5], description: '0.5 for a half-size picture (cheaper); then double x and y for click and hover. Default 1.' } }),
     readOnly: true,
   },
   {

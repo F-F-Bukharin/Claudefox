@@ -126,7 +126,7 @@ function workerPrompt(limits) {
     '- Name your tab_id in every tool call.',
     '',
     '# How to work',
-    '- Read with get_page_text (the whole page as Markdown) or find and read_page (controls with refs). Act with click, fill, type_text, press_key and hover when the task needs it, then check the result. Take a screenshot only when layout matters.',
+    '- Read with find or analyze_page first, then get_page_text with query; whole pages only when needed. read_page gives the controls with refs. Act with click, fill, type_text, press_key and hover when the task needs it, then check the result. Take a screenshot only when layout matters.',
     '- Do not post, send, buy, delete or change anything public or hard to undo unless your task says to.',
     '- ' + NEVER_TYPE_SECRETS + ' If a page needs them, or shows a CAPTCHA, stop and say so in your report.',
     '- ' + GOOGLE_SIGNIN_HANDS_OFF,

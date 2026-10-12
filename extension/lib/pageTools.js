@@ -331,7 +331,9 @@ const CIZ_TOOLS = {
       try { back = (await cizInPage(tab, 'viewport', {})).scroll_y; } catch {}
       for (let i = 0; i < rounds; i++) { await cizInPage(tab, 'scroll', { direction: 'bottom' }); await cizSleep(900); }
     }
-    try { return await cizInPage(tab, 'text', args); }
+    // A worker reads 12,000 characters a part unless it asks for a size; start_at reads on. Other callers read 40,000.
+    const textArgs = args.max_chars == null ? { ...args, max_chars: args.__army ? 12000 : 40000 } : args;
+    try { return await cizInPage(tab, 'text', textArgs); }
     finally { if (back != null) { try { await cizInPage(tab, 'scrollto', { y: back }); } catch {} } }
   },
 
@@ -382,21 +384,26 @@ const CIZ_TOOLS = {
     const { tab, gate } = await cizGatedTab(args, true, 'screenshot');
     if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
     // captureTab only: bringing the tab to the front to capture it would take the user's tab away from them.
-    // scale 1: one image pixel per CSS pixel, so click x/y can be read straight off the picture.
+    // JPEG at quality 80 is smaller than PNG. scale 1 (the default): one image pixel per CSS pixel, so click x/y can be read
+    // straight off the picture. scale 0.5: half size, so x and y are doubled.
+    const half = Number(args.scale) === 0.5;
     let dataUrl, why = 'Zen returned no image';
     try {
-      dataUrl = await browser.tabs.captureTab(tab.id, { format: 'png', scale: 1 });
+      dataUrl = await browser.tabs.captureTab(tab.id, { format: 'jpeg', quality: 80, scale: half ? 0.5 : 1 });
     } catch (e) { why = String((e && e.message) || e).replace(/^Error:\s*/, '').replace(/\.$/, '') || why; }
-    const m = /^data:image\/png;base64,(.+)$/.exec(dataUrl || '');
+    const m = /^data:image\/jpeg;base64,(.+)$/.exec(dataUrl || '');
     if (!m) {
       if (gate.about) throw new Error('Zen did not let the add-on capture this browser page.');
       if (args.__army) throw new Error(`Could not capture tab ${tab.id}: ${why}. Read the page with get_page_text or find instead.`);
       throw new Error(`Could not capture tab ${tab.id}: ${why}. Zen draws a tab only while it is in front. If you need this picture, ask the user, or bring the tab to the front with tab_activate first.`);
     }
-    let vp = null;
-    try { vp = await cizInPage(tab, 'viewport', {}); } catch {}
-    const note = vp ? `Visible page is ${vp.width}x${vp.height} CSS px; use these image pixels as click x and y.` : '';
-    return { data: m[1], mimeType: 'image/png', title: tab.title || '', url: tab.url || '', note };
+    let note = 'This image is at half size: double x and y for click and hover.';
+    if (!half) {
+      let vp = null;
+      try { vp = await cizInPage(tab, 'viewport', {}); } catch {}
+      note = vp ? `Visible page is ${vp.width}x${vp.height} CSS px; use these image pixels as click x and y.` : '';
+    }
+    return { data: m[1], mimeType: 'image/jpeg', title: tab.title || '', url: tab.url || '', note };
   },
 
   // Debugging: the tab's requests and redirects (metadata only, see lib/netlog.js) and its console messages.

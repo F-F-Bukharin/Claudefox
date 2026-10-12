@@ -23,7 +23,7 @@ let tabs = [
 let nextTab = 100;
 const created = [], updated = [], removed = [], injected = [];
 let visibleCaptures = 0;
-let capture = async () => 'data:image/png;base64,AAAA';
+let capture = async () => 'data:image/jpeg;base64,AAAA';
 let native = null;
 const connectEv = ev();
 const tabEv = { onActivated: ev(), onUpdated: ev(), onCreated: ev(), onRemoved: ev() };
@@ -224,7 +224,7 @@ const answerConfirm = async ok => {
     capture = async () => undefined;
     const blank = await call('screenshot', { tab_id: 2 });
     check('a capture with no image fails the same way', !blank.ok && /Could not capture tab 2: .*tab_activate/.test(blank.error) && updated.length === u && visibleCaptures === 0, blank.error);
-    capture = async () => 'data:image/png;base64,AAAA';
+    capture = async () => 'data:image/jpeg;base64,AAAA';
     r = await armyCall('screenshot', { tab_id: A });
     check('an army worker can take a screenshot of its own tab', r.ok && r.result.data === 'AAAA', r.error);
 

@@ -29,7 +29,7 @@ let scriptError = null;
 let nextTab = 100;
 const created = [], updated = [], removed = [], injected = [];
 let visibleCaptures = 0;
-let capture = async () => 'data:image/png;base64,AAAA';
+let capture = async () => 'data:image/jpeg;base64,AAAA';
 let native = null;
 const connectEv = ev();
 const tabEv = { onActivated: ev(), onUpdated: ev(), onCreated: ev(), onRemoved: ev() };
@@ -311,7 +311,7 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
     tabs.push({ id: 22, windowId: 1, active: false, title: 'G4', url: F + 'game4/index.html', status: 'complete' });
     let shots = 0;
     const cap0 = capture;
-    capture = async () => { shots++; return 'data:image/png;base64,AAAA'; };
+    capture = async () => { shots++; return 'data:image/jpeg;base64,AAAA'; };
     p = call('screenshot', { tab_id: 22 });
     await tick();
     tabOf(22).url = F + 'secret/plan.html';

@@ -25,6 +25,41 @@ function cizOpText(env, args) {
   const { clamp, page, mainRoot, markdown, metaInfo, words } = env;
   const max = clamp(args.max_chars, 1000, 200000, 40000);
   const start = clamp(args.start_at, 0, 50000000, 0);
+  if (typeof args.query === 'string' && args.query.trim()) {
+    // Query: the Markdown blocks (paragraphs, list items, table rows, code) that have a query word of 3 letters or more, in
+    // any case, in page order, each under its nearest heading. Nothing matches: the first 40 headings instead.
+    const root = mainRoot(args.scope);
+    const md = markdown(root, 400000, { skipChrome: root === document.body && args.scope !== 'full' });
+    const blocks = [], heads = [];
+    let heading = null, cur = null, kind = null;   // kind: the open block, 'para', 'item' or 'code'
+    for (const line of md.text.split('\n')) {
+      if (kind === 'code') { cur.text += '\n' + line; if (/^\s*```\s*$/.test(line)) kind = null; continue; }
+      if (!line.trim()) { kind = null; continue; }
+      if (/^```/.test(line)) { kind = 'code'; cur = { heading, text: line }; blocks.push(cur); continue; }
+      if (/^#{1,6} /.test(line)) { heading = line; heads.push(line); kind = null; continue; }
+      if (/^\|/.test(line)) {   // a table row; the |---| line under the header is not text
+        kind = null;
+        if (!(/^[|\s:-]+$/.test(line) && line.includes('-'))) blocks.push({ heading, text: line.trim() });
+        continue;
+      }
+      if (/^\s*([-*]|\d+\.) /.test(line)) { kind = 'item'; cur = { heading, text: line.replace(/\s+$/, '') }; blocks.push(cur); continue; }
+      if (kind === 'item' && /^\s+\S/.test(line)) { cur.text += '\n' + line.replace(/\s+$/, ''); continue; }
+      if (kind === 'para') { cur.text += '\n' + line.trim(); continue; }
+      kind = 'para'; cur = { heading, text: line.trim() }; blocks.push(cur);
+    }
+    const want = (args.query.match(/\p{L}{3,}/gu) || []).map(x => x.toLowerCase());
+    const hits = blocks.filter(b => want.some(x => b.text.toLowerCase().includes(x)));
+    if (!hits.length) {
+      const none = `No part of the page matches "${args.query.trim()}".`;
+      return page({ text: heads.length ? none + '\n\n' + heads.slice(0, 40).join('\n') : none, truncated: false });
+    }
+    let out = '', shown;   // the heading written last
+    for (const b of hits) {
+      if (b.heading !== shown) { shown = b.heading; if (b.heading) out += (out ? '\n\n' : '') + b.heading; }
+      out += (out ? '\n\n' : '') + b.text;
+    }
+    return page({ text: out.slice(0, max), truncated: out.length > max });
+  }
   if (args.format === 'text') {
     const root = mainRoot(args.scope);
     let text = String((root && root.innerText) || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
