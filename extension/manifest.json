@@ -38,6 +38,7 @@
       "lib/pageOp.js",
       "lib/pageOpRead.js",
       "lib/pageOpAct.js",
+      "lib/siteGate.js",
       "lib/pageTools.js",
       "lib/bg-panel.js",
       "lib/bg-accounts.js",
