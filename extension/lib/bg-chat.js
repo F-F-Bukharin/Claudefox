@@ -82,6 +82,8 @@ async function onChatDone(msg) {
 
 let nativeRetries = 0;
 let nativeRetryTimer = null;
+// A panel that connects with no helper port waits here; connectNative sends its watch_load after hello.
+let watchLoadWanted = false;
 
 function connectNative() {
   if (nativePort) return;
@@ -123,6 +125,7 @@ function connectNative() {
     }
   });
   sendNative({ type: 'hello', version: browser.runtime.getManifest().version });
+  if (watchLoadWanted) { watchLoadWanted = false; sendNative({ type: 'watch_load' }); }   // a panel opened before the helper was connected
 }
 
 function disconnectNative(reason) {

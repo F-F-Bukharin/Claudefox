@@ -15,7 +15,8 @@ browser.runtime.onConnect.addListener(port => {
   }));
   port.postMessage({ type: 'state', state: cizState.get(), log: cizState.log() });
   port.postMessage({ type: 'chatRuns', ids: [...chatRuns.keys()] });
-  sendNative({ type: 'watch_load' });   // the helper replies with watch_state (and asks the first-run question once)
+  // The helper replies with watch_state and asks the first-run question once. With no helper port yet, connectNative sends it (bg-chat.js).
+  if (nativePort) sendNative({ type: 'watch_load' }); else watchLoadWanted = true;
   refreshArmyToday();   // the army card shows today's runs, even when Zen stayed open past midnight
 });
 
