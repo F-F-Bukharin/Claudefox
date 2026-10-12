@@ -64,6 +64,15 @@ function addUsage(list) {
   for (const u of list) if (u) for (const k of Object.keys(u)) sum[k] = (sum[k] || 0) + u[k];
   return Object.keys(sum).length ? sum : null;
 }
+// One line for the lead (C11): "Workers so far: 48k in (40k cached) · 1.2k out · ≈ $0.18 at API prices." Parts with no data are left out.
+function usageLine(u) {
+  const n = v => v < 1000 ? String(v) : v < 10000 ? `${(v / 1000).toFixed(1)}k` : v < 999500 ? `${Math.round(v / 1000)}k` : `${(v / 1e6).toFixed(1)}M`;
+  const parts = [];
+  if (u.tokensIn) parts.push(`${n(u.tokensIn)} in${u.tokensCached ? ` (${n(u.tokensCached)} cached)` : ''}`);
+  if (u.tokensOut) parts.push(`${n(u.tokensOut)} out`);
+  if (u.costUsd) parts.push(`≈ $${u.costUsd.toFixed(2)} at API prices`);
+  return parts.length ? `Workers so far: ${parts.join(' · ')}.` : '';
+}
 createArmy.usageFrom = usageFrom;   // a function declaration is hoisted; the exports line stays as it is
 
 function cleanUrl(u) {
@@ -341,6 +350,8 @@ function createArmy(deps) {
       lines.push(w.ended ? `- ${w.id} · ${w.state} · reported earlier` : `- ${w.id} · ${w.state} · ${w.action || 'starting'}`);
     }
     const usage = addUsage(run.workers.map(w => w.usage));   // the workers whose result event had usage
+    const said = usage ? usageLine(usage) : '';
+    if (said) lines.push('', said);
     return Object.assign({ title: `Army run ${run.id}`, text: lines.join('\n'), finished: done === total, done, total }, usage ? { usage } : {});
   }
 

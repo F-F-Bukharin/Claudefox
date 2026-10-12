@@ -177,6 +177,7 @@ async function partArmy() {
     const u = r1.usage || {};
     check('army_wait: usage adds the workers (tokensIn counts input, cache read and cache creation)', u.tokensIn === 460, JSON.stringify(r1.usage));
     check('army_wait: tokensOut, tokensCached and costUsd are summed too', u.tokensOut === 50 && u.tokensCached === 150 && near(u.costUsd, 0.03), JSON.stringify(r1.usage));
+    check('army_wait: the text the lead reads names the workers\' tokens and cost', /Workers so far: 460 in \(150 cached\) · 50 out · ≈ \$0\.03 at API prices\./.test(r1.text || ''), String(r1.text).slice(-160));
     check('army_wait: usage has just the four fields', Object.keys(u).sort().join() === 'costUsd,tokensCached,tokensIn,tokensOut', Object.keys(u).join());
     const r2 = await go(['ONE alone, and a worker with no usage', 'NOTHING here']);
     const u2 = r2.usage || {};
