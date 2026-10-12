@@ -113,10 +113,12 @@ async function main() {
     const { ch, sent } = channel();
     // The JSON of this reply is a little over 2 MiB, which rounds up to 3 MB.
     let threw = null;
-    try { ch.send({ type: 'chat_event', id: 'c1', text: 'x'.repeat(2 * MB) }); } catch (e) { threw = e; }
+    let returned;
+    try { returned = ch.send({ type: 'chat_event', id: 'c1', text: 'x'.repeat(2 * MB) }); } catch (e) { threw = e; }
     await tick();
     const out = sent();
     check('an over-size reply does not throw', threw === null, threw && threw.message);
+    check('send() answers false for an over-size reply, so the helper knows the message itself did not go', returned === false, String(returned));
     check('the add-on gets the reply-too-large error for that id, with the size rounded up to 3 MB', out.length === 1
       && out[0].type === 'error' && out[0].id === 'c1' && out[0].error === 'The reply was too large to send (3 MB).', JSON.stringify(out).slice(0, 200));
   }
@@ -124,8 +126,9 @@ async function main() {
   // ---- B11 output: a normal reply is written as before, and a reply of exactly 1 MiB is still sent
   {
     const { ch, raw } = channel();
-    ch.send({ type: 'ping' });
+    const sentOk = ch.send({ type: 'ping' });
     await tick();
+    check('send() answers true for a normal reply', sentOk === true, String(sentOk));
     check('a normal reply is written as before: the length, then the JSON', raw().equals(json({ type: 'ping' })));
     const edge = { type: 'x', text: 'y'.repeat(MB - Buffer.byteLength(JSON.stringify({ type: 'x', text: '' }))) };
     const at = channel();

@@ -55,6 +55,38 @@ function imageName(pid) {
   } catch { return ''; }
 }
 
+// When a pid's process started, in ms since 1970, or null when it cannot be read.
+function startedAt(pid) {
+  try {
+    if (process.platform === 'win32') {
+      const out = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+        `(Get-Process -Id ${pid}).StartTime.ToUniversalTime().ToString('o')`], { encoding: 'utf8', windowsHide: true, timeout: 10000 });
+      const t = Date.parse(out.trim());
+      return Number.isFinite(t) ? t : null;
+    }
+    if (process.platform === 'linux') {
+      // Field 22 of /proc/<pid>/stat is the start in clock ticks after boot; the fields after the ")" of the name start at 3.
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+      const ticks = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]);
+      const btime = Number((/^btime (\d+)$/m.exec(fs.readFileSync('/proc/stat', 'utf8')) || [])[1]);
+      let hz = 100;
+      try { hz = Number(execFileSync('getconf', ['CLK_TCK'], { encoding: 'utf8', timeout: 5000 }).trim()) || 100; } catch {}
+      return Number.isFinite(ticks) && btime ? btime * 1000 + (ticks / hz) * 1000 : null;
+    }
+    const t = Date.parse(execFileSync('ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8', timeout: 5000 }).trim());
+    return Number.isFinite(t) ? t : null;
+  } catch { return null; }
+}
+
+// A listed child is still the same process only if it started before the helper listed it. A process that started later
+// holds a reused pid: it may be the user's own node or Claude Code, so it is left alone, and so is one whose start cannot
+// be read. The slack covers the coarse clocks (boot time in whole seconds on Linux).
+const START_SLACK_MS = 2000;
+function sameProcess(pid, listedAt) {
+  const t = startedAt(pid);
+  return t !== null && Number.isFinite(listedAt) && t <= listedAt + START_SLACK_MS;
+}
+
 // Stops a process and what it started. On POSIX the whole group goes, since the chat and army children lead one.
 function killTree(pid) {
   if (process.platform === 'win32') {
@@ -76,7 +108,7 @@ function reapAtStart() {
     // Never this process or the one that started it, and never pid 0 or 1: a group kill with those reaches far more
     // than one program.
     if (!Number.isInteger(pid) || pid < 2 || pid === process.pid || pid === process.ppid) continue;
-    if (!running(pid) || !ALLOWED.includes(imageName(pid))) continue;
+    if (!running(pid) || !ALLOWED.includes(imageName(pid)) || !sameProcess(pid, Number(e.started))) continue;
     killTree(pid);
     stopped++;
   }

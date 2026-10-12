@@ -153,6 +153,19 @@ async function reapChecks() {
   } finally {
     for (const c of [node, sleeper]) { try { process.kill(-c.pid, 'SIGKILL'); } catch {} }
   }
+
+  // A pid that was reused: the entry was listed a minute before this node process started, so it is someone else's
+  // node (the user's own), not the helper's leftover, and it is left running.
+  const reused = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });
+  reused.on('error', () => {});
+  try {
+    await sleep(200);
+    fs.writeFileSync(children().FILE, JSON.stringify([{ pid: reused.pid, kind: 'chat', started: Date.now() - 60000 }]));
+    children().reapAtStart();
+    await sleep(500);
+    check('a node process that started after its entry was listed (a reused pid) is left running', alive(reused.pid));
+    check('children.json is cleared after a reused pid too', listed().length === 0);
+  } finally { try { process.kill(-reused.pid, 'SIGKILL'); } catch {} }
 }
 
 async function main() {

@@ -140,7 +140,8 @@ function modUpdate(msg) {
 }
 
 function sendAddon(msg) {
-  try { nm.send(msg); return true; } catch (e) { log.error('send to add-on failed', e.message); return false; }
+  // false also when the message was too large and only a short error went in its place (lib/nm.js).
+  try { return nm.send(msg); } catch (e) { log.error('send to add-on failed', e.message); return false; }
 }
 
 // "Choose folder…": a Windows folder window (pick-folder.ps1, run in an STA thread, which the dialog needs).

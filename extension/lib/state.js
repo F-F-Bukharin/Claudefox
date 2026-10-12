@@ -26,7 +26,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   chatArmy: false,            // the army switch: in Quality, Opus may send Haiku workers to background tabs. Remembered across restarts (storage.local armyOn)
   armyToday: 0,               // army runs started today (local date), from storage.local armyRuns; 5 a day is the recommended most
   caveman: false,             // Caveman mode: short replies (the + menu). Remembered across restarts (storage.local)
-  outputMode: 'download',     // Files: 'download' (Downloads, as before) or 'store' (the output folder beside the mods folder). Remembered across restarts (storage.local)
+  outputMode: 'download',     // Files: 'download' (Downloads, as before) or 'store' (the output folder in the helper's data folder). Remembered across restarts (storage.local)
   tools: null,                // Settings > Tools and plugins, as the helper last reported it
   toolLogin: null,            // { name, label } while a tool's sign-in window is open
   chatSession: '',            // Claude Code session id, so follow-ups keep the conversation

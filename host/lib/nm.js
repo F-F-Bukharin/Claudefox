@@ -83,16 +83,20 @@ class NativeChannel extends EventEmitter {
 
   send(msg) {
     let body = Buffer.from(JSON.stringify(msg), 'utf8');
+    let replaced = false;
     if (body.length > MAX_OUT) {
       // Zen cannot take a frame this big, so the add-on gets a short error with the same id instead of no answer at all.
       const mb = Math.ceil(body.length / MB);
       log.warn(`reply too large to send (${mb} MB): ${msg.type}`);
       const id = typeof msg.id === 'string' || typeof msg.id === 'number' ? msg.id : null;
       body = Buffer.from(JSON.stringify({ type: 'error', id, error: `The reply was too large to send (${mb} MB).` }), 'utf8');
+      replaced = true;
     }
     const head = Buffer.alloc(4);
     head.writeUInt32LE(body.length, 0);
     this.out.write(Buffer.concat([head, body]));
+    // false: the message itself did not go (only the short error did), so a caller waiting for an answer to it fails now.
+    return !replaced;
   }
 }
 

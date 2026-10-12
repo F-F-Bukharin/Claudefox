@@ -4,6 +4,9 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+// The data folder goes to a temp folder before any helper module loads (paths are read at require time): a watch run
+// is listed in children.json, which must never land in the real data folder.
+process.env.LOCALAPPDATA = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-watch-data-'));
 
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
