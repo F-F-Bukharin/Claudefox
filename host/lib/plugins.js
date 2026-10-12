@@ -271,9 +271,14 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
     return job;
   }
 
-  async function ensureFresh(key) {
+  // opts.background (the start of a chat turn): the cached list is used at once. Only an account never scanned waits for
+  // its first scan. A stale list starts a scan in the background, and its result applies from the next turn.
+  async function ensureFresh(key, opts) {
     const c = cat(key);
-    if (!c.scanned || Date.now() - c.scanned > RESCAN_MS) await scan(key);
+    if (!c.scanned) return scan(key);
+    if (Date.now() - c.scanned <= RESCAN_MS) return;
+    if (opts && opts.background) scan(key).then(() => push(key), e => log.warn('tools scan', e.message));
+    else await scan(key);
   }
 
   // Full check with "claude mcp list": starts every server once to see whether it answers, and lists the

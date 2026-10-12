@@ -150,6 +150,7 @@ async function helperTests() {
 // Print mode: reads the prompt, streams a session id, a local Read when the prompt says "read", then a WebSearch that
 // the test waits for. It stays up until the helper stops it. Other calls (mcp, plugin) answer at once.
 if (!process.argv.includes('-p')) { process.stdout.write('[]\\n'); process.exit(0); }
+if (process.argv.includes('--input-format')) { process.stderr.write("error: unknown option '--input-format'\\n"); process.exit(1); }   // this fake takes one prompt per process: the helper falls back to that
 let prompt = '';
 process.stdin.on('data', d => { prompt += d; });
 process.stdin.on('end', () => {

@@ -194,6 +194,7 @@ function chatArgs(files, resume, choice, opts) {
   );
   if (files.mode) args.push('--add-dir', files.folder);
   if (resume) args.push('--resume', resume);
+  if (o.stream) args.push('--input-format', 'stream-json');   // one process per chat: each message is a JSON line on stdin
   return args;
 }
 

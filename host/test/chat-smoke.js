@@ -69,6 +69,7 @@ if (argv[0] === 'auth') {
   }
   process.exit(0);
 }
+if (argv.includes('--input-format')) { process.stderr.write("error: unknown option '--input-format'\\n"); process.exit(1); }   // this fake takes one prompt per process: the helper falls back to that
 fs.writeFileSync(${JSON.stringify(record)} + '.pid', String(process.pid));
 let prompt = '';
 process.stdin.setEncoding('utf8');

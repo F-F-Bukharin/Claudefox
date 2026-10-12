@@ -1,7 +1,8 @@
 'use strict';
-// Chat turns: one Claude Code process per message. Starts a turn, turns its event stream into chat events for the
-// panel, ends or cancels it, runs the Improve flow's Apply and Discard, and holds army mode (lib/army.js). One turn at
-// a time.
+// Chat turns: one Claude Code process per chat (messages go in as stream-json lines; one process per message when the
+// installed Claude Code does not take stream input, and for Improve). Starts a turn, turns its event stream into chat
+// events for the panel, ends or cancels it, runs the Improve flow's Apply and Discard, and holds army mode
+// (lib/army.js). One turn at a time.
 
 const path = require('path');
 const { spawn } = require('child_process');
@@ -17,6 +18,9 @@ const children = require('./children');
 const selfimprove = require('./selfimprove');
 
 const CHAT_TIMEOUT_MS = 60 * 60 * 1000;   // long jobs (a whole course's homework) take a while; Cancel is always there
+// An idle chat process is stopped after this long (CLAUDE_IN_ZEN_IDLE_MS shortens it, only with CLAUDE_IN_ZEN_TEST=1).
+const IDLE_MS = process.env.CLAUDE_IN_ZEN_TEST === '1' && Number(process.env.CLAUDE_IN_ZEN_IDLE_MS) > 0 ? Number(process.env.CLAUDE_IN_ZEN_IDLE_MS) : 10 * 60 * 1000;
+const STREAM_PROBE_MS = 5000;   // a new process that stops this soon, with an error and no output, did not take --input-format
 const LIMIT_RE = /usage limit|limit reached|rate.?limit|reached your|limit will reset|out of (extra )?usage/i;
 
 function brief(v, n) {
@@ -43,7 +47,9 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
   // The helper builds its chat turns once, at start, before any child exists: so this is where the leftovers of an
   // earlier helper are stopped (lib/children.js).
   children.reapAtStart();
-  let chat = null;   // the running turn: { id, child, sessionId, finished, stderr, resultError, timer, files, key, army, armyRuns }
+  let chat = null;   // the running turn: { id, child, sess, sessionId, finished, stderr, resultError, timer, files, key, army, armyRuns }
+  let proc = null;   // the chat's Claude Code process, between turns too: { child, sig, sessionId, run, ctx, spawned, sawOutput, stderr, dead, killed, idleTimer, reportedModel }
+  let streamUnsupported = false;   // set when the installed Claude Code showed it does not take stream input: one process per message
   // Army mode (lib/army.js): the workers of the running turn.
   const army = require('./army').createArmy({
     callAddon, sendAddon, emit: (run, event) => emitChat(run, event), currentChat: () => chat, findClaude,
@@ -78,6 +84,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     if (ev && typeof ev.session_id === 'string' && !run.sessionId) run.sessionId = ev.session_id;
     if (ev && ev.type === 'system' && ev.subtype === 'init') {
       if (ev.model) emitChat(run, { kind: 'meta', model: String(ev.model), effort: run.effort });   // the model Claude Code reports
+      if (ev.model && run.sess) run.sess.reportedModel = String(ev.model);
       if (Array.isArray(ev.mcp_servers)) {
         for (const p of toolbox.learn(run.key, ev.mcp_servers)) {
           const k = `${run.sessionId || run.id}|${p.name}`;
@@ -133,6 +140,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
         if (ev.is_error || ev.subtype !== 'success') {
           run.resultError = String(ev.result || (Array.isArray(ev.errors) && ev.errors.join(' ')) || ev.subtype || 'Claude Code reported an error.');
         }
+        if (run.sess) finishChat(run, !run.resultError, run.resultError);   // one process per chat: the turn ends here, the process stays
         return;
     }
   }
@@ -142,6 +150,11 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     run.finished = true;
     clearTimeout(run.timer);
     if (chat === run) chat = null;
+    const sess = run.sess;
+    if (sess) {
+      if (ok && !sess.dead) { if (!sess.sessionId) sess.sessionId = run.sessionId; sess.run = null; armIdle(sess); }
+      else dropProc(sess, shuttingDown());   // a turn that failed or was stopped takes its process with it
+    }
     army.stopChat(run, shuttingDown());   // workers never outlive their turn (the lead may answer without waiting)
     if (run.improve && !ok) {
       selfimprove.recordEnd(run.sandbox.id, { outcome: `failed or stopped without a change: ${String(error || 'stopped').slice(0, 200)}`, said: run.said || '' });
@@ -198,7 +211,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     emitChat(run, { kind: 'meta', model: choice.model, effort: choice.effort });   // what the helper asked for
     run.timer = setTimeout(() => cancelChat(id, 'The answer took longer than an hour and was stopped.'), CHAT_TIMEOUT_MS);
 
-    const ready = improve ? Promise.resolve() : Promise.resolve(toolbox.ensureFresh(key)).catch(e => log.warn('tools scan', e.message));
+    const ready = improve ? Promise.resolve() : Promise.resolve(toolbox.ensureFresh(key, { background: true })).catch(e => log.warn('tools scan', e.message));
     ready.then(() => {
       if (run.finished) return;
       let saved = { files: [], errors: [] };
@@ -206,50 +219,154 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
       const tb = improve ? { servers: [], settings: {} } : toolbox.chatOptions(key);
       const opts = { unsafe, trusted, caveman, tb, watch: !improve, cavemanText: caveman ? toolbox.skillText(key, 'caveman', 'caveman') : '' };
       if (armyOn) Object.assign(opts, { army: true, mcpConfig: P.MCP_ARMY_CONFIG });
-      let child;
-      try {
-        child = spawn(exe, improve ? selfimprove.args(run.sandbox, choice, toolbox.chatOptions(key).settings) : chatArgs(files, resume, choice, opts), {
-          // Only the Zen tools: all loaded up front (ENABLE_TOOL_SEARCH=false). With other servers on: "auto" loads them up
-          // front while they are small and defers big sets (like vidIQ's) behind ToolSearch, to keep each turn light.
-          // An improve run has no other servers at all, and works in its copy.
-          cwd: improve ? run.sandbox.work : P.WORKSPACE,
-          env: { ...claudeEnv(accountDir(key)), ENABLE_TOOL_SEARCH: !improve && tb.servers.length ? 'auto' : 'false' },
-          // On Linux and macOS the turn leads its own process group, so killTree (lib/army.js) takes Claude Code and the
-          // tool servers it started in one go. Its pipes work the same way. Windows stops the tree by pid instead.
-          detached: process.platform !== 'win32',
-          windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
-        });
-      } catch (e) {
-        return finishChat(run, false, `Could not start Claude Code: ${e.message}`);
-      }
-      run.child = child;
-      children.track(child, 'chat');   // listed in children.json, so a helper that stops without cleaning up leaves no turn running
-      log.info(`chat ${id} started (${choice.model}${armyOn ? ', army' : ''}${improve ? ', improve' : `, files: ${files.mode || 'off'}`}, ${resume ? 'resumed' : 'new'}${unsafe ? ', unsafe mode' : ''}`
-        + `${tb.servers.length ? `, tools: ${tb.servers.join(', ')}` : ''}${saved.files.length ? `, ${saved.files.length} attachment(s)` : ''}${caveman ? ', caveman' : ''})`);
-
-      child.stdin.on('error', () => {});
       let prompt;
       if (improve) { prompt = selfimprove.request(text); selfimprove.recordStart(run.sandbox, text); }
       else {
         const ctx = msg.tab && typeof msg.tab === 'object' ? tabLine(msg.tab) : '';
         prompt = ctx + uploads.promptBlock(saved) + (text.trim() ? text : 'Look at the attached files.');
       }
-      child.stdin.end(prompt, 'utf8');   // the prompt goes on stdin: no quoting or length limits
-
-      let buf = '';
-      child.stdout.setEncoding('utf8');
-      child.stdout.on('data', chunk => { buf = splitLines(buf + chunk, line => onChatLine(run, line)); });
-      child.stderr.setEncoding('utf8');
-      child.stderr.on('data', d => { run.stderr = (run.stderr + d).slice(-4000); });
-      child.on('error', e => finishChat(run, false, `Could not run Claude Code: ${e.message}`));
-      child.on('close', code => {
-        if (buf) onChatLine(run, buf);
-        if (run.resultError) return finishChat(run, false, run.resultError);
-        if (code === 0) return improve ? finishImprove(run) : finishChat(run, true);
-        const tail = run.stderr.trim().split('\n').slice(-6).join('\n');
-        finishChat(run, false, tail || `Claude Code exited with code ${code}.`);
-      });
+      // Everything that makes a process different from the one before it: when one of these changes, the chat gets a new one.
+      const sig = JSON.stringify([choice.model, choice.effort, caveman, unsafe, trusted, files.mode, files.folder, opts.mcpConfig || P.MCP_CONFIG,
+        tb.settings, tb.servers, tb.allowTools, tb.skills, key, opts.watch, armyOn]);
+      const c = { exe, id, key, choice, files, resume, opts, tb, saved, prompt, sig, improve, armyOn, unsafe, caveman, probe: false };
+      if (improve || streamUnsupported) oneShot(run, c); else streamTurn(run, c);
     });
+  }
+
+  // The flags and settings every Claude Code process of a chat starts with.
+  function spawnOptions(run, c) {
+    return {
+      // Only the Zen tools: all loaded up front (ENABLE_TOOL_SEARCH=false). With other servers on: "auto" loads them up
+      // front while they are small and defers big sets (like vidIQ's) behind ToolSearch, to keep each turn light.
+      // An improve run has no other servers at all, and works in its copy.
+      cwd: c.improve ? run.sandbox.work : P.WORKSPACE,
+      env: { ...claudeEnv(accountDir(c.key)), ENABLE_TOOL_SEARCH: !c.improve && c.tb.servers.length ? 'auto' : 'false' },
+      // On Linux and macOS the turn leads its own process group, so killTree (lib/army.js) takes Claude Code and the
+      // tool servers it started in one go. Its pipes work the same way. Windows stops the tree by pid instead.
+      detached: process.platform !== 'win32',
+      windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
+    };
+  }
+
+  function logStart(c, how) {
+    log.info(`chat ${c.id} started (${c.choice.model}${c.armyOn ? ', army' : ''}${c.improve ? ', improve' : `, files: ${c.files.mode || 'off'}`}, ${c.resume ? 'resumed' : 'new'}${c.unsafe ? ', unsafe mode' : ''}`
+      + `${c.tb.servers.length ? `, tools: ${c.tb.servers.join(', ')}` : ''}${c.saved.files.length ? `, ${c.saved.files.length} attachment(s)` : ''}${c.caveman ? ', caveman' : ''}, ${how})`);
+  }
+
+  // One process per message: an Improve run, and every message once the installed Claude Code has shown it does not take
+  // stream input. The prompt goes on stdin and stdin ends.
+  function oneShot(run, c) {
+    let child;
+    try {
+      child = spawn(c.exe, c.improve ? selfimprove.args(run.sandbox, c.choice, toolbox.chatOptions(c.key).settings) : chatArgs(c.files, c.resume, c.choice, c.opts), spawnOptions(run, c));
+    } catch (e) {
+      return finishChat(run, false, `Could not start Claude Code: ${e.message}`);
+    }
+    run.child = child;
+    children.track(child, 'chat');   // listed in children.json, so a helper that stops without cleaning up leaves no turn running
+    logStart(c, 'one process');
+    child.stdin.on('error', () => {});
+    child.stdin.end(c.prompt, 'utf8');   // the prompt goes on stdin: no quoting or length limits
+
+    let buf = '', gotOutput = false;
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', chunk => { gotOutput = true; buf = splitLines(buf + chunk, line => onChatLine(run, line)); });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', d => { run.stderr = (run.stderr + d).slice(-4000); });
+    child.on('error', e => finishChat(run, false, `Could not run Claude Code: ${e.message}`));
+    child.on('close', code => {
+      if (buf) onChatLine(run, buf);
+      // The retry after a failed stream spawn failed the same way: the stream flag was not the cause (a session that
+      // is gone, say), so the next message tries one process per chat again.
+      if (c.probe && code !== 0 && !gotOutput) streamUnsupported = false;
+      if (run.resultError) return finishChat(run, false, run.resultError);
+      if (code === 0) return c.improve ? finishImprove(run) : finishChat(run, true);
+      const tail = run.stderr.trim().split('\n').slice(-6).join('\n');
+      finishChat(run, false, tail || `Claude Code exited with code ${code}.`);
+    });
+  }
+
+  // One process per chat: the process lives on after its answer and takes the next message as a JSON line on stdin. A
+  // turn ends at the process's "result" event (onChatLine). A turn that fails or is stopped takes the process with it.
+  function streamTurn(run, c) {
+    let sess = proc;
+    // The process holds one conversation: it serves a message that resumes that session, with the same spawn signature.
+    if (sess && !(!sess.dead && sess.sig === c.sig && c.resume && sess.sessionId === c.resume)) { dropProc(sess, false); sess = null; }
+    if (sess) {
+      clearTimeout(sess.idleTimer);
+      log.info(`chat ${c.id} goes to the running Claude Code process`);
+      if (sess.reportedModel) emitChat(run, { kind: 'meta', model: sess.reportedModel, effort: run.effort });
+    } else {
+      sess = spawnProc(run, c);
+      if (!sess) return;
+    }
+    sess.run = run;
+    sess.ctx = c;
+    run.sess = sess;
+    run.child = sess.child;
+    sess.child.stdin.write(JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: c.prompt }] } }) + '\n', 'utf8');
+  }
+
+  function spawnProc(run, c) {
+    let child;
+    try { child = spawn(c.exe, chatArgs(c.files, c.resume, c.choice, { ...c.opts, stream: true }), spawnOptions(run, c)); } catch (e) {
+      finishChat(run, false, `Could not start Claude Code: ${e.message}`);
+      return null;
+    }
+    children.track(child, 'chat');
+    logStart(c, 'new process');
+    const sess = { child, sig: c.sig, sessionId: c.resume, run: null, ctx: c, spawned: Date.now(), sawOutput: false, stderr: '', dead: false, killed: false, idleTimer: null, reportedModel: '' };
+    proc = sess;
+    child.stdin.on('error', () => {});
+    let buf = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', chunk => {
+      sess.sawOutput = true;
+      buf = splitLines(buf + chunk, line => { if (sess.run) onChatLine(sess.run, line); });   // events go to the running turn; between turns there is none
+    });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', d => { sess.stderr = (sess.stderr + d).slice(-4000); });
+    child.on('error', e => {
+      const r = sess.run;
+      dropProc(sess, false);
+      if (r) finishChat(r, false, `Could not run Claude Code: ${e.message}`);
+    });
+    child.on('close', code => {
+      const r = sess.run;
+      if (buf && r) onChatLine(r, buf);
+      if (sess.dead) return;   // stopped on purpose (Cancel, a changed signature, idle)
+      sess.killed = true;      // already gone: nothing to kill
+      dropProc(sess, false);
+      if (!r || r.finished) return;
+      // Claude Code that does not know --input-format stops at once, with an error and nothing on stdout: from here on
+      // every message gets its own process, and this one is sent again.
+      if (code !== 0 && !sess.sawOutput && Date.now() - sess.spawned < STREAM_PROBE_MS && !streamUnsupported) {
+        streamUnsupported = true;
+        log.warn('Claude Code does not take stream input; using one process per message.');
+        r.sess = null; r.child = null; r.stderr = '';
+        return oneShot(r, Object.assign({}, sess.ctx, { probe: true }));
+      }
+      if (r.resultError) return finishChat(r, false, r.resultError);
+      if (code === 0) return finishChat(r, true);
+      const tail = sess.stderr.trim().split('\n').slice(-6).join('\n');
+      finishChat(r, false, tail || `Claude Code exited with code ${code}.`);
+    });
+    return sess;
+  }
+
+  // Stops the chat's process (and what it started) for good: the next message spawns a new one.
+  function dropProc(sess, sync) {
+    clearTimeout(sess.idleTimer);
+    sess.dead = true;
+    sess.run = null;
+    if (proc === sess) proc = null;
+    if (!sess.killed) { sess.killed = true; killTree(sess.child, sync); }
+  }
+
+  function armIdle(sess) {
+    clearTimeout(sess.idleTimer);
+    sess.idleTimer = setTimeout(() => { log.info('chat process idle, stopped'); dropProc(sess, false); }, IDLE_MS);
+    if (sess.idleTimer.unref) sess.idleTimer.unref();
   }
 
   // The improve run ended well: check the change, show it as a card, then end the turn.
@@ -283,10 +400,14 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
 
   function cancelChat(id, reason) {
     const run = chat;
-    if (!run || (id !== '*' && id !== run.id)) return;
+    if (!run) {
+      if (id === '*' && proc) dropProc(proc, shuttingDown());   // no turn running: the idle process goes too
+      return;
+    }
+    if (id !== '*' && id !== run.id) return;
     // The whole tree: Claude Code and what it started (the tool server, plugin servers). On Windows, killing only
     // claude.exe leaves those running. While the helper shuts down this waits for the kill to finish.
-    killTree(run.child, shuttingDown());
+    if (run.sess) dropProc(run.sess, shuttingDown()); else killTree(run.child, shuttingDown());
     finishChat(run, false, reason || 'Stopped.');
   }
 

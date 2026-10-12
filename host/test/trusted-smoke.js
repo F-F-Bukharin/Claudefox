@@ -57,6 +57,7 @@ async function helperTests() {
 // Print mode: logs its argv, then answers. A prompt with "hold" stays up until the helper stops it. Other calls answer at once.
 const fs = require('fs');
 if (!process.argv.includes('-p')) { process.stdout.write('[]\\n'); process.exit(0); }
+if (process.argv.includes('--input-format')) { process.stderr.write("error: unknown option '--input-format'\\n"); process.exit(1); }   // this fake takes one prompt per process: the helper falls back to that
 fs.appendFileSync(${JSON.stringify(record)}, JSON.stringify(process.argv.slice(2)) + '\\n');
 let prompt = '';
 process.stdin.on('data', d => { prompt += d; });

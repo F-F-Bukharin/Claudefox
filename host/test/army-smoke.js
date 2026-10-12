@@ -27,6 +27,7 @@ function fakeClaude(C) {
   const worker = /worker in Claude in Zen's army/.test(val('--append-system-prompt') || '');
   const cfg = JSON.parse(fs.readFileSync(val('--mcp-config'), 'utf8')).mcpServers['claude-in-zen'];
   const out = o => process.stdout.write(JSON.stringify(o) + '\n');
+  if (process.argv.includes('--input-format')) { process.stderr.write("error: unknown option '--input-format'\\n"); process.exit(1); }   // this fake takes one prompt per process: the helper falls back to that
   let prompt = '';
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', d => { prompt += d; });
