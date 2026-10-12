@@ -77,7 +77,7 @@ $('wallFile').addEventListener('change', e => {
 });
 // The picture is scaled so its long side is 1600 px and kept as a JPEG, so it stays small enough to keep.
 function pictureToWall(file) {
-  if (!/^image\//.test(file.type)) { wallNote('That file is not a picture.'); return; }
+  if (!/^image\//.test(file.type)) { wallNote(t('set_notPicture')); return; }
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
@@ -94,16 +94,16 @@ function pictureToWall(file) {
     sctx.drawImage(canvas, 0, 0, 16, 16);
     const avg = window.cizWallInk ? cizWallInk.averageHex(sctx.getImageData(0, 0, 16, 16).data) : null;
     const kept = setWall({ mode: 'picture', image: canvas.toDataURL('image/jpeg', 0.82), avg: avg || '' });
-    wallNote(kept ? '' : 'That picture is too big to keep in this browser, so it is used for this session only.');
+    wallNote(kept ? '' : t('set_pictureTooBig'));
   };
-  img.onerror = () => { URL.revokeObjectURL(url); wallNote('Could not open that picture.'); };
+  img.onerror = () => { URL.revokeObjectURL(url); wallNote(t('set_pictureOpenFail')); };
   img.src = url;
 }
 $('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
 // Local pages: Claude's question about a folder (answered in the helper's confirm window), and the allowed folders in
 // Profile > Permissions.
-const FILE_ACCESS_OFF = "Zen keeps add-ons out of files on this computer. Turn on 'Access local files on your computer' for Claude in Zen: about:addons, Claude in Zen, Permissions and data.";
-const CONFIRM_WAIT = 'Answer in the Claude in Zen window that opened. If you do not see it, look behind Zen or on the taskbar.';
+const FILE_ACCESS_OFF = t('set_fileAccessOff');
+const CONFIRM_WAIT = t('set_confirmWait');
 function renderLocal(s) {
   const ask = s.grantAsk && s.grantAsk.folder ? s.grantAsk : null;
   const box = $('grantAsk');
@@ -117,7 +117,7 @@ function renderLocal(s) {
   $('grantAccess').textContent = FILE_ACCESS_OFF;
   $('grantAccess').hidden = s.fileAccess !== 'no';
   const grants = Array.isArray(s.localGrants) ? s.localGrants.map(String) : [];
-  $('localCount').textContent = grants.length ? `${grants.length} allowed` : 'none allowed';
+  $('localCount').textContent = grants.length === 1 ? t('set_oneAllowed') : grants.length ? t('set_nAllowed', grants.length) : t('set_noneAllowed');
   const list = $('localList');
   const sig = JSON.stringify(grants);
   if (list.dataset.sig !== sig) {   // rebuilt only when the list changes, so a focused Remove button keeps its focus
@@ -127,16 +127,15 @@ function renderLocal(s) {
       const li = el('li');
       const name = el('span', 'mono', f);
       name.title = f;
-      const rm = el('button', 'link', 'Remove');
+      const rm = el('button', 'link', t('set_remove'));
       rm.type = 'button';
-      rm.setAttribute('aria-label', `Remove ${f}`);
+      rm.setAttribute('aria-label', t('set_removeAria', f));
       rm.addEventListener('click', () => send('localGrantRemove', { folder: f }));
       li.append(name, rm);
       list.appendChild(li);
     }
   }
-  $('localNote').textContent = s.fileAccess === 'no' ? FILE_ACCESS_OFF
-    : 'Claude asks before it looks at a page or file on this computer, one folder at a time. Remove a folder to be asked again.';
+  $('localNote').textContent = s.fileAccess === 'no' ? FILE_ACCESS_OFF : t('set_localNote');
   $('localNote').classList.toggle('warnnote', s.fileAccess === 'no');
 }
 
@@ -149,11 +148,11 @@ function renderSites(sites) {
     const li = el('li');
     const name = el('span', 'mono', site);
     const choices = ['allow', 'block'].map(value => {
-      const b = actBtn(value === 'allow' ? 'Allow' : 'Block', 'link', () => send('siteListSet', { site, value }));
+      const b = actBtn(value === 'allow' ? t('set_allow') : t('set_block'), 'link', () => send('siteListSet', { site, value }));
       b.setAttribute('aria-pressed', String(sites[site] === value));
       return b;
     });
-    const rm = actBtn('Remove', 'link', () => send('siteListSet', { site, value: null }));
+    const rm = actBtn(t('set_remove'), 'link', () => send('siteListSet', { site, value: null }));
     li.append(name, ...choices, rm);
     list.appendChild(li);
   }
@@ -179,7 +178,7 @@ $('addBtn').addEventListener('click', () => {
   if (!name || !target) { $('addName').focus(); return; }
   const local = !/^https?:\/\//i.test(target);
   const go = () => send('toolAdd', { name, target, header: $('addHeader').value.trim(), on: true });
-  if (local) askConfirm(`${name} runs a program on this PC with your permissions. A web page could try to trick Claude into using it. Add it and turn it on?`, go, 'Add and turn on');
+  if (local) askConfirm(t('set_addLocalAsk', name), go, t('set_addAndOn'));
   else go();
 });
 $('pluginBtn').addEventListener('click', () => {
@@ -191,7 +190,7 @@ let confirmAction = null;
 function askConfirm(text, action, yes) {
   confirmAction = action;
   $('toolConfirmText').textContent = text;
-  $('toolYes').textContent = yes || 'Turn on';
+  $('toolYes').textContent = yes || t('set_turnOn');
   $('toolConfirm').hidden = false;
   if ($('toolConfirm').scrollIntoView) $('toolConfirm').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
@@ -262,24 +261,24 @@ function actBtn(text, cls, fn, disabled) {
   return b;
 }
 function accountCard(a, s) {
-  const who = a.email || 'Claude account';
+  const who = a.email || t('set_claudeAccount');
   const card = el('section', 'card acctcard' + (a.loggedIn ? '' : ' off'));
   const txt = el('div', 'who');
-  txt.append(el('div', 'name', who), el('div', 'muted', [a.plan && `${a.plan} plan`, a.org, a.loggedIn ? '' : 'signed out'].filter(Boolean).join(' · ')));
+  txt.append(el('div', 'name', who), el('div', 'muted', [a.plan && t('set_planName', a.plan), a.org, a.loggedIn ? '' : t('set_signedOut')].filter(Boolean).join(' · ')));
   const head = el('div', 'acct');
   head.append(el('div', 'avatar', who.trim()[0].toUpperCase()), txt);
   const stopped = s.agent === 'stopped' || !!s.accountLogin;   // no account changes while a sign-in window is open
   const acts = el('div', 'aacts');
-  if (a.active) acts.appendChild(el('span', 'pill active', 'In use'));
-  else acts.appendChild(actBtn(a.id === s.accountBusy ? 'Switching…' : a.loggedIn ? 'Use' : 'Sign in', 'primary', () => send(a.loggedIn ? 'accountUse' : 'accountSignIn', { id: a.id }), stopped || !!s.accountBusy));
+  if (a.active) acts.appendChild(el('span', 'pill active', t('set_inUse')));
+  else acts.appendChild(actBtn(a.id === s.accountBusy ? t('set_switching') : a.loggedIn ? t('set_use') : t('set_signIn'), 'primary', () => send(a.loggedIn ? 'accountUse' : 'accountSignIn', { id: a.id }), stopped || !!s.accountBusy));
   const confirm = el('div', 'confirm');
   confirm.hidden = true;
   const answers = el('div', 'confirm-btns');
   answers.append(
-    actBtn('Cancel', 'ghost', () => { confirm.hidden = true; }),
-    actBtn('Remove', 'primary', () => { confirm.hidden = true; send('accountRemove', { id: a.id }); }));
-  confirm.append(el('p', '', `Remove ${who} from Claude in Zen? You can add it again later.`), answers);
-  if (!a.active) acts.appendChild(actBtn('Remove', 'ghost', () => { confirm.hidden = false; }, stopped || !!s.accountBusy));
+    actBtn(t('set_cancel'), 'ghost', () => { confirm.hidden = true; }),
+    actBtn(t('set_remove'), 'primary', () => { confirm.hidden = true; send('accountRemove', { id: a.id }); }));
+  confirm.append(el('p', '', t('set_removeAccountAsk', who)), answers);
+  if (!a.active) acts.appendChild(actBtn(t('set_remove'), 'ghost', () => { confirm.hidden = false; }, stopped || !!s.accountBusy));
   card.append(head, acts, confirm);
   return card;
 }
@@ -291,9 +290,9 @@ function renderAccounts(s) {
   const line = $('acctChat');
   const addon = s.account && s.account.email;
   const differs = !!(inUse && inUse.email && addon && addon.toLowerCase() !== inUse.email.toLowerCase());
-  line.textContent = moving ? `Switching the chat to ${moving.email || 'that account'}…`
-    : differs ? `The chat uses ${inUse.email}. The add-on is still signed in to claude.ai as ${addon}; sign out of claude.ai and back in as ${inUse.email}, and the add-on follows.`
-    : inUse ? `The chat uses ${inUse.email || 'this account'}.` : '';
+  line.textContent = moving ? t('set_switchingChat', moving.email || t('set_thatAccount'))
+    : differs ? t('set_chatDiffers', inUse.email, addon)
+    : inUse ? t('set_chatUses', inUse.email || t('set_thisAccount')) : '';
   line.hidden = !line.textContent;
   const result = s.accountNote;
   $('acctNote').textContent = result ? result.text : '';
@@ -302,12 +301,12 @@ function renderAccounts(s) {
   const list = $('acctList');
   list.textContent = '';
   for (const a of accts) list.appendChild(accountCard(a, s));
-  const note = s.native !== 'connected' ? 'Connect the helper to see your accounts.' : accts.length ? '' : 'No accounts yet. Add one to start.';
+  const note = s.native !== 'connected' ? t('set_connectHelperAccts') : accts.length ? '' : t('set_noAccounts');
   $('acctEmpty').textContent = note;
   $('acctEmpty').hidden = !note;
   $('acctLogin').hidden = !busy;
   $('accountAdd').disabled = s.native !== 'connected' || s.agent === 'stopped' || busy || !!s.accountBusy;
-  $('accountAdd').textContent = busy ? 'Waiting for the sign-in window…' : 'Add account';
+  $('accountAdd').textContent = busy ? t('set_waitingSignIn') : t('set_addAccount');
 }
 
 // Settings sections that start closed: Tools and plugins, and Advanced (Panel, Developer, Action log).
@@ -323,50 +322,52 @@ $('advancedHead').addEventListener('click', () => setSection('advancedHead', 'ad
 let lastToolsSig = '';
 let toolsAsked = false;
 const STATUS_TEXT = {
-  connected: ['ok', 'ready'], 'needs-auth': ['warn', 'needs sign-in'], failed: ['bad', 'not answering'],
-  'not-configured': ['', 'not set up'], pending: ['', 'waiting'], unknown: ['', ''], none: ['', ''],
+  connected: ['ok', t('set_stReady')], 'needs-auth': ['warn', t('set_stNeedsSignIn')], failed: ['bad', t('set_stNotAnswering')],
+  'not-configured': ['', t('set_stNotSetUp')], pending: ['', t('set_stWaiting')], unknown: ['', ''], none: ['', ''],
 };
+// The helper's busy words, as the line under the tools: one it does not know here is shown in English.
+const BUSY_KEY = { adding: 'set_busyAdding', removing: 'set_busyRemoving', installing: 'set_busyInstalling' };
 
 function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
 
 function renderTools(s) {
-  const t = s.tools;
-  const sig = JSON.stringify([t, s.native, s.agent, s.toolLogin]);
+  const tools = s.tools;
+  const sig = JSON.stringify([tools, s.native, s.agent, s.toolLogin]);
   if (sig === lastToolsSig) return;
   lastToolsSig = sig;
   const box = $('toolsList');
   box.textContent = '';
   $('toolsCheck').hidden = s.native !== 'connected';
-  if (s.native !== 'connected') { $('toolsSummary').textContent = ''; box.appendChild(el('div', 'tempty', 'Connect the helper to see your tools and plugins.')); return; }
-  if (!t) {
-    box.appendChild(el('div', 'tempty', 'Looking for your tools…'));
+  if (s.native !== 'connected') { $('toolsSummary').textContent = ''; box.appendChild(el('div', 'tempty', t('set_connectHelperTools'))); return; }
+  if (!tools) {
+    box.appendChild(el('div', 'tempty', t('set_lookingTools')));
     if (!toolsAsked) { toolsAsked = true; send('tools'); }
     return;
   }
-  const onCount = [...t.plugins, ...t.connectors, ...t.added].filter(x => x.on).length;
-  $('toolsSummary').textContent = onCount ? `${onCount} on` : '';
-  $('toolsCheck').textContent = t.busy === 'checking' ? 'checking…' : 'check';
-  $('toolsCheck').disabled = !!t.busy;
+  const onCount = [...tools.plugins, ...tools.connectors, ...tools.added].filter(x => x.on).length;
+  $('toolsSummary').textContent = onCount ? t('set_onCount', onCount) : '';
+  $('toolsCheck').textContent = tools.busy === 'checking' ? t('set_checking') : t('set_check');
+  $('toolsCheck').disabled = !!tools.busy;
   const groups = [
-    ['Recommended', t.plugins.filter(p => p.recommended).map(item => ({ kind: 'plugin', item }))],
-    ['Plugins', t.plugins.filter(p => !p.recommended).map(item => ({ kind: 'plugin', item }))],
-    ['claude.ai connectors', t.connectors.map(item => ({ kind: 'server', item }))],
-    ['Added by you', t.added.map(item => ({ kind: 'server', item }))],
+    [t('set_groupRecommended'), tools.plugins.filter(p => p.recommended).map(item => ({ kind: 'plugin', item }))],
+    [t('set_groupPlugins'), tools.plugins.filter(p => !p.recommended).map(item => ({ kind: 'plugin', item }))],
+    [t('set_groupConnectors'), tools.connectors.map(item => ({ kind: 'server', item })), true],   // always listed
+    [t('set_groupAdded'), tools.added.map(item => ({ kind: 'server', item }))],
   ];
-  for (const [title, rows] of groups) {
-    if (!rows.length && title !== 'claude.ai connectors') continue;
+  for (const [title, rows, always] of groups) {
+    if (!rows.length && !always) continue;
     box.appendChild(el('div', 'tgroup', title));
-    if (!rows.length) { box.appendChild(el('div', 'tempty', t.checked ? 'None on this account.' : 'Press check to list them.')); continue; }
+    if (!rows.length) { box.appendChild(el('div', 'tempty', tools.checked ? t('set_noneOnAccount') : t('set_pressCheck'))); continue; }
     for (const r of rows) box.appendChild(toolRow(r.kind, r.item, s));
   }
-  if (t.busy && t.busy !== 'checking') box.appendChild(el('div', 'tempty', `${t.busy[0].toUpperCase()}${t.busy.slice(1)}…`));
+  if (tools.busy && tools.busy !== 'checking') box.appendChild(el('div', 'tempty', BUSY_KEY[tools.busy] ? t(BUSY_KEY[tools.busy]) : `${tools.busy[0].toUpperCase()}${tools.busy.slice(1)}…`));
 }
 
 function toolRow(kind, item, s) {
   const row = el('div', 'trow' + (item.on ? ' on' : ''));
   const sw = el('input');
   sw.type = 'checkbox'; sw.className = 'switch'; sw.checked = !!item.on; sw.disabled = s.agent === 'stopped' || !!item.blocked;
-  sw.setAttribute('aria-label', `Use ${item.label} in the chat`);
+  sw.setAttribute('aria-label', t('set_useInChat', item.label));
   const id = kind === 'plugin' ? item.id : item.name;
   sw.addEventListener('change', () => {
     $('toolsNote').hidden = true;
@@ -376,16 +377,16 @@ function toolRow(kind, item, s) {
   });
   const info = el('div', 'tinfo');
   const name = el('div', 'tname', item.label);
-  if (item.recommended) name.appendChild(el('span', 'tag star', 'essential'));
-  if (item.blocked) name.appendChild(el('span', 'tag bad', 'blocked'));
-  else if (item.local) name.appendChild(el('span', 'tag warn', 'runs on this PC'));
+  if (item.recommended) name.appendChild(el('span', 'tag star', t('set_essential')));
+  if (item.blocked) name.appendChild(el('span', 'tag bad', t('set_blockedTag')));
+  else if (item.local) name.appendChild(el('span', 'tag warn', t('set_runsOnPc')));
   const sub = [];
   if (kind === 'plugin') {
     if (item.version && item.version !== 'unknown') sub.push('v' + item.version);
-    if (item.skills) sub.push('skills');
-    if (item.servers.length) sub.push(`${item.servers.length} tool server${item.servers.length === 1 ? '' : 's'}`);
-    sub.push(item.scope === 'synced' ? 'from claude.ai' : 'installed here');
-  } else sub.push(item.transport === 'stdio' ? `command: ${item.target}` : String(item.target || '').replace(/^https?:\/\//, ''));
+    if (item.skills) sub.push(t('set_skills'));
+    if (item.servers.length) sub.push(t(item.servers.length === 1 ? 'set_toolServerOne' : 'set_toolServerMany', item.servers.length));
+    sub.push(item.scope === 'synced' ? t('set_fromClaudeAi') : t('set_installedHere'));
+  } else sub.push(item.transport === 'stdio' ? t('set_commandOf', item.target) : String(item.target || '').replace(/^https?:\/\//, ''));
   const subline = el('div', 'tsub', sub.filter(Boolean).join(' · '));
   info.append(name, subline);
   if (item.blocked) info.appendChild(el('div', 'tblocked', item.blocked));
@@ -403,22 +404,22 @@ function toolRow(kind, item, s) {
   const signName = kind === 'plugin' ? ((item.servers.find(x => x.status === 'needs-auth') || {}).name || '') : item.status === 'needs-auth' ? item.name : '';
   const login = s.toolLogin;
   if (login && signName && login.name === signName) {
-    stat.appendChild(el('span', 'st warn', 'signing in…'));
-    const c = el('button', 'link', 'cancel'); c.addEventListener('click', () => send('toolCancel')); stat.appendChild(c);
+    stat.appendChild(el('span', 'st warn', t('set_signingInDots')));
+    const c = el('button', 'link', t('set_cancelLink')); c.addEventListener('click', () => send('toolCancel')); stat.appendChild(c);
   } else if (signName) {
-    const b = el('button', 'link', 'sign in');
+    const b = el('button', 'link', t('set_signInLink'));
     b.addEventListener('click', () => send('toolSignIn', { name: signName }));
     b.disabled = !!login;
     stat.appendChild(b);
   }
   if (kind === 'server' && item.target && !item.name.startsWith('claude.ai ')) {
-    const rm = el('button', 'link', 'remove');
-    rm.addEventListener('click', () => askConfirm(`Remove ${item.label} from Claude Code on this PC?`, () => send('toolRemove', { name: item.name }), 'Remove'));
+    const rm = el('button', 'link', t('set_removeLink'));
+    rm.addEventListener('click', () => askConfirm(t('set_removeToolAsk', item.label), () => send('toolRemove', { name: item.name }), t('set_remove')));
     stat.appendChild(rm);
   }
   if (kind === 'plugin' && item.scope === 'user' && !item.recommended) {
-    const rm = el('button', 'link', 'remove');
-    rm.addEventListener('click', () => askConfirm(`Uninstall the ${item.label} plugin from Claude in Zen?`, () => send('pluginUninstall', { id: item.id }), 'Uninstall'));
+    const rm = el('button', 'link', t('set_removeLink'));
+    rm.addEventListener('click', () => askConfirm(t('set_uninstallAsk', item.label), () => send('pluginUninstall', { id: item.id }), t('set_uninstall')));
     stat.appendChild(rm);
   }
   row.append(sw, info, stat);
@@ -431,7 +432,7 @@ function renderLog(log) {
   if (!log.length) {
     const li = document.createElement('li');
     li.className = 'empty';
-    li.textContent = 'Nothing yet.';
+    li.textContent = t('set_nothingYet');
     ol.appendChild(li);
     return;
   }
@@ -439,7 +440,7 @@ function renderLog(log) {
     const e = log[i];
     const li = document.createElement('li');
     const t = document.createElement('time');
-    t.textContent = new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    t.textContent = new Date(e.t).toLocaleTimeString(cizI18n.lang() === 'pt_BR' ? 'pt-BR' : [], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const span = document.createElement('span');
     span.className = e.kind;
     span.textContent = e.text;
@@ -514,10 +515,7 @@ function loadMod(m) {
 }
 
 // Settings > Saving files: a made file is downloaded now (the default), or kept in the output folder in Claude in Zen's data folder.
-const OUTPUT_NOTES = {
-  download: 'Downloads go to Downloads\\Claude in Zen, as before.',
-  store: 'Made files are kept in Claude in Zen\'s data folder (…\\claude-in-zen\\output). A name that is already taken gets (2), (3) and so on, so nothing is overwritten. If the helper is not running, the file is downloaded instead.',
-};
+const OUTPUT_NOTES = { download: t('set_outDownload'), store: t('set_outStore') };
 function renderOutput(s) {
   const mode = s.outputMode === 'store' ? 'store' : 'download';
   for (const b of document.querySelectorAll('#outputSeg button')) b.setAttribute('aria-checked', String(b.dataset.value === mode));
@@ -528,7 +526,7 @@ for (const b of document.querySelectorAll('#outputSeg button')) {
 }
 // The helper stored a made file: say where it went, in the chat.
 function onOutputSaved(m) {
-  addMsg({ role: 'system', text: `Stored ${m.name} in the output folder: ${m.path}` });
+  addMsg({ role: 'system', text: t('set_outputStored', m.name, m.path) });
 }
 
 // The Mods card: one row per mod, with its state and a switch. Rebuilt only when the list changes.
@@ -544,11 +542,11 @@ function renderMods(s) {
     const text = el('div', 'mod-text');
     text.appendChild(el('div', 'mod-name', m.name || m.id));
     if (m.description) text.appendChild(el('div', 'mod-desc', m.description));
-    text.appendChild(el('div', m.broken ? 'mod-state bad' : 'mod-state', m.broken ? `Stopped: ${m.broken}` : (m.enabled ? 'On' : 'Off')));
+    text.appendChild(el('div', m.broken ? 'mod-state bad' : 'mod-state', m.broken ? t('set_modStopped', m.broken) : (m.enabled ? t('set_modOn') : t('set_modOff'))));
     const sw = el('input', 'switch');
     sw.type = 'checkbox';
     sw.checked = !!m.enabled;
-    sw.setAttribute('aria-label', `${m.name || m.id}, on`);
+    sw.setAttribute('aria-label', t('set_modAria', m.name || m.id));
     sw.addEventListener('change', () => send('modUpdate', { id: m.id, enabled: sw.checked }));
     li.append(text, sw);
     ul.appendChild(li);
@@ -556,9 +554,7 @@ function renderMods(s) {
   ul.hidden = !list.length;
   const empty = $('modsEmpty');
   empty.hidden = list.length > 0;
-  empty.textContent = s.modsKnown
-    ? 'No mods yet. Ask Improve Claude in Zen for one, and it is made in extension\\mods.'
-    : 'The helper lists the mods when it is connected.';
+  empty.textContent = s.modsKnown ? t('set_noMods') : t('set_modsHelper');
 }
 
 $('modsCheck').addEventListener('click', () => send('modsRefresh'));
@@ -585,9 +581,9 @@ function renderMacros() {
   for (const m of macrosCache) {
     const li = el('li');
     li.dataset.name = m.name;
-    const when = !m.schedule ? '' : m.schedule.kind === 'daily' ? ` · daily at ${m.schedule.at}` : ` · every ${m.schedule.hours} h`;
-    li.append(el('span', 'mono', '/' + m.name), el('span', 'muted small', when.slice(3)),
-      actBtn('Edit', 'link macro-edit', () => macroEdit(m.name)), actBtn('Remove', 'link macro-del', () => macroRemove(m.name)),
+    const when = !m.schedule ? '' : m.schedule.kind === 'daily' ? t('set_macroDaily', m.schedule.at) : t('set_macroEvery', m.schedule.hours);
+    li.append(el('span', 'mono', '/' + m.name), el('span', 'muted small', when),
+      actBtn(t('set_edit'), 'link macro-edit', () => macroEdit(m.name)), actBtn(t('set_remove'), 'link macro-del', () => macroRemove(m.name)),
       el('span', 'macro-text', m.text.replace(/\s+/g, ' ')));
     list.appendChild(li);
   }
@@ -625,23 +621,23 @@ async function macroSave() {
   const kind = $('macroSched').value;
   const sites = [];
   let bad = '';
-  for (const s of $('macroSites').value.split(/[\s,;]+/).filter(Boolean)) { const h = macroSiteOf(s); if (!h) bad = bad || `"${s}" is not a site.`; else if (sites.indexOf(h) < 0) sites.push(h); }
+  for (const s of $('macroSites').value.split(/[\s,;]+/).filter(Boolean)) { const h = macroSiteOf(s); if (!h) bad = bad || t('set_macroNotSite', s); else if (sites.indexOf(h) < 0) sites.push(h); }
   let schedule = null;
   let problem = '';
-  if (!MACRO_NAME.test(name)) problem = 'The name takes letters, numbers and dashes only (up to 30).';
-  else if (COMMANDS.some(c => c.cmd === name)) problem = `/${name} is a built-in command. Pick another name.`;
-  else if (name !== macroEditing && macrosCache.some(m => m.name === name)) problem = `A macro called ${name} already exists.`;
-  else if (!text) problem = 'Write what the macro sends.';
+  if (!MACRO_NAME.test(name)) problem = t('set_macroNameRule');
+  else if (COMMANDS.some(c => c.cmd === name)) problem = t('set_macroBuiltIn', name);
+  else if (name !== macroEditing && macrosCache.some(m => m.name === name)) problem = t('set_macroExists', name);
+  else if (!text) problem = t('set_macroNoText');
   else if (bad) problem = bad;
   else if (kind === 'daily') {
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test($('macroAt').value)) problem = 'Pick the time of day (HH:MM).';
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test($('macroAt').value)) problem = t('set_macroTime');
     else schedule = { kind: 'daily', at: $('macroAt').value };
   } else if (kind === 'every') {
     const n = Number($('macroEvery').value);
-    if (!Number.isInteger(n) || n < 1 || n > 24) problem = 'Every N hours takes a whole number from 1 to 24.';
+    if (!Number.isInteger(n) || n < 1 || n > 24) problem = t('set_macroHours');
     else schedule = { kind: 'every', hours: n };
   }
-  if (!problem && schedule && !sites.length) problem = 'A scheduled macro must list the sites it reads.';
+  if (!problem && schedule && !sites.length) problem = t('set_macroNeedSites');
   $('macroErr').textContent = problem;
   $('macroErr').hidden = !problem;
   if (problem) return;

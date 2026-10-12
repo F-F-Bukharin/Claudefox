@@ -33,7 +33,7 @@ function histSnapshot() {
   const first = chat.find(histReal);
   if (!first) return null;
   if (!histCur) histCur = { id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), acct: histAcct(), created: Date.now() };
-  const title = String(first.text || (first.files && first.files[0] && first.files[0].name) || 'New chat').replace(/\s+/g, ' ').trim().slice(0, 60) || 'New chat';
+  const title = String(first.text || (first.files && first.files[0] && first.files[0].name) || t('hist_newChat')).replace(/\s+/g, ' ').trim().slice(0, 60) || t('hist_newChat');
   return { acct: histCur.acct, id: histCur.id, created: histCur.created, title, sessionId: histSession, at: Date.now(), msgs: JSON.parse(JSON.stringify(chat)) };
 }
 
@@ -123,7 +123,7 @@ async function histExport(id) {
   const url = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
   const name = meta.title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'chat';
   try { await browser.downloads.download({ url, filename: `Claude in Zen/${name}.md`, conflictAction: 'uniquify', saveAs: false }); }
-  catch (e) { $('composerHint').textContent = 'Could not save the Markdown: ' + (e && e.message || e); }
+  catch (e) { $('composerHint').textContent = t('hist_saveFailed', e && e.message || e); }
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
@@ -158,8 +158,8 @@ async function histRender() {
   const a = (state.accounts || []).find(x => x && x.active);
   const sched = items.filter(c => c.group === 'Scheduled');   // scheduled macros' results (lib/bg-macros.js) sit in their own group
   for (const c of items.filter(c => c.group !== 'Scheduled')) list.appendChild(histRow(c));
-  if (sched.length) { list.appendChild(el('li', 'hist-group', 'Scheduled')); for (const c of sched) list.appendChild(histRow(c)); }
-  $('histEmpty').textContent = q ? 'No chat matches.' : `No saved chats yet${a && a.email ? ' for ' + a.email : ''}.`;
+  if (sched.length) { list.appendChild(el('li', 'hist-group', t('hist_scheduledHeader'))); for (const c of sched) list.appendChild(histRow(c)); }
+  $('histEmpty').textContent = q ? t('hist_noMatch') : t('hist_noSaved', a && a.email ? t('hist_forAccount', a.email) : '');
   $('histEmpty').hidden = items.length > 0;
 }
 
@@ -168,15 +168,15 @@ function histRow(c) {
   li.dataset.id = c.id;
   const open = el('button', 'hist-open');
   open.type = 'button';
-  open.append(el('span', 'hist-title', c.title), el('span', 'hist-date', new Date(c.updated).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })));
+  open.append(el('span', 'hist-title', c.title), el('span', 'hist-date', new Date(c.updated).toLocaleString(cizI18n.lang() === 'pt_BR' ? 'pt-BR' : [], { dateStyle: 'medium', timeStyle: 'short' })));
   open.disabled = !!busyMsg() && !(histCur && histCur.id === c.id);
-  if (open.disabled) open.title = 'Claude is still answering. Open a chat after it finishes.';
+  if (open.disabled) open.title = t('hist_stillAnswering');
   open.addEventListener('click', () => histOpen(c.id));
   const acts = el('div', 'hist-acts');
-  const exp = el('button', 'hist-export link', 'Export Markdown');
+  const exp = el('button', 'hist-export link', t('hist_export'));
   exp.type = 'button';
   exp.addEventListener('click', () => histExport(c.id));
-  const del = el('button', 'hist-del link', 'Delete');
+  const del = el('button', 'hist-del link', t('hist_delete'));
   del.type = 'button';
   del.addEventListener('click', () => histDelete(c.id));
   acts.append(exp, del);
@@ -196,8 +196,8 @@ async function histOpen(id) {
   if (!meta || !Array.isArray(msgs)) return histRender();
   leaveImprove();
   histNewChat();   // keeps the chat that was open
-  for (const m of msgs) if (m.pending) { m.pending = false; m.error = m.error || 'This answer was interrupted.'; bump(m); }
-  for (const m of msgs) if (m.queued) { m.queued = false; m.error = 'This message was not sent.'; bump(m); }
+  for (const m of msgs) if (m.pending) { m.pending = false; m.error = m.error || t('hist_interrupted'); bump(m); }
+  for (const m of msgs) if (m.queued) { m.queued = false; m.error = t('hist_notSent'); bump(m); }
   chat = msgs;
   histCur = { id, acct, created: meta.created };
   histSession = meta.sessionId || '';
