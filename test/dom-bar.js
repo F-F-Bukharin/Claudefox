@@ -73,7 +73,7 @@ const unset = () => !bar.classList.contains('menu-open') && !bar.classList.conta
     ok('(b) the chips start at least 12px to the right of the menu', starters.offsetLeft + margin - menuRight >= 12, `chips at ${starters.offsetLeft + margin}px, menu ends at ${menuRight}px`);
     ok('(b) the left gap is at least menu width + 12', margin >= menu.offsetWidth + 12, `gap ${margin}px`);
     const cs = w.getComputedStyle(starters);
-    ok('(b) the chips are right-aligned and wrap in that space', cs.justifyContent === 'flex-end' && cs.flexWrap === 'wrap', `justify ${cs.justifyContent}, wrap ${cs.flexWrap}`);
+    ok('(b) the chips are centred in that space and wrap', cs.justifyContent === 'center' && cs.flexWrap === 'wrap', `justify ${cs.justifyContent}, wrap ${cs.flexWrap}`);
     toggle();
 
     // (c) no room beside the menu for the widest chip: the chips hide (visibility), and the menu still comes down

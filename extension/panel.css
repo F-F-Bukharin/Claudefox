@@ -489,10 +489,10 @@ textarea:focus-visible { outline: none; }
 .menu [aria-checked="true"] .mcheck { background: var(--plus); }
 .menu [aria-checked="true"] .mcheck::after { left: 14px; }
 .menu .sep { height: 1px; background: var(--line); margin: 4px 6px; }
-/* the + menu open in an empty chat: the starter chips move to its right and the menu comes down to their bottom line.
+/* the + menu open in an empty chat: the starter chips move to the room on its right, centred there, and the menu comes down to their bottom line.
    panel-chat.js (placeMenuBar) measures the numbers; chips-hidden hides the chips when no chip fits beside the menu (the menu still comes down) */
 .chat.is-empty .composer.menu-open #moreMenu { bottom: calc(100% - var(--menu-bottom)); }
-.chat.is-empty .composer.menu-open .starters { margin-left: var(--chips-ml, 0px); padding: 0; justify-content: flex-end; }
+.chat.is-empty .composer.menu-open .starters { margin-left: var(--chips-ml, 0px); padding: 0; justify-content: center; }
 .chat.is-empty .composer.chips-hidden .starters { visibility: hidden; }
 /* the "/" menu: the commands, narrowed as you type; the highlighted one runs on Enter */
 .slash-menu { min-width: 260px; max-height: 260px; overflow-y: auto; }
