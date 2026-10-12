@@ -5,7 +5,9 @@
 // ---------------------------------------------------------------- chat
 // One Claude Code turn at a time, run by the helper. The panel shows the stream.
 
-const chatRuns = new Map();   // chat id -> { startedAt }
+const chatRuns = new Map();   // chat id -> { startedAt, model }
+// The log's names for the army turns: the Max effort switch picks armymax.
+const ARMY_LABEL = { army: 'army (Opus 5.5 at high effort, with Haiku workers)', armymax: 'army (Opus 5.5 at max effort, with Haiku workers)' };
 
 // The chat turn that is running (one at a time), or '' between turns: the message id the site gate and the helper share.
 function cizChatId() { return chatRuns.size ? [...chatRuns.keys()][0] : ''; }
@@ -33,6 +35,11 @@ function cleanAttachments(list) {
   return out;
 }
 
+// The army's Max effort switch (storage.local armyMax, written by the panel).
+async function armyMaxOn() {
+  try { return (await browser.storage.local.get('armyMax')).armyMax === true; } catch { return false; }
+}
+
 async function startChat(msg) {
   const id = String(msg.id || '').slice(0, 64);
   const text = String(msg.text || '');
@@ -41,6 +48,7 @@ async function startChat(msg) {
   const fail = error => postToPanels({ type: 'chatDone', id, ok: false, error });
   if (!id || (!text.trim() && !attachments.length && !improve)) return;
   const s = cizState.get();
+  const armyMax = !improve && s.chatModel === 'quality' && s.chatArmy ? await armyMaxOn() : false;
   if (chatRuns.size) return fail('Claude is still answering. Wait, or press Cancel.');
   if (s.agent !== 'active') return fail('Claude is stopped. Press Start first.');
   if (!s.signedIn) return fail('Not signed in. Open the Profile page and sign in first.');
@@ -48,8 +56,8 @@ async function startChat(msg) {
   if (s.claude && !s.claude.installed) return fail('Claude Code is not installed on this PC.');
   if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Double-click "Sign in Claude Code.bat" in the tools folder.');
   const files = !improve && s.filesEnabled ? s.filesMode : '';
-  chatRuns.set(id, { startedAt: Date.now() });
-  const model = improve ? 'selfimprove' : s.chatModel === 'quality' ? (s.chatArmy ? 'army' : 'quality') : s.chatPlus ? 'speedplus' : 'speed';
+  const model = improve ? 'selfimprove' : s.chatModel === 'quality' ? (s.chatArmy ? (armyMax ? 'armymax' : 'army') : 'quality') : s.chatPlus ? 'speedplus' : 'speed';
+  chatRuns.set(id, { startedAt: Date.now(), model });
   let tab = null, windowId = null;
   if (!improve) {
     try {
@@ -70,7 +78,7 @@ async function startChat(msg) {
     sites, trusted: !improve && !!s.trusted });
   if (!sent) { chatRuns.delete(id); cizSiteGate.end(id); return fail('Could not reach the helper.'); }
   await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
-    : `chat → Claude Code, ${model === 'army' ? 'army (Opus 5.5 at max effort, with Haiku workers)' : model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
+    : `chat → Claude Code, ${ARMY_LABEL[model] || model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
 }
 
 function cancelChat(id) {
@@ -311,6 +319,8 @@ async function onNativeMessage(msg) {
       const id = String(msg.id);
       if (!chatRuns.has(id)) return;
       let event = msg.event || {};
+      const model = chatRuns.get(id).model;   // the entry is there: checked above
+      if (event.kind === 'stats' && (model === 'army' || model === 'armymax')) await countArmyTokens((Number(event.tokensIn) || 0) + (Number(event.tokensOut) || 0));
       if (event.kind === 'army' && event.started) event = Object.assign({}, event, { today: await countArmyRun() });
       postToPanels({ type: 'chatEvent', id, event });
       return;

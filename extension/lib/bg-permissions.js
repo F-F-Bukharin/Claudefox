@@ -21,7 +21,7 @@ async function stopAll(source) {
   endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)
   if (typeof cizSiteGate !== 'undefined') cizSiteGate.cancel();   // an open site card counts as no
   failChats('Stopped.');
-  cizNetReset();                 // forget recorded requests, stop watching consoles
+  cizNetReset();                 // forget recorded requests, stop watching consoles, the network log's listeners go
   await stopped;
   await cizLocal.cancelAll();    // an open folder question counts as no
   await cizArmy.closeAll();      // every army worker's tab goes too
@@ -30,6 +30,7 @@ async function stopAll(source) {
 
 async function startAgent() {
   await cizState.set({ agent: 'active' });
+  cizNetLogStart();
   await cizState.addLog('info', 'Agent resumed');
   connectNative();
 }
@@ -199,12 +200,15 @@ async function setModel(model) {
 // Today's army runs, read again: the count starts over at midnight even while Zen stays open (startup, every half
 // hour, and whenever a panel opens).
 async function refreshArmyToday() {
-  let count;
+  let count, tokens;
   try {
     const r = (await browser.storage.local.get('armyRuns')).armyRuns;
     count = r && r.day === localDay() ? Number(r.count) || 0 : 0;
+    const t = (await browser.storage.local.get('armyTokens')).armyTokens;
+    tokens = t && t.date === localDay() ? Number(t.tokens) || 0 : 0;
   } catch { return; }
-  if (cizState.get().armyToday !== count) await cizState.set({ armyToday: count });
+  const s = cizState.get();
+  if (s.armyToday !== count || s.armyTokensToday !== tokens) await cizState.set({ armyToday: count, armyTokensToday: tokens });
 }
 
 // A new army run: count it for today. 5 a day is the recommended most; the panel warns past that, nothing blocks.
@@ -219,4 +223,18 @@ async function countArmyRun() {
   try { await browser.storage.local.set({ armyRuns: { day, count } }); } catch {}
   await cizState.set({ armyToday: count });
   return count;
+}
+
+// The tokens an army turn used (its input and output, from the helper's stats), added to today's count (storage.local armyTokens).
+async function countArmyTokens(n) {
+  const day = localDay();
+  let tokens = 0;
+  try {
+    const r = (await browser.storage.local.get('armyTokens')).armyTokens;
+    tokens = r && r.date === day ? Number(r.tokens) || 0 : 0;
+  } catch { tokens = cizState.get().armyTokensToday || 0; }
+  tokens += n;
+  try { await browser.storage.local.set({ armyTokens: { date: day, tokens } }); } catch {}
+  await cizState.set({ armyTokensToday: tokens });
+  return tokens;
 }

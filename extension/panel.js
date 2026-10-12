@@ -232,7 +232,7 @@ function render(s, log) {
   $('armyToggle').checked = army;
   $('armyToggle').disabled = s.agent === 'stopped';
   const runs = Number(s.armyToday) || 0;
-  $('armyRuns').textContent = armyRunsText(runs);
+  $('armyRuns').textContent = armyRunsText(runs, Number(s.armyTokensToday) || 0);
   $('armyRuns').classList.toggle('warnnote', runs > ARMY_RECOMMENDED);
   // the line under the outputs: what the next message runs on
   $('modelLine').textContent = (army ? 'Opus 5.5 · max effort · army of 5 Haiku' : quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort')

@@ -30,7 +30,7 @@ const booted = (async function init() {
   setInterval(refreshArmyToday, 30 * 60 * 1000);
   try { await cizLocal.init(); } catch {}   // the allowed folders, and whether Zen lets the add-on into file: pages
   try { const o = await browser.storage.local.get('outputMode'); await cizState.set({ outputMode: o.outputMode === 'store' ? 'store' : 'download' }); } catch {}
-  cizNetStart();
+  if (cizState.get().agent === 'active') cizNetLogStart();   // the network log watches only while the agent is active
   await cizState.addLog('info', 'Add-on started');
   resumeSignIn('startup');
   closeInstallerTabs();
@@ -49,6 +49,7 @@ browser.windows.onCreated.addListener(win => {
     if (normal.length !== 1) return;
     if (cizState.get().agent === 'active') return connectNative();
     await cizState.set({ agent: 'active' });
+    cizNetLogStart();
     await cizState.addLog('info', 'Zen opened: the agent is on.');
     connectNative();
   }).catch(e => cizState.addLog('error', `Auto-start failed: ${e.message || e}`));

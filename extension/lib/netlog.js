@@ -117,10 +117,19 @@ const cizNetListeners = {
   },
 };
 
-function cizNetStart() {
+// The listeners the log keeps while the agent is active: cizNetLogStart adds them (once), cizNetLogStop removes them.
+const cizNetTabListeners = {
+  removed: id => { cizNet.delete(id); cizNetAll.delete(id); cizConsoleTabs.delete(id); },
+  updated: (id, info, tab) => {
+    if (info.status === 'loading' && cizConsoleTabs.has(id)) cizConsoleInject(tab || { id, url: info.url || '' }).catch(() => {});
+  },
+};
+let cizNetWr = null;   // the webRequest API the listeners are on, or null while they are off
+
+function cizNetLogStart() {
   const wr = typeof browser !== 'undefined' && browser.webRequest;
-  if (!wr || cizNetStart.done) return;
-  cizNetStart.done = true;
+  if (!wr || cizNetWr) return;
+  cizNetWr = wr;
   const filter = { urls: ['<all_urls>'] };
   try {
     wr.onBeforeRequest.addListener(cizNetListeners.before, filter);
@@ -130,17 +139,32 @@ function cizNetStart() {
     wr.onCompleted.addListener(cizNetListeners.done, filter);
     wr.onErrorOccurred.addListener(cizNetListeners.error, filter);
   } catch (e) { console.warn('network log unavailable', e); }
-  if (browser.tabs && browser.tabs.onRemoved) browser.tabs.onRemoved.addListener(id => { cizNet.delete(id); cizNetAll.delete(id); cizConsoleTabs.delete(id); });
-  if (browser.tabs && browser.tabs.onUpdated) {
-    browser.tabs.onUpdated.addListener((id, info, tab) => {
-      if (info.status === 'loading' && cizConsoleTabs.has(id)) cizConsoleInject(tab || { id, url: info.url || '' }).catch(() => {});
-    });
-  }
+  if (browser.tabs && browser.tabs.onRemoved) browser.tabs.onRemoved.addListener(cizNetTabListeners.removed);
+  if (browser.tabs && browser.tabs.onUpdated) browser.tabs.onUpdated.addListener(cizNetTabListeners.updated);
 }
 
-// Stop: forget everything recorded and stop watching consoles.
+// Stop: the listeners go. A listener that cannot be removed is logged, not thrown, so Stop goes on past this call
+// (as cizNetLogStart logs a listener it cannot add).
+function cizNetLogStop() {
+  const wr = cizNetWr;
+  if (!wr) return;
+  cizNetWr = null;
+  try {
+    wr.onBeforeRequest.removeListener(cizNetListeners.before);
+    wr.onSendHeaders.removeListener(cizNetListeners.send);
+    wr.onHeadersReceived.removeListener(cizNetListeners.headers);
+    wr.onBeforeRedirect.removeListener(cizNetListeners.redirect);
+    wr.onCompleted.removeListener(cizNetListeners.done);
+    wr.onErrorOccurred.removeListener(cizNetListeners.error);
+    if (browser.tabs && browser.tabs.onRemoved) browser.tabs.onRemoved.removeListener(cizNetTabListeners.removed);
+    if (browser.tabs && browser.tabs.onUpdated) browser.tabs.onUpdated.removeListener(cizNetTabListeners.updated);
+  } catch (e) { console.warn('network log: listeners not removed', e); }
+}
+
+// Stop: forget everything recorded and stop watching consoles; the listeners go too (cizNetLogStop).
 function cizNetReset() {
   cizNet.clear(); cizNetOpen.clear(); cizNetAll.clear(); cizConsoleTabs.clear();
+  cizNetLogStop();
 }
 
 function cizNetLog(tabId, args) {

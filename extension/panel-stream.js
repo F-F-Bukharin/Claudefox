@@ -10,7 +10,7 @@ function onChatEvent(id, ev) {
   else if (ev.kind === 'meta') m.meta = { model: String(ev.model || ''), effort: String(ev.effort || '') };
   else if (ev.kind === 'status') m.status = String(ev.status || '');
   else if (ev.kind === 'proposal') m.proposal = proposalFrom(ev);
-  else if (ev.kind === 'stats') m.stats = { ms: Number(ev.ms) || 0, turns: Number(ev.turns) || 0 };
+  else if (ev.kind === 'stats') m.stats = { ms: Number(ev.ms) || 0, turns: Number(ev.turns) || 0, tokensIn: Number(ev.tokensIn) || 0, tokensOut: Number(ev.tokensOut) || 0, tokensCached: Number(ev.tokensCached) || 0, costUsd: Number(ev.costUsd) || 0 };
   else if (ev.kind === 'progress') {
     const steps = Array.isArray(ev.steps) && ev.steps.length ? ev.steps : (m.plan && m.plan.steps) || [];
     m.plan = { steps, done: Number(ev.done) || 0, note: String(ev.note || ''), at: m.steps.length };
@@ -20,13 +20,31 @@ function onChatEvent(id, ev) {
     m.notices = (m.notices || []).concat([{ text: String(ev.text || '').slice(0, 300), action: ev.action && typeof ev.action === 'object' ? ev.action : null }]).slice(-5);
   }
   else if (ev.kind === 'tool') {
-    m.steps.push(Object.assign({ name: String(ev.name || 'tool'), input: String(ev.input || ''), state: 'run' }, ev.server ? { server: String(ev.server).slice(0, 60) } : {}));
+    m.steps.push(Object.assign({ name: String(ev.name || 'tool'), input: String(ev.input || ''), state: 'run' }, ev.id ? { id: String(ev.id) } : {}, ev.server ? { server: String(ev.server).slice(0, 60) } : {}));
     if (m.steps.length > 30) m.steps.splice(0, m.steps.length - 30);
   } else if (ev.kind === 'tool_result') {
-    const step = m.steps.find(st => st.state === 'run');
+    const step = (ev.id && m.steps.find(st => st.id === String(ev.id))) || m.steps.find(st => st.state === 'run');
     if (step) { step.state = ev.error ? 'bad' : 'ok'; step.result = String(ev.text || ''); }
   }
   scheduleRender();
+}
+
+// Token counts as the panel shows them: 999, 1.2k, 48k, 1.2M.
+function tokenCount(n) {
+  if (n < 1000) return String(Math.round(n));
+  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
+  if (n < 999500) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1e6).toFixed(1)}M`;
+}
+
+// The done line: the time, the tokens in (cached part in brackets) and out, and the API cost. A part with no data is left out.
+function doneLine(m, secs) {
+  const st = m.stats || {};
+  const parts = [`${m.error ? 'Stopped' : 'Done'}${secs ? ` in ${secs < 100 ? secs.toFixed(1) : Math.round(secs)} s` : ''}`];
+  if (st.tokensIn > 0) parts.push(`${tokenCount(st.tokensIn)} in${st.tokensCached > 0 ? ` (${tokenCount(st.tokensCached)} cached)` : ''}`);
+  if (st.tokensOut > 0) parts.push(`${tokenCount(st.tokensOut)} out`);
+  if (st.costUsd > 0) parts.push(`≈ $${st.costUsd.toFixed(2)} at API prices`);
+  return parts.join(' · ');
 }
 
 // The army trail: the latest snapshot of the run in m.army, and the last two runs before it in m.armyPrev.
@@ -174,7 +192,7 @@ function progressBlock(m) {
   const n = m.steps.length;
   const mark = document.createElement('span'); mark.className = 'dmark' + (m.error ? ' bad' : ''); mark.textContent = m.error ? '✕' : '✓';
   const text = document.createElement('span');
-  text.textContent = `${m.error ? 'Stopped' : 'Done'}${secs ? ` in ${secs < 10 ? secs.toFixed(1) : Math.round(secs)} s` : ''}`;
+  text.textContent = doneLine(m, secs);
   box.append(mark, text);
   if (n) {
     const t = document.createElement('button'); t.className = 'link dsteps';

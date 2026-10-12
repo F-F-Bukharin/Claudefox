@@ -27,6 +27,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   chatPlus: false,            // Speed Plus: Haiku 5.5 at max effort (only applies in Speed)
   chatArmy: false,            // the army switch: in Quality, Opus may send Haiku workers to background tabs. Remembered across restarts (storage.local armyOn)
   armyToday: 0,               // army runs started today (local date), from storage.local armyRuns; 5 a day is the recommended most
+  armyTokensToday: 0,         // army tokens today: input and output of army turns, local date, from storage.local armyTokens
   caveman: false,             // Caveman mode: short replies (the + menu). Remembered across restarts (storage.local)
   outputMode: 'download',     // Files: 'download' (Downloads, as before) or 'store' (the output folder in the helper's data folder). Remembered across restarts (storage.local)
   tools: null,                // Settings > Tools and plugins, as the helper last reported it

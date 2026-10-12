@@ -294,7 +294,7 @@ const answerConfirm = async ok => {
     check('setArmy true turns the army on, picks Quality and is remembered', s.chatArmy === true && s.chatModel === 'quality' && local.armyOn === true);
     await fromPanel({ type: 'chat', id: 'a1', text: 'compare three shops' });
     const sentArmy = native.sent.find(m => m.type === 'chat' && m.id === 'a1');
-    check('the next chat goes to the helper with model army', sentArmy && sentArmy.model === 'army' && g('cizState').log().some(e => /army \(Opus 5\.5 at max effort, with Haiku workers\)/.test(e.text)), sentArmy && sentArmy.model);
+    check('the next chat goes to the helper with model army', sentArmy && sentArmy.model === 'army' && g('cizState').log().some(e => /army \(Opus 5\.5 at high effort, with Haiku workers\)/.test(e.text)), sentArmy && sentArmy.model);
 
     // 13. the run counter
     await helperSays({ type: 'chat_event', id: 'a1', event: { kind: 'army', run: 'r9', round: 1, started: true, finished: false, workers: [] } });

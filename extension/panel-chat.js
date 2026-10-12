@@ -26,11 +26,15 @@ function closeArmy(refocus) {
 $('armyBtn').addEventListener('click', e => { e.stopPropagation(); if ($('armyCard').hidden) openArmy(true); else closeArmy(true); });
 $('armyClose').addEventListener('click', () => closeArmy(true));
 $('armyToggle').addEventListener('change', e => send('setArmy', { value: e.target.checked }));
+// Max effort: remembered in storage.local (the background reads it when an army chat starts).
+$('armyMax').addEventListener('change', e => { try { browser.storage.local.set({ armyMax: e.target.checked }); } catch {} });
+(async () => { try { $('armyMax').checked = (await browser.storage.local.get('armyMax')).armyMax === true; } catch {} })();
 document.addEventListener('click', e => { if (!$('armyCard').hidden && !e.target.closest('#armyCard, #armyBtn')) closeArmy(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('armyCard').hidden) { e.preventDefault(); closeArmy(true); } });
-function armyRunsText(n) {
-  return n > ARMY_RECOMMENDED ? `Runs today: ${n}. That's past the recommended ${ARMY_RECOMMENDED}, so usage is high.`
-    : `Runs today: ${n} of ${ARMY_RECOMMENDED} recommended.`;
+function armyRunsText(n, tokens) {
+  const t = tokens > 0 ? ` · ${tokenCount(tokens)} tokens` : '';
+  return n > ARMY_RECOMMENDED ? `Runs today: ${n}${t}. That's past the recommended ${ARMY_RECOMMENDED}, so usage is high.`
+    : `Runs today: ${n} of ${ARMY_RECOMMENDED} recommended${t || '.'}`;
 }
 
 // ------------------------------------------------------------ current tab chip
