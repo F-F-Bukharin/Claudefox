@@ -11,6 +11,7 @@ const log = require('./log');
 const guard = require('./guard');
 const uploads = require('./uploads');
 const { killTree } = require('./army');
+const usageFrom = require('./army').createArmy.usageFrom;   // cost and tokens of a result event
 const { splitLines } = require('./jsonlines');
 const { MODELS, chatArgs, chatModel } = require('./chatargs');
 const { decide, LOCAL_READ_TOOLS } = require('./sites');
@@ -127,16 +128,17 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
             });
             continue;
           }
-          emitChat(run, Object.assign({ kind: 'tool', name: t.name, input: brief(b.input, 300) }, t.server ? { server: t.server } : {}));
+          emitChat(run, Object.assign({ kind: 'tool', id: b.id, name: t.name, input: brief(b.input, 300) }, t.server ? { server: t.server } : {}));
         }
         return;
       case 'user':
         for (const b of (ev.message && ev.message.content) || []) {
-          if (b && b.type === 'tool_result' && !run.progressIds.has(b.tool_use_id)) emitChat(run, { kind: 'tool_result', error: !!b.is_error, text: brief(resultText(b.content), 200) });
+          if (b && b.type === 'tool_result' && !run.progressIds.has(b.tool_use_id)) emitChat(run, { kind: 'tool_result', id: b.tool_use_id, error: !!b.is_error, text: brief(resultText(b.content), 200) });
         }
         return;
       case 'result':
-        emitChat(run, { kind: 'stats', ms: Number(ev.duration_ms) || Date.now() - run.started, turns: Number(ev.num_turns) || 0 });
+        // tokensIn, tokensOut, tokensCached and costUsd (lib/army.js usageFrom) are there only when Claude Code reported them.
+        emitChat(run, Object.assign({ kind: 'stats', ms: Number(ev.duration_ms) || Date.now() - run.started, turns: Number(ev.num_turns) || 0 }, usageFrom(ev)));
         if (ev.is_error || ev.subtype !== 'success') {
           run.resultError = String(ev.result || (Array.isArray(ev.errors) && ev.errors.join(' ')) || ev.subtype || 'Claude Code reported an error.');
         }
@@ -196,7 +198,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
       files.folder = path.resolve(folder);
     }
     const choice = improve ? MODELS.selfimprove : chatModel(msg.model);
-    const armyOn = !improve && msg.model === 'army';
+    const armyOn = !improve && (msg.model === 'army' || msg.model === 'armymax');
     const unsafe = !improve && msg.unsafe === true && confirmed.unsafe;   // only when the user allowed it in the confirm window
     const trusted = !improve && msg.trusted === true && confirmed.trusted === true;   // Trusted mode: only when the user allowed it too
     const caveman = !improve && msg.caveman === true;

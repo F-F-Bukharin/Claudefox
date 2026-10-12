@@ -37,6 +37,29 @@ function killTree(child, sync) {
   try { process.kill(-child.pid, 'SIGKILL'); } catch { if (running) { try { child.kill('SIGKILL'); } catch {} } }
 }
 
+// The cost and tokens a result event reports (Claude Code's stream-json): { tokensIn, tokensOut, tokensCached, costUsd },
+// leaving out whatever the event lacks. tokensIn is all the input the model read: fresh, cached and cache-creation tokens.
+// null when it reports none of them. Also used for a chat turn (lib/chatturns.js) as createArmy.usageFrom.
+function usageFrom(ev) {
+  const u = ev && typeof ev.usage === 'object' && ev.usage ? ev.usage : {};
+  const num = v => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+  const out = {};
+  const inp = [num(u.input_tokens), num(u.cache_read_input_tokens), num(u.cache_creation_input_tokens)];
+  if (inp.some(v => v !== null)) out.tokensIn = inp.reduce((a, v) => a + (v || 0), 0);
+  if (num(u.output_tokens) !== null) out.tokensOut = num(u.output_tokens);
+  if (num(u.cache_read_input_tokens) !== null) out.tokensCached = num(u.cache_read_input_tokens);
+  if (ev && num(ev.total_cost_usd) !== null) out.costUsd = num(ev.total_cost_usd);
+  return Object.keys(out).length ? out : null;
+}
+
+// The sum of several usageFrom results, field by field: a field is there when any of them had it. null when none had any.
+function addUsage(list) {
+  const sum = {};
+  for (const u of list) if (u) for (const k of Object.keys(u)) sum[k] = (sum[k] || 0) + u[k];
+  return Object.keys(sum).length ? sum : null;
+}
+createArmy.usageFrom = usageFrom;   // a function declaration is hoisted; the exports line stays as it is
+
 function cleanUrl(u) {
   try { const x = new URL(String(u).trim()); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; }
 }
@@ -170,6 +193,7 @@ function createArmy(deps) {
       try { ev = JSON.parse(line); } catch { return; }
       if (!ev || ev.type !== 'result') return;
       result = ev;
+      w.usage = usageFrom(ev);
       // The report is in: end the worker now. One whose process lingers after it (a slow shutdown, a stuck tool
       // server) is then done with its report, instead of running into the hard time and losing it.
       if (!ev.is_error && ev.subtype === 'success') {
@@ -311,7 +335,8 @@ function createArmy(deps) {
     for (const w of rest) {
       lines.push(w.ended ? `- ${w.id} · ${w.state} · reported earlier` : `- ${w.id} · ${w.state} · ${w.action || 'starting'}`);
     }
-    return { title: `Army run ${run.id}`, text: lines.join('\n'), finished: done === total, done, total };
+    const usage = addUsage(run.workers.map(w => w.usage));   // the workers whose result event had usage
+    return Object.assign({ title: `Army run ${run.id}`, text: lines.join('\n'), finished: done === total, done, total }, usage ? { usage } : {});
   }
 
   // ---------------------------------------------------------------- the helper's hooks
