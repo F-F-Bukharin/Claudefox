@@ -21,6 +21,12 @@ const MAX_RUNS_PER_TURN = 2;
 const TRAIL_MS = 700;   // action updates go to the panel at most this often per run
 
 // Kills a process and everything it started. sync: for shutdown, so it is done before the helper exits.
+// army_wait's seconds: 280 by default and at most, 5 at least. The tool server allows the call 20 s more (toolSchemas.js).
+function waitSeconds(seconds) {
+  const s = Number(seconds);
+  return Math.min(Math.max(Number.isFinite(s) && s > 0 ? s : 280, 5), 280);
+}
+
 function killTree(child, sync) {
   if (!child || !child.pid) return;
   const running = child.exitCode === null && child.signalCode === null;
@@ -310,8 +316,7 @@ function createArmy(deps) {
     const id = String((args && args.run_id) || '');
     const run = runs.get(id);
     if (!run) throw new Error(`There is no army run ${id || '(none given)'}. Use the run_id army_start returned.`);
-    const s = Number(args.seconds);
-    const secs = Math.min(Math.max(Number.isFinite(s) && s > 0 ? s : 60, 5), 110);
+    const secs = waitSeconds(args.seconds);
     if (!run.workers.every(w => w.ended)) {
       await new Promise(resolve => {
         const t = setTimeout(() => { run.waiters = run.waiters.filter(f => f !== go); resolve(); }, secs * 1000);
@@ -361,4 +366,4 @@ function createArmy(deps) {
   return { start, wait, stopChat, workerFor, trailSoon, runs };
 }
 
-module.exports = { createArmy, killTree, MAX_TASKS, MAX_RUNS_PER_TURN };
+module.exports = { createArmy, killTree, waitSeconds, MAX_TASKS, MAX_RUNS_PER_TURN };

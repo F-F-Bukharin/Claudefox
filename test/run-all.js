@@ -14,6 +14,7 @@ const TESTS = [
   'host/test/scope-smoke.js',
   'host/test/trusted-smoke.js',
   'host/test/usage-smoke.js',
+  'host/test/effort-smoke.js',
 ];
 // A test that cannot run here (no jsdom, or a POSIX-only test on Windows) prints SKIP and exits 0: it counts as
 // skipped, never as passed.

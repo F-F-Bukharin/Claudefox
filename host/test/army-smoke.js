@@ -236,8 +236,8 @@ async function mainChecks() {
     const la = L.argv, lv = f => la[la.indexOf(f) + 1];
     const armyCfgFile = lv('--mcp-config');
     const armyCfg = JSON.parse(fs.readFileSync(armyCfgFile, 'utf8')).mcpServers['claude-in-zen'];
-    check('1. army lead: Opus 5.5 at max effort, mcp-army.json in lead mode, the army prompt section',
-      lv('--model') === 'claude-opus-5-5' && lv('--effort') === 'max' && path.basename(armyCfgFile) === 'mcp-army.json'
+    check('1. army lead: Opus 5.5 at high effort, mcp-army.json in lead mode, the army prompt section',
+      lv('--model') === 'claude-opus-5-5' && lv('--effort') === 'high' && path.basename(armyCfgFile) === 'mcp-army.json'
       && armyCfg.env.CLAUDE_IN_ZEN_ARMY_LEAD === '1' && /# Army mode \(on\)/.test(lv('--append-system-prompt')) && L.tools.includes('army_start') && L.tools.includes('army_wait'));
     check('the army turn ends ok', done.ok, done.error);
     const st = L.steps;
@@ -254,8 +254,8 @@ async function mainChecks() {
     const ws = workersOf(/SCRIPT:(s5|s7|s8)/);
     const w1 = workersOf(/SCRIPT:s5/)[0], w2 = workersOf(/SCRIPT:s7/)[0], w3 = workersOf(/SCRIPT:s8/)[0];
     const wa = w1.argv, wv = f => wa[wa.indexOf(f) + 1];
-    check('3. worker flags: Haiku high, no built-in tools, only the Zen tools, nothing prompted, no Bash',
-      wv('--model') === 'claude-haiku-5-5' && wv('--effort') === 'high' && wa.includes('--tools') && wv('--tools') === '' && wa.includes('--strict-mcp-config')
+    check('3. worker flags: Haiku medium, no built-in tools, only the Zen tools, nothing prompted, no Bash',
+      wv('--model') === 'claude-haiku-5-5' && wv('--effort') === 'medium' && wa.includes('--tools') && wv('--tools') === '' && wa.includes('--strict-mcp-config')
       && wv('--allowedTools') === 'mcp__claude-in-zen' && wv('--permission-mode') === 'dontAsk' && !wa.join(' ').includes('Bash')
       && /^r\d+-settings\.json$/.test(path.basename(wv('--settings'))), JSON.stringify(wa.filter(x => x.length < 80)));
     check('3. worker tool server: its token, its name, no panel flag', ws.length === 3 && ws.every(w => /^[0-9a-f]{32}$/.test(w.env.CLAUDE_IN_ZEN_ARMY_TOKEN) && /^Army worker w\d$/.test(w.env.CLAUDE_IN_ZEN_CLIENT) && !('CLAUDE_IN_ZEN_PANEL' in w.env)));
@@ -373,7 +373,7 @@ async function raceChecks() {
     const st = lead('c2').steps;
     check('15 page loads a message: a run that needs more than is left is refused, naming what is left',
       st[2] && st[2].isError && st[2].text === 'The army has 1 page load left for this message: send at most 1 worker, or answer with what you have.', st[2] && st[2].text);
-    check('...and the refused call does not use up one of the two runs', st[3] && !st[3].isError && /"run_id": "r\d+"/.test(st[3].text), st[3] && st[3].text);
+    check('...and the refused call does not use up one of the two runs', st[3] && !st[3].isError && /"run_id":"r\d+"/.test(st[3].text), st[3] && st[3].text);
   } finally {
     try { h.proc.kill(); } catch {}
   }

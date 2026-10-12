@@ -22,7 +22,7 @@ const TRUSTED = '- Trusted mode is on: act directly; there is no confirmation st
 const TRUSTED_Q = 'Claude acts on any site without asking. Pages can try to steer it. It stays on until you press Stop.';
 const WAIT_TOOLS = ['read_page', 'get_page_text', 'analyze_page', 'get_selection', 'find', 'click', 'hover', 'fill', 'type_text', 'press_key', 'scroll', 'media', 'wait_for', 'screenshot', 'console_log', 'network_log', 'navigate', 'tab_open'];
 // The other tools keep their limits (0 = none set).
-const OTHER_TOOLS = { tabs_list: 0, tab_activate: 0, tab_close: 0, create_file: 30000, read_document: 60000, local_page_open: 180000, local_files: 180000, local_file_read: 180000, watch_video: 900000, progress: 0, army_start: 60000, army_wait: 0 };
+const OTHER_TOOLS = { tabs_list: 0, tab_activate: 0, tab_close: 0, create_file: 30000, read_document: 60000, local_page_open: 180000, local_files: 180000, local_file_read: 180000, watch_video: 900000, progress: 0, army_start: 60000, army_wait: 300000 };
 
 let passed = 0;
 const failed = [];

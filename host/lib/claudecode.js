@@ -50,7 +50,7 @@ function createClaudeCode({ accountDir, activeId, sendAddon }) {
   // Environment for every Claude Code process the host starts: the profile folder of the active account (or the
   // one given), and no API-key or third-party-provider variables, so usage always runs on the user's plan.
   function claudeEnv(dir) {
-    const env = { ...process.env, CLAUDE_CONFIG_DIR: dir || accountDir(activeId()) };
+    const env = { ...process.env, CLAUDE_CONFIG_DIR: dir || accountDir(activeId()), MCP_TOOL_TIMEOUT: '960000' };
     for (const k of [
       'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_PROFILE',
       'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY',
