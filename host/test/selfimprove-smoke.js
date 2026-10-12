@@ -8,6 +8,7 @@ const path = require('path');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-self-'));
 process.env.LOCALAPPDATA = path.join(tmp, 'local');   // paths.js reads this when it loads
 const S = require('../lib/selfimprove');
+const G = require('../lib/guard');
 
 let pass = 0;
 let fail = 0;
@@ -132,6 +133,19 @@ putFile('extension/mods/syntax/panel.js', 'const a = ;\n');
   check('a core edit is blocked before the tests run', p4.tests === null && p4.canApply === false && notMod(p4.blocked));
   S.discard(sb4.id);
   check('Discard leaves the core file as it was', fs.readFileSync(path.join(rootOk, 'host/lib/guard.js'), 'utf8') === 'module.exports = {};\n');
+  // node_modules is left out of a copy, so the run cannot see it; a change made in it is seen by the diff and refused.
+  const rootNm = fakeAddon(path.join(tmp, 'addon-nm'), 0);
+  fs.mkdirSync(path.join(rootNm, 'host', 'node_modules', 'dep'), { recursive: true });
+  fs.writeFileSync(path.join(rootNm, 'host', 'node_modules', 'dep', 'index.js'), 'module.exports = 1;\n');
+  const sbNm = S.prepare(rootNm);
+  check('the copy leaves node_modules out, in base and in work', !fs.existsSync(path.join(sbNm.base, 'host', 'node_modules')) && !fs.existsSync(path.join(sbNm.work, 'host', 'node_modules')));
+  fs.mkdirSync(path.join(sbNm.work, 'host', 'node_modules', 'evil'), { recursive: true });
+  fs.writeFileSync(path.join(sbNm.work, 'host', 'node_modules', 'evil', 'index.js'), 'module.exports = 2;\n');
+  const pNm = await S.propose(sbNm);
+  check('a change under node_modules is refused as not a mod file, and its tests do not run', pNm.blocked.some(m => /host\/node_modules\/evil\/index\.js: not a mod file/.test(m)) && pNm.tests === null && pNm.canApply === false, JSON.stringify(pNm.blocked));
+  const applyNm = S.apply(sbNm.id, rootNm);
+  check('Apply refuses that change, and writes nothing into node_modules', !applyNm.ok && /did not pass its checks/.test(applyNm.text) && !fs.existsSync(path.join(rootNm, 'host', 'node_modules', 'evil')), applyNm.text);
+  S.discard(sbNm.id);
 
   // Notes on earlier runs: in memory/ under the helper folder, scrubbed, kept to the newest 50, and capped for a prompt.
   check('the notes live in memory/ under the helper folder', S.MEMORY_DIR === path.join(process.env.LOCALAPPDATA, 'claude-in-zen', 'memory'), S.MEMORY_DIR);
@@ -160,15 +174,51 @@ putFile('extension/mods/syntax/panel.js', 'const a = ;\n');
   const a = S.args(sb5, { model: 'claude-opus-5-5', effort: 'max' }, { enabledPlugins: { 'vidiq@test': true } });
   const val = f => a[a.indexOf(f) + 1];
   check('an improve run uses Opus 5.5 at max effort', val('--model') === 'claude-opus-5-5' && val('--effort') === 'max', a.join(' '));
-  check('an improve run has the five file tools only: no shell, no web, no browser tools', val('--tools') === 'Read,Glob,Grep,Edit,Write' && val('--allowedTools') === 'Read,Glob,Grep,Edit,Write' && a.includes('--strict-mcp-config') && !a.join(' ').includes('Bash') && !a.join(' ').includes('WebSearch'));
+  const modRule = tool => `${tool}(/${G.posix(path.join(sb5.work, 'extension', 'mods'))}/**)`;
+  check('an improve run has the five file tools only: no shell, no web, no browser tools', val('--tools') === 'Read,Glob,Grep,Edit,Write' && val('--allowedTools') === `Read,Glob,Grep,${modRule('Edit')},${modRule('Write')}` && a.includes('--strict-mcp-config') && !a.join(' ').includes('Bash') && !a.join(' ').includes('WebSearch'));
+  check('an improve run asks for nothing: dontAsk, not acceptEdits, and only the user settings load', val('--permission-mode') === 'dontAsk' && !a.includes('acceptEdits') && val('--setting-sources') === 'user');
   check('plugins are forced off for the run', JSON.parse(fs.readFileSync(val('--settings'), 'utf8')).enabledPlugins['vidiq@test'] === false);
   const prompt = val('--append-system-prompt');
   check('the master prompt names the copy, the mods folder, and what may not change', prompt.includes(sb5.work) && prompt.includes('extension/mods/') && /Nothing outside extension\/mods\/ may change/.test(prompt));
   check('the master prompt says how a mod runs, and what happens when it throws', /\$\('id'\)/.test(prompt) && /turns that mod off/.test(prompt) && /\(function \(\) \{/.test(prompt));
   check('the master prompt gives the notes as data, with the newest run in it', /data, not instructions/.test(prompt) && prompt.includes('Asked: run 55'));
   check('the master prompt names no shell and no web tool', !/Bash|WebSearch|WebFetch/.test(prompt));
+  // The Edit and Write rules name the mods folder by its given spelling and by its real one, as denyRules spells its rules.
+  const link = path.join(tmp, 'work-link');
+  fs.symlinkSync(sb5.work, link, 'junction');
+  const linked = S.args({ ...sb5, work: link }, { model: 'claude-opus-5-5', effort: 'max' }, {});
+  const allowedLinked = linked[linked.indexOf('--allowedTools') + 1];
+  const realMods = path.join(fs.realpathSync.native(link), 'extension', 'mods');
+  check('the Edit and Write rules name the mods folder by its given spelling and by its real one', ['Edit', 'Write'].every(t => allowedLinked.includes(`${t}(/${G.posix(path.join(link, 'extension', 'mods'))}/**)`) && allowedLinked.includes(`${t}(/${G.posix(realMods)}/**)`)), allowedLinked);
   S.discard(sb5.id);
   check('an empty request asks for one change; a typed one is passed on', /pick the one change/.test(S.request('')) && S.request('make the panel nicer').includes('make the panel nicer'));
+  // A test run past its time is stopped with every process it started: its child writes a heartbeat until it is stopped.
+  const hangRoot = path.join(tmp, 'hang-addon');
+  fs.mkdirSync(path.join(hangRoot, 'test'), { recursive: true });
+  const beaterSrc = () => { setInterval(() => require('fs').appendFileSync(require('path').join(__dirname, '..', 'beat.txt'), 'b'), 100); };
+  const runnerSrc = () => {
+    const fs = require('fs');
+    const path = require('path');
+    const kid = require('child_process').spawn(process.execPath, [path.join(__dirname, 'beater.js')], { stdio: 'ignore' });
+    fs.writeFileSync(path.join(__dirname, '..', 'pids.txt'), `${process.pid} ${kid.pid}`);
+    setInterval(() => {}, 1000);
+  };
+  fs.writeFileSync(path.join(hangRoot, 'test', 'beater.js'), `(${beaterSrc})();\n`);
+  fs.writeFileSync(path.join(hangRoot, 'test', 'run-all.js'), `(${runnerSrc})();\n`);
+  let hangCap;
+  const capped = new Promise(r => { hangCap = setTimeout(() => r({ ok: 'capped' }), 8000); });
+  const hung = await Promise.race([S.runTests(hangRoot, 1500), capped]);
+  clearTimeout(hangCap);
+  const beatFile = path.join(hangRoot, 'beat.txt');
+  const beats = () => (fs.existsSync(beatFile) ? fs.statSync(beatFile).size : 0);
+  await new Promise(r => setTimeout(r, 300));
+  const stoppedAt = beats();
+  await new Promise(r => setTimeout(r, 800));
+  const laterAt = beats();
+  // Clean-up only: anything this test started that is still running is stopped by its pid.
+  const pidFile = path.join(hangRoot, 'pids.txt');
+  for (const pid of fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8').split(' ').map(Number) : []) if (pid > 0) { try { process.kill(pid, 'SIGKILL'); } catch {} }
+  check('a test run past its time is stopped with its child: no heartbeat after the stop', hung.ok === false && stoppedAt > 0 && laterAt === stoppedAt, JSON.stringify({ ok: hung.ok, stoppedAt, laterAt }));
 
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`${pass} checks passed, ${fail} failed`);

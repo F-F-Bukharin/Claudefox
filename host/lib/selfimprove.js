@@ -15,6 +15,7 @@ const { spawn } = require('child_process');
 const P = require('./paths');
 const guard = require('./guard');
 const MODS = require('./mods');
+const { killTree } = require('./army');
 const vm = require('vm');
 
 const SELF_DIR = path.join(P.BASE, 'self');
@@ -27,7 +28,8 @@ const MEMORY_DIR = path.join(P.BASE, 'memory');
 const MEMORY_KEEP = 50;     // runs whose notes are kept
 const MEMORY_SHOWN = 6;     // the newest runs given to the next run
 const MEMORY_MAX = 8000;    // characters of notes given to the next run
-const SKIP = new Set(['node_modules', '.git', 'build', 'web-ext-artifacts']);
+const SKIP = new Set(['node_modules', '.git', 'build', 'web-ext-artifacts']);   // left out of a copy
+const DIFF_SKIP = new Set(['.git', 'build', 'web-ext-artifacts']);              // left out of the diff; node_modules is in it, so a change there is refused
 const TOOLS = 'Read,Glob,Grep,Edit,Write';
 const MAX_FILE = 400 * 1024;      // bigger files are not checked
 const MAX_CELLS = 16e6;           // the longest diff worked out line by line
@@ -44,14 +46,14 @@ function isEditable(rel) {
   return MOD_PATH.test(rel) && !rel.split('/').includes('..');
 }
 
-// Every regular file in the copied folders, as posix paths relative to the add-on folder.
-function listFiles(root) {
+// Every regular file in the folders, as posix paths relative to the add-on folder; the names in skip are left out.
+function listFiles(root, skip = SKIP) {
   const out = [];
   const walk = (abs, rel) => {
     let entries;
     try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
-      if (SKIP.has(e.name)) continue;
+      if (skip.has(e.name)) continue;
       const a = path.join(abs, e.name);
       const r = `${rel}/${e.name}`;
       if (e.isDirectory()) walk(a, r);
@@ -165,7 +167,7 @@ function change(rel, status, a, b) {
 
 // The files that differ between two copies of the add-on.
 function diffTrees(baseDir, workDir) {
-  const names = [...new Set([...listFiles(baseDir), ...listFiles(workDir)])].sort();
+  const names = [...new Set([...listFiles(baseDir, DIFF_SKIP), ...listFiles(workDir, DIFF_SKIP)])].sort();
   const out = [];
   for (const rel of names) {
     const a = readMaybe(path.join(baseDir, rel));
@@ -363,6 +365,15 @@ function request(text) {
 
 // The flags of one improve run (Opus 5.5 at max effort, from the caller). settings: the account's settings from the
 // toolbox; plugins are forced off, and the guard's deny rules hold for every file tool.
+// Edit and Write may touch only the copy's extension/mods/. The rules are spelled the way guard.denyRules spells its own:
+// the given spelling of the folder and the real one (links resolved), both absolute.
+function modRules(work) {
+  const mods = path.join(work, 'extension', 'mods');
+  const rules = new Set();
+  for (const d of new Set([path.resolve(mods), guard.real(mods)])) for (const tool of ['Edit', 'Write']) rules.add(`${tool}(/${guard.escapeRule(guard.posix(d))}/**)`);
+  return [...rules];
+}
+
 function args(sandbox, choice, settings) {
   const s = JSON.parse(JSON.stringify(settings || {}));
   if (s.enabledPlugins) for (const k of Object.keys(s.enabledPlugins)) s.enabledPlugins[k] = false;
@@ -370,26 +381,28 @@ function args(sandbox, choice, settings) {
   s.permissions = { deny: guard.denyRules() };
   const file = path.join(sandbox.dir, 'settings.json');
   fs.writeFileSync(file, JSON.stringify(s, null, 1));
+  // Asks nothing (dontAsk refuses what is not allowed), reads wherever the deny rules allow, and edits only the copy's mods.
   return [
     '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
     '--mcp-config', '{"mcpServers":{}}', '--strict-mcp-config',
     '--settings', file,
+    '--setting-sources', 'user',
     '--append-system-prompt', systemPrompt(sandbox),
-    '--permission-mode', 'acceptEdits',
-    '--allowedTools', TOOLS,
+    '--permission-mode', 'dontAsk',
+    '--allowedTools', ['Read', 'Glob', 'Grep', ...modRules(sandbox.work)].join(','),
     '--tools', TOOLS,
     '--model', choice.model, '--effort', choice.effort,
   ];
 }
 
 // Runs the add-on's own tests in a folder. Passes when the test runner exits 0.
-function runTests(dir) {
+function runTests(dir, ms = TEST_MS) {
   return new Promise(resolve => {
     let out = '';
     const take = d => { out = (out + d).slice(-20000); };
     let child;
     try {
-      child = spawn(process.execPath, [path.join(dir, 'test', 'run-all.js')], { cwd: dir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(process.execPath, [path.join(dir, 'test', 'run-all.js')], { cwd: dir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
     } catch (e) {
       resolve({ ok: false, summary: `Could not run the tests: ${e.message}`, tail: '' });
       return;
@@ -398,7 +411,8 @@ function runTests(dir) {
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', take);
     child.stderr.on('data', take);
-    const timer = setTimeout(() => { try { child.kill(); } catch {} }, TEST_MS);
+    // Stopped with its whole process group (detached above), so the processes its tests started stop too.
+    const timer = setTimeout(() => killTree(child), ms);
     child.on('error', e => { clearTimeout(timer); resolve({ ok: false, summary: `Could not run the tests: ${e.message}`, tail: '' }); });
     child.on('close', code => {
       clearTimeout(timer);

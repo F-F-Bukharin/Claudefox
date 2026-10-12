@@ -175,4 +175,4 @@ function localProblem(realPath, isDir) {
   return '';
 }
 
-module.exports = { denyRules, folderProblem, readable, localProblem, secretFile, within, protectedPlaces, posix, SECRET_FILES, OWN };
+module.exports = { denyRules, folderProblem, readable, localProblem, secretFile, within, protectedPlaces, posix, escapeRule, real, SECRET_FILES, OWN };
