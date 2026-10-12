@@ -41,10 +41,11 @@ function tokenCount(n) {
 // The done line: the time, the tokens in (cached part in brackets) and out, and the API cost. A part with no data is left out.
 function doneLine(m, secs) {
   const st = m.stats || {};
-  const parts = [`${m.error ? 'Stopped' : 'Done'}${secs ? ` in ${secs < 100 ? secs.toFixed(1) : Math.round(secs)} s` : ''}`];
-  if (st.tokensIn > 0) parts.push(`${tokenCount(st.tokensIn)} in${st.tokensCached > 0 ? ` (${tokenCount(st.tokensCached)} cached)` : ''}`);
-  if (st.tokensOut > 0) parts.push(`${tokenCount(st.tokensOut)} out`);
-  if (st.costUsd > 0) parts.push(`≈ $${st.costUsd.toFixed(2)} at API prices`);
+  const took = secs ? (secs < 100 ? secs.toFixed(1) : String(Math.round(secs))) : '';
+  const parts = [took ? t(m.error ? 'stream_stoppedIn' : 'stream_doneIn', took) : t(m.error ? 'stream_stopped' : 'stream_done')];
+  if (st.tokensIn > 0) parts.push(st.tokensCached > 0 ? t('stream_tokInCached', tokenCount(st.tokensIn), tokenCount(st.tokensCached)) : t('stream_tokIn', tokenCount(st.tokensIn)));
+  if (st.tokensOut > 0) parts.push(t('stream_tokOut', tokenCount(st.tokensOut)));
+  if (st.costUsd > 0) parts.push(t('stream_cost', st.costUsd.toFixed(2)));
   return parts.join(' · ');
 }
 
@@ -68,7 +69,7 @@ function onArmyEvent(m, ev) {
     workers: (Array.isArray(ev.workers) ? ev.workers : []).slice(0, 5).map(armyWorker) };
   const today = Number(ev.today) || 0;
   if (ev.started && today > ARMY_RECOMMENDED) {
-    m.notices = (m.notices || []).concat([{ text: `Army run ${today} today: past the recommended ${ARMY_RECOMMENDED}, so this uses a lot of your plan.`, action: null }]).slice(-5);
+    m.notices = (m.notices || []).concat([{ text: t('stream_armyPast', today, ARMY_RECOMMENDED), action: null }]).slice(-5);
   }
 }
 
@@ -78,7 +79,7 @@ function onChatDone(msg) {
   histNoteDone(msg);
   const m = chat.find(x => x.id === msg.id);
   if (!m) {   // a waiting message that never started (Stop, a full queue): it stays, with the reason
-    own.queued = false; own.error = 'Not sent. ' + (msg.error || 'Something went wrong.'); bump(own);
+    own.queued = false; own.error = t('stream_notSent', msg.error || t('stream_wentWrong')); bump(own);
     saveChat(); renderChat(); return;
   }
   m.pending = false;
@@ -86,10 +87,10 @@ function onChatDone(msg) {
   bump(m);
   for (const st of m.steps) if (st.state === 'run') st.state = msg.ok ? 'ok' : 'bad';
   if (!msg.ok) {
-    m.error = msg.error || 'Something went wrong.';
+    m.error = msg.error || t('stream_wentWrong');
     m.limit = !!msg.limit;
   } else if (!m.text.trim()) {
-    m.text = '(No reply text.)';
+    m.text = t('stream_noReplyText');
   }
   saveChat();
   renderChat();
@@ -103,10 +104,10 @@ function onChatRuns(ids, queued) {
   for (const m of chat) {   // waiting messages the background no longer has: started while the panel was closed, or gone
     if (!m.queued || liveQueued.includes(m.cid)) continue;
     m.queued = false; bump(m); changed = true;
-    if (liveRuns.has(m.cid)) startedAnswer(m); else m.error = 'This message was not answered.';
+    if (liveRuns.has(m.cid)) startedAnswer(m); else m.error = t('stream_notAnswered');
   }
   for (const m of chat) {
-    if (m.pending && !liveRuns.has(m.id)) { m.pending = false; m.error = m.error || 'This answer was interrupted.'; bump(m); changed = true; }
+    if (m.pending && !liveRuns.has(m.id)) { m.pending = false; m.error = m.error || t('stream_interrupted'); bump(m); changed = true; }
   }
   if (changed) { saveChat(); renderChat(); }
 }
@@ -140,14 +141,14 @@ function unqueue(id) {
   saveChat(); renderChat();
 }
 // Claude answers now (this window's answer, or any other window's): sending only queues.
-const BUSY_HINT = 'Claude is answering · stops after 1 hour';
+const BUSY_HINT = t('stream_busyHint');
 let lastBusy = false;
 function isBusy() { return !!busyMsg() || !!(liveRuns && liveRuns.size); }
 function syncBusy() {
   const b = isBusy();
   if (b === lastBusy) return;
   lastBusy = b;
-  $('composerHint').textContent = state.agent === 'stopped' ? 'Stopped. Press Start to let Claude act again.' : !state.signedIn ? 'Not signed in. Open the Profile page to sign in.' : b ? BUSY_HINT : '';
+  $('composerHint').textContent = state.agent === 'stopped' ? t('stream_hintStopped') : !state.signedIn ? t('stream_hintSignedOut') : b ? BUSY_HINT : '';
 }
 
 function addMsg(m) {
@@ -175,25 +176,49 @@ function scheduleRender() {
   requestAnimationFrame(() => { renderQueued = false; renderChat(); saveChat(); });
 }
 
-const WHO = { user: 'You', assistant: 'Claude', system: 'Claude in Zen', error: 'Claude in Zen' };
+const WHO = { user: t('stream_you'), assistant: 'Claude', system: 'Claude in Zen', error: 'Claude in Zen' };
 const STEP_MARK = { run: '…', ok: '✓', bad: '✕' };
 const VERB = {
-  get_page_text: 'Reading the page', analyze_page: 'Analyzing the page', get_selection: 'Reading your selection',
-  read_page: 'Looking over the page', find: 'Finding', click: 'Clicking', hover: 'Pointing at', fill: 'Filling in',
-  type_text: 'Typing', press_key: 'Pressing a key', scroll: 'Scrolling', wait_for: 'Waiting for the page',
-  media: 'Controlling the player', screenshot: 'Looking at the page', navigate: 'Opening a page', tab_open: 'Opening a tab',
-  tab_activate: 'Switching tabs', tab_close: 'Closing a tab', tabs_list: 'Checking your tabs', create_file: 'Writing a file',
-  WebSearch: 'Searching the web', WebFetch: 'Reading a web page', Read: 'Reading a file', Glob: 'Looking for files',
-  Grep: 'Searching files', Edit: 'Editing a file', Write: 'Saving a file', read_document: 'Reading a document',
-  network_log: 'Reading the network log', console_log: 'Reading the console', Skill: 'Using a skill',
-  army_start: 'Sending the army', army_wait: 'Waiting for the army',
+  get_page_text: t('stream_verbGetPageText'),
+  analyze_page: t('stream_verbAnalyzePage'),
+  get_selection: t('stream_verbGetSelection'),
+  read_page: t('stream_verbReadPage'),
+  find: t('stream_verbFind'),
+  click: t('stream_verbClick'),
+  hover: t('stream_verbHover'),
+  fill: t('stream_verbFill'),
+  type_text: t('stream_verbTypeText'),
+  press_key: t('stream_verbPressKey'),
+  scroll: t('stream_verbScroll'),
+  wait_for: t('stream_verbWaitFor'),
+  media: t('stream_verbMedia'),
+  screenshot: t('stream_verbScreenshot'),
+  navigate: t('stream_verbNavigate'),
+  tab_open: t('stream_verbTabOpen'),
+  tab_activate: t('stream_verbTabActivate'),
+  tab_close: t('stream_verbTabClose'),
+  tabs_list: t('stream_verbTabsList'),
+  create_file: t('stream_verbCreateFile'),
+  WebSearch: t('stream_verbWebSearch'),
+  WebFetch: t('stream_verbWebFetch'),
+  Read: t('stream_verbRead'),
+  Glob: t('stream_verbGlob'),
+  Grep: t('stream_verbGrep'),
+  Edit: t('stream_verbEdit'),
+  Write: t('stream_verbWrite'),
+  read_document: t('stream_verbReadDocument'),
+  network_log: t('stream_verbNetworkLog'),
+  console_log: t('stream_verbConsoleLog'),
+  Skill: t('stream_verbSkill'),
+  army_start: t('stream_verbArmyStart'),
+  army_wait: t('stream_verbArmyWait'),
 };
 
 // What the current step is doing, in words: "Searching the web: niche tamagotchi repair".
 function stepLabel(st) {
   const verb = (!st.server && VERB[st.name])
     || (st.server ? `${st.server}: ${String(st.name).replace(/^[a-z0-9]+_(?=[a-z])/i, m => (st.server.toLowerCase().replace(/[^a-z0-9]/g, '').startsWith(m.slice(0, -1).toLowerCase()) ? '' : m)).replace(/_/g, ' ')}`
-      : `Using ${st.name}`);
+      : t('stream_usingTool', st.name));
   let inp = {};
   try { inp = JSON.parse(st.input || '{}'); } catch {}
   let what = inp.query || inp.name || inp.text || inp.key || inp.skill || inp.video_id || inp.videoId || '';
@@ -221,12 +246,12 @@ function progressLabel(m) {
   const last = run || m.steps[m.steps.length - 1];
   if (m.plan && m.plan.steps.length) {
     const total = m.plan.steps.length, at = Math.min(m.plan.done + 1, total);
-    return `Step ${at} of ${total} · ${m.plan.note || m.plan.steps[at - 1] || (last ? stepLabel(last) : 'Working')}`;
+    return t('stream_stepOf', at, total, m.plan.note || m.plan.steps[at - 1] || (last ? stepLabel(last) : t('stream_working')));
   }
   if (run) return stepLabel(run);
-  if (m.text && !run) return 'Writing';
+  if (m.text && !run) return t('stream_writing');
   if (last) return stepLabel(last);
-  return m.status === 'thinking' ? 'Thinking' : 'Starting';
+  return m.status === 'thinking' ? t('stream_thinking') : t('stream_starting');
 }
 
 const expandedSteps = new Set();   // finished answers whose action list is open
@@ -266,17 +291,17 @@ function progressBlock(m) {
   text.textContent = doneLine(m, secs);
   box.append(mark, text);
   if (n) {
-    const t = document.createElement('button'); t.className = 'link dsteps';
+    const tog = document.createElement('button'); tog.className = 'link dsteps';
     const open = expandedSteps.has(m.id);
-    t.textContent = `${n} action${n === 1 ? '' : 's'} ${open ? '▴' : '▾'}`;
-    t.addEventListener('click', () => { if (open) expandedSteps.delete(m.id); else expandedSteps.add(m.id); renderChat(); });
-    box.appendChild(t);
+    tog.textContent = `${t(n === 1 ? 'stream_actionOne' : 'stream_actionMany', n)} ${open ? '▴' : '▾'}`;
+    tog.addEventListener('click', () => { if (open) expandedSteps.delete(m.id); else expandedSteps.add(m.id); renderChat(); });
+    box.appendChild(tog);
     if (open) {
       const ul = document.createElement('ol'); ul.className = 'actlist';
       for (const st of m.steps) {
         const li = document.createElement('li'); li.className = st.state;
         li.textContent = `${STEP_MARK[st.state] || ''} ${stepLabel(st)}`;
-        li.title = [st.input && `Input: ${st.input}`, st.result && `Result: ${st.result}`].filter(Boolean).join('\n');
+        li.title = [st.input && t('stream_input', st.input), st.result && t('stream_result', st.result)].filter(Boolean).join('\n');
         ul.appendChild(li);
       }
       box.appendChild(ul);
@@ -297,13 +322,13 @@ function armyRow(w) {
   li.appendChild(el('span', 'aid', w.id.toUpperCase()));
   if (w.host) li.appendChild(el('span', 'ahost', w.host));
   const running = w.state === 'working' || w.state === 'starting';
-  const what = w.state === 'working' ? w.action : w.state === 'starting' ? 'Starting' : w.state === 'failed' ? w.error || 'Failed'
-    : w.state === 'stopped' ? 'Stopped' : `${w.steps} step${w.steps === 1 ? '' : 's'}`;
+  const what = w.state === 'working' ? w.action : w.state === 'starting' ? t('stream_starting') : w.state === 'failed' ? w.error || t('stream_failed')
+    : w.state === 'stopped' ? t('stream_workerStopped') : t(w.steps === 1 ? 'stream_stepOne' : 'stream_stepMany', w.steps);
   if (what) li.appendChild(el('span', 'awhat', what));
   if (w.state === 'working' && w.tab_id != null) {
-    const show = el('button', 'link ashow', 'Show');
+    const show = el('button', 'link ashow', t('stream_show'));
     show.type = 'button';
-    show.title = 'Switch to this worker\'s tab';
+    show.title = t('stream_workerTab');
     show.addEventListener('click', () => send('openTab', { id: w.tab_id }));
     li.appendChild(show);
   }
@@ -324,7 +349,7 @@ function armyRunBlock(r) {
   const box = el('div', 'arun');
   const done = r.workers.filter(w => w.state === 'done').length;
   const head = el('div', 'ahead');
-  head.appendChild(el('span', '', `Army · ${done} of ${r.workers.length} done`));
+  head.appendChild(el('span', '', t('stream_armyHead', done, r.workers.length)));
   const time = el('span', 'atime', secsText((r.until || Date.now()) - r.since));
   if (!r.finished) time.dataset.since = String(r.since);
   head.appendChild(time);
@@ -340,16 +365,16 @@ function armyBlock(m) {
   if (m.pending) { for (const r of runs) box.appendChild(armyRunBlock(r)); return box; }
   const all = runs.flatMap(r => r.workers);
   const count = st => all.filter(w => w.state === st).length;
-  const parts = [`${all.length} worker${all.length === 1 ? '' : 's'}`];
-  for (const [st, word] of [['done', 'done'], ['failed', 'failed'], ['stopped', 'stopped']]) if (count(st)) parts.push(`${count(st)} ${word}`);
+  const parts = [t(all.length === 1 ? 'stream_workerOne' : 'stream_workerMany', all.length)];
+  for (const [st, key] of [['done', 'stream_countDone'], ['failed', 'stream_countFailed'], ['stopped', 'stream_countStopped']]) if (count(st)) parts.push(t(key, count(st)));
   const line = el('div', 'asum');
-  line.appendChild(el('span', '', `Army: ${parts.join(' · ')}`));
+  line.appendChild(el('span', '', t('stream_armySummary', parts.join(' · '))));
   const open = expandedArmy.has(m.id);
-  const t = el('button', 'link dsteps', open ? 'Hide ▴' : 'Show ▾');
-  t.type = 'button';
-  t.setAttribute('aria-expanded', String(open));
-  t.addEventListener('click', () => { if (open) expandedArmy.delete(m.id); else expandedArmy.add(m.id); renderChat(); });
-  line.appendChild(t);
+  const tog = el('button', 'link dsteps', open ? t('stream_hide') + ' ▴' : t('stream_show') + ' ▾');
+  tog.type = 'button';
+  tog.setAttribute('aria-expanded', String(open));
+  tog.addEventListener('click', () => { if (open) expandedArmy.delete(m.id); else expandedArmy.add(m.id); renderChat(); });
+  line.appendChild(tog);
   box.appendChild(line);
   if (open) for (const r of runs) box.appendChild(armyRunBlock(r));
   return box;
@@ -365,9 +390,9 @@ function fileCard(f) {
   const meta = document.createElement('div'); meta.className = 'fmeta';
   meta.textContent = [f.title, f.size >= 1024 ? `${Math.round(f.size / 1024)} KB` : `${f.size} bytes`].filter(Boolean).join(' · ');
   info.append(nm, meta);
-  const open = document.createElement('button'); open.className = 'ghost fbtn'; open.textContent = 'Open';
+  const open = document.createElement('button'); open.className = 'ghost fbtn'; open.textContent = t('stream_open');
   open.addEventListener('click', () => send('openFile', { id: f.id }));
-  const dl = document.createElement('button'); dl.className = 'primary fbtn'; dl.textContent = 'Download';
+  const dl = document.createElement('button'); dl.className = 'primary fbtn'; dl.textContent = t('stream_download');
   dl.addEventListener('click', () => send('downloadFile', { id: f.id }));
   card.append(ic, info, open, dl);
   return card;
@@ -381,7 +406,7 @@ setInterval(() => {
     el.querySelector('.pfill').style.width = Math.round(progressOf(m) * 100) + '%';
     el.querySelector('.plabel').textContent = progressLabel(m);
   }
-  for (const t of document.querySelectorAll('.atime[data-since]')) t.textContent = secsText(Date.now() - Number(t.dataset.since));
+  for (const at of document.querySelectorAll('.atime[data-since]')) at.textContent = secsText(Date.now() - Number(at.dataset.since));
 }, 1000);
 
 // Light formatting for replies: **bold**, `code`, "- " bullets. Built as DOM nodes, never HTML.
@@ -402,9 +427,9 @@ function fillRich(el, text) {
 }
 
 async function copyText(text, btn) {
-  try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; }
-  catch { btn.textContent = 'Copy failed'; }
-  setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  try { await navigator.clipboard.writeText(text); btn.textContent = t('stream_copied'); }
+  catch { btn.textContent = t('stream_copyFailed'); }
+  setTimeout(() => { btn.textContent = t('stream_copy'); }, 1500);
 }
 
 // Each message keeps its own node and is rebuilt only when its own content changes. A streamed token changes the reply
@@ -438,7 +463,7 @@ function buildMsg(m) {
     const box = el('div', 'notice');
     box.appendChild(el('span', '', n.text));
     if (n.action && n.action.type === 'tool_signin' && n.action.name) {
-      const b = el('button', 'primary', n.action.label || 'Sign in');
+      const b = el('button', 'primary', n.action.label || t('stream_signIn'));
       b.addEventListener('click', () => send('toolSignIn', { name: String(n.action.name) }));
       box.appendChild(b);
     }
@@ -466,15 +491,15 @@ function buildMsg(m) {
       if (m.meta && m.meta.model) {
         const tag = document.createElement('span');
         tag.className = 'ran' + (m.meta.effort === 'max' && /haiku/.test(m.meta.model) ? ' plus' : '');
-        tag.textContent = `${modelName(m.meta.model)} · ${m.meta.effort} effort`;
-        tag.title = `Ran on ${m.meta.model}, ${m.meta.effort} effort`;
+        tag.textContent = t('stream_ranTag', modelName(m.meta.model), effortWord(m.meta.effort));
+        tag.title = t('stream_ranTitle', m.meta.model, effortWord(m.meta.effort));
         foot.appendChild(tag);
       }
       div.appendChild(foot);
       const cp = document.createElement('button');
       cp.className = 'link copy';
-      cp.textContent = 'Copy';
-      cp.title = 'Copy this reply';
+      cp.textContent = t('stream_copy');
+      cp.title = t('stream_copyReply');
       cp.addEventListener('click', () => copyText(m.text, cp));
       foot.appendChild(cp);
     }
@@ -485,9 +510,9 @@ function buildMsg(m) {
     div.appendChild(files);
   }
   if (m.queued) {
-    const row = el('div', 'qrow', 'Waiting for Claude to finish');
+    const row = el('div', 'qrow', t('stream_queueWait'));
     const x = el('button', 'link qx', '×');
-    x.type = 'button'; x.title = 'Remove from the queue'; x.setAttribute('aria-label', 'Remove from the queue');
+    x.type = 'button'; x.title = t('stream_queueRemove'); x.setAttribute('aria-label', t('stream_queueRemove'));
     x.addEventListener('click', () => unqueue(m.cid));
     row.appendChild(x);
     div.appendChild(row);
@@ -496,7 +521,7 @@ function buildMsg(m) {
     const row = document.createElement('div');
     row.className = 'working';
     const dots = document.createElement('span'); dots.className = 'dots'; dots.textContent = '';
-    const cancel = document.createElement('button'); cancel.className = 'link'; cancel.textContent = 'Cancel';
+    const cancel = document.createElement('button'); cancel.className = 'link'; cancel.textContent = t('stream_cancel');
     cancel.addEventListener('click', () => send('chatCancel', { id: m.id }));
     row.append(dots, cancel);
     div.appendChild(row);
@@ -510,10 +535,10 @@ function buildMsg(m) {
       const hint = document.createElement('div');
       hint.className = 'limit';
       const at = limitResetAt(m.error);
-      hint.textContent = at ? `Your limit resets at ${at}.` : m.error;
+      hint.textContent = at ? t('stream_limitResets', at) : m.error;
       const sw = document.createElement('button');
       sw.className = 'primary limitbtn';
-      sw.textContent = 'Log out and add another account';
+      sw.textContent = t('stream_switchAccount');
       sw.disabled = !!state.switching;
       sw.addEventListener('click', () => send('switchAccount'));
       div.append(hint, sw);
@@ -523,12 +548,12 @@ function buildMsg(m) {
   if (Array.isArray(m.tabs)) {
     const ul = document.createElement('ul');
     ul.className = 'tablist';
-    for (const t of m.tabs) {
+    for (const tab of m.tabs) {
       const li = document.createElement('li');
-      if (t.active) li.className = 'active';
-      const id = document.createElement('span'); id.className = 'tid'; id.textContent = '#' + t.id;
-      const tt = document.createElement('span'); tt.className = 'tt'; tt.textContent = t.title || 'Untitled';
-      const tu = document.createElement('span'); tu.className = 'tu'; tu.textContent = t.url || '';
+      if (tab.active) li.className = 'active';
+      const id = document.createElement('span'); id.className = 'tid'; id.textContent = '#' + tab.id;
+      const tt = document.createElement('span'); tt.className = 'tt'; tt.textContent = tab.title || t('stream_untitled');
+      const tu = document.createElement('span'); tu.className = 'tu'; tu.textContent = tab.url || '';
       li.append(id, tt, tu);
       ul.appendChild(li);
     }
@@ -545,12 +570,12 @@ function renderChat() {
   for (const m of chat) { const h = msgNodes.get(m); if (h) live.add(h.el); }
   for (const node of box.querySelectorAll('.msg')) if (!live.has(node)) node.remove();
   let prev = $('emptyState');
-  const t = Date.now();
+  const now = Date.now();
   let wait = 0;
   for (const m of chat) {
     const view = msgView(m);
     let hit = msgNodes.get(m);
-    if (hit && hit.at && hit.rev !== m.rev && hit.view === view && m.pending && t - hit.at < STREAM_DRAW_MS) wait = Math.max(wait, STREAM_DRAW_MS - (t - hit.at));   // too soon: keep what is drawn, draw again later
+    if (hit && hit.at && hit.rev !== m.rev && hit.view === view && m.pending && now - hit.at < STREAM_DRAW_MS) wait = Math.max(wait, STREAM_DRAW_MS - (now - hit.at));   // too soon: keep what is drawn, draw again later
     else if (!hit || hit.rev !== m.rev || hit.view !== view) {
       if (hit) hit.el.remove();
       const node = buildMsg(m);
@@ -559,7 +584,7 @@ function renderChat() {
         node.classList.add('enter');
         node.addEventListener('animationend', e => { if (e.target === node) node.classList.remove('enter'); });
       }
-      hit = { rev: m.rev, view, at: m.text ? t : 0, el: node };   // at: when the reply's Markdown was last parsed; the first words draw at once
+      hit = { rev: m.rev, view, at: m.text ? now : 0, el: node };   // at: when the reply's Markdown was last parsed; the first words draw at once
       msgNodes.set(m, hit);
     }
     if (prev.nextElementSibling !== hit.el) prev.after(hit.el);
