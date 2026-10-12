@@ -12,7 +12,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-smoke-'));
 const pipe = process.platform === 'win32'
   ? `\\\\.\\pipe\\claude-in-zen-smoke-${process.pid}`
   : path.join(tmp, 'smoke.sock');
-const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe };
+const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_TEST: '1' };
 const { onLines, sendLine } = require('../lib/lines');
 
 const results = [];

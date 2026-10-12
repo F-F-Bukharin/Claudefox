@@ -7,8 +7,8 @@
 const WORKER_TOOLS = ['navigate', 'get_page_text', 'read_page', 'find', 'analyze_page', 'scroll', 'wait_for', 'click', 'hover',
   'fill', 'type_text', 'press_key', 'screenshot', 'tab_open', 'tab_close'];
 
-const num = (k, d) => (Number(process.env[k]) > 0 ? Number(process.env[k]) : d);
-// Each limit can be lowered for tests through its environment variable.
+const num = (k, d) => (Number(process.env[k]) > 0 ? Math.min(d, Number(process.env[k])) : d);
+// Each limit can be lowered for tests through its environment variable, and never raised above its default.
 const LIMITS = {
   calls: num('CLAUDE_IN_ZEN_ARMY_CALLS', 40),        // tool calls per worker
   navs: num('CLAUDE_IN_ZEN_ARMY_NAVS', 6),           // page loads per worker (navigate and tab_open)

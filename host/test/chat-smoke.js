@@ -110,7 +110,7 @@ const confirmLog = path.join(tmp, 'confirm.log'), confirmAnswer = path.join(tmp,
 const fakeConfirm = path.join(tmp, 'confirm');
 fs.writeFileSync(fakeConfirm, `#!${process.execPath}\nconst fs = require('fs');\nfs.appendFileSync(${JSON.stringify(confirmLog)}, JSON.stringify({ title: process.env.CIZ_Q_TITLE, text: process.env.CIZ_Q_TEXT, yes: process.env.CIZ_Q_YES, no: process.env.CIZ_Q_NO }) + '\\n');\nlet a = 'yes'; try { a = fs.readFileSync(${JSON.stringify(confirmAnswer)}, 'utf8').trim(); } catch {}\nprocess.stdout.write(a);\n`, { mode: 0o755 });
 const questions = () => { try { return fs.readFileSync(confirmLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
-const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_CLAUDE: fake, ANTHROPIC_API_KEY: 'sk-should-not-leak', CLAUDE_IN_ZEN_PICK: 'C:\\Users\\Test\\Notes', CLAUDE_IN_ZEN_CONFIRM: fakeConfirm };
+const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fake, ANTHROPIC_API_KEY: 'sk-should-not-leak', CLAUDE_IN_ZEN_PICK: 'C:\\Users\\Test\\Notes', CLAUDE_IN_ZEN_CONFIRM: fakeConfirm };
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));

@@ -128,7 +128,7 @@ const alive = pid => {
 function startHelper(name, extraEnv) {
   const base = path.join(tmp, name);
   fs.mkdirSync(base);
-  const env = { ...process.env, LOCALAPPDATA: base, CLAUDE_IN_ZEN_PIPE: path.join(base, 'h.sock'), CLAUDE_IN_ZEN_CLAUDE: fake, ...extraEnv };
+  const env = { ...process.env, LOCALAPPDATA: base, CLAUDE_IN_ZEN_PIPE: path.join(base, 'h.sock'), CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fake, ...extraEnv };
   const proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
   const h = { proc, base, inbox: [], calls: [], waiters: [], tabSeq: 100, held: [] };
   let buf = Buffer.alloc(0);

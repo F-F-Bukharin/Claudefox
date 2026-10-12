@@ -97,9 +97,10 @@ function connect() {
   return l.ready;
 }
 
-// Script mode, for the live safety test (test/injection-live.js) only: answers come from a JSON script instead of Zen,
+// Script mode, for the live safety test (test/injection-live.js) only, read only with CLAUDE_IN_ZEN_TEST=1: answers come from a JSON script instead of Zen,
 // and every call is logged. { log: file, results: { tool: result | [{ match: { arg: value }, result? , error? }] } }
-const SCRIPT = process.env.CLAUDE_IN_ZEN_SCRIPT ? JSON.parse(fs.readFileSync(process.env.CLAUDE_IN_ZEN_SCRIPT, 'utf8')) : null;
+const SCRIPT_FILE = P.testHook('CLAUDE_IN_ZEN_SCRIPT');
+const SCRIPT = SCRIPT_FILE ? JSON.parse(fs.readFileSync(SCRIPT_FILE, 'utf8')) : null;
 
 function scripted(tool, args) {
   try { fs.appendFileSync(SCRIPT.log, JSON.stringify({ tool, args }) + '\n'); } catch {}

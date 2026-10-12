@@ -8,7 +8,7 @@ const path = require('path');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-mcp-'));
 const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\claude-in-zen-mcp-${process.pid}` : path.join(tmp, 'mcp.sock');
-const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_CLIENT: 'mcp-smoke' };
+const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLIENT: 'mcp-smoke' };
 const hostDir = path.join(__dirname, '..');
 
 const results = [];

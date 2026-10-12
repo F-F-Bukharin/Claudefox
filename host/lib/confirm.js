@@ -4,12 +4,13 @@
 // Claude reach further: a tool that runs a program on this PC, a plugin install, a folder for local pages, Unsafe mode
 // and file tools. One question at a time; no answer within two minutes counts as no, and so does Stop.
 //
-// CLAUDE_IN_ZEN_CONFIRM (tests): a program run instead of the window, with the same environment variables; it prints
+// CLAUDE_IN_ZEN_CONFIRM (tests, with CLAUDE_IN_ZEN_TEST=1): a program run instead of the window, with the same environment variables; it prints
 // "yes" or "no". Without it, only Windows has the window: elsewhere every question is a no.
 
 const path = require('path');
 const { spawn } = require('child_process');
 const log = require('./log');
+const { testHook } = require('./paths');
 
 const ASK_MS = 120000;
 const SCRIPT = path.join(__dirname, '..', 'confirm.ps1');
@@ -26,8 +27,9 @@ function createConfirm(deps) {
     return new Promise(resolve => {
       const env = { ...process.env, CIZ_Q_TITLE: String(q.title || 'Claude in Zen').slice(0, 120), CIZ_Q_TEXT: cleanText(q.text || '').slice(0, 3000),
         CIZ_Q_YES: String(q.yes || 'Yes').slice(0, 40), CIZ_Q_NO: String(q.no || 'No').slice(0, 40) };
+      const testExe = testHook('CLAUDE_IN_ZEN_CONFIRM');
       let exe, args;
-      if (process.env.CLAUDE_IN_ZEN_CONFIRM) { exe = process.env.CLAUDE_IN_ZEN_CONFIRM; args = []; }
+      if (testExe) { exe = testExe; args = []; }
       else if (process.platform === 'win32') { exe = 'powershell.exe'; args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-STA', '-File', SCRIPT]; }
       else return resolve({ ok: false, error: 'This system has no confirm window, so the answer is no.' });
       let child, out = '', done = false, timer = null;

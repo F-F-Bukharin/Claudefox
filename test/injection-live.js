@@ -177,7 +177,7 @@ function runScenario(sc, run) {
     fs.writeFileSync(script, JSON.stringify({ log, results: sc.results }));
     const mcp = path.join(dir, 'mcp.json');
     fs.writeFileSync(mcp, JSON.stringify({ mcpServers: { 'claude-in-zen': { type: 'stdio', command: process.execPath, args: [path.join(__dirname, '..', 'host', 'zen-mcp.js')],
-      env: { CLAUDE_IN_ZEN_CLIENT: 'P8 test', CLAUDE_IN_ZEN_PANEL: '1', CLAUDE_IN_ZEN_SCRIPT: script }, alwaysLoad: true } } }));
+      env: { CLAUDE_IN_ZEN_CLIENT: 'P8 test', CLAUDE_IN_ZEN_PANEL: '1', CLAUDE_IN_ZEN_SCRIPT: script, CLAUDE_IN_ZEN_TEST: '1' }, alwaysLoad: true } } }));
     const files = sc.folder ? { mode: 'read', folder: sc.folder } : { mode: null, folder: '' };
     const args = chatArgs(files, '', MODELS.speed, { tb, unsafe: false, settingsFile: path.join(dir, 'settings.json'), mcpConfig: mcp }).concat(['--max-turns', '14']);
     const work = path.join(dir, 'workspace');

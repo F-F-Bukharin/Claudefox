@@ -54,7 +54,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const base = path.join(tmp, 'base');
 fs.mkdirSync(base);
 const env = { ...process.env, HOME: home, LOCALAPPDATA: base, APPDATA: path.join(home, 'AppData', 'Roaming'), CLAUDE_IN_ZEN_PIPE: path.join(base, 'h.sock'),
-  CLAUDE_IN_ZEN_CLAUDE: path.join(tmp, 'no-claude'), CLAUDE_IN_ZEN_ZEN_EXE: zen, CLAUDE_IN_ZEN_CONFIRM: confirmExe, MOZ_TEST_VAR: '1' };
+  CLAUDE_IN_ZEN_CLAUDE: path.join(tmp, 'no-claude'), CLAUDE_IN_ZEN_ZEN_EXE: zen, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CONFIRM: confirmExe, MOZ_TEST_VAR: '1' };
 let proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
 
 // ---- this test plays the add-on
@@ -246,10 +246,12 @@ function client() {
     if (saved.pf86 !== undefined) process.env['ProgramFiles(x86)'] = saved.pf86;
     fs.rmSync(apps, { recursive: true, force: true });
     check('without Zen, Firefox is found where it is usually installed', ff === path.join(apps, 'Mozilla Firefox', 'firefox.exe') && zz === '', JSON.stringify({ ff, zz }));
-    const keep = process.env.CLAUDE_IN_ZEN_ZEN_EXE;
+    const keep = process.env.CLAUDE_IN_ZEN_ZEN_EXE, keepTest = process.env.CLAUDE_IN_ZEN_TEST;
     process.env.CLAUDE_IN_ZEN_ZEN_EXE = '/opt/test/firefox';
+    process.env.CLAUDE_IN_ZEN_TEST = '1';
     const fb = await lp.findBrowser();
     if (keep === undefined) delete process.env.CLAUDE_IN_ZEN_ZEN_EXE; else process.env.CLAUDE_IN_ZEN_ZEN_EXE = keep;
+    if (keepTest === undefined) delete process.env.CLAUDE_IN_ZEN_TEST; else process.env.CLAUDE_IN_ZEN_TEST = keepTest;
     check('the test override names the browser', fb === '/opt/test/firefox', fb);
   } catch (e) {
     check('no unexpected errors', false, e.stack || e.message);
