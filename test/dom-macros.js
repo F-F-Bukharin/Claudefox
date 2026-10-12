@@ -123,18 +123,18 @@ function makePanel(windowId) {
   ok('every N hours takes 1 to 24 only', macros().length === 1 && /1 to 24/.test(err()), err());
   await fill({ name: 'morning', text: 'Read the headlines', sched: 'daily', at: '08:30', sites: 'News.example, https://www.other.example/path' });
   await fill({ name: 'hourly', text: 'Check the board', sched: 'every', every: '6', sites: 'news.example' });
-  await fill({ name: 'research', text: 'Compare prices', army: 'shop a\n\nshop b\n' });
+  await fill({ name: 'shopcheck', text: 'Compare prices', army: 'shop a\n\nshop b\n' });
   const m = Object.fromEntries(macros().map(x => [x.name, x]));
   ok('sites are normalised, the schedule kept, army tasks one per line', JSON.stringify(m.morning.sites) === '["news.example","other.example"]' && m.morning.schedule.kind === 'daily' && m.morning.schedule.at === '08:30'
-    && m.hourly.schedule.hours === 6 && JSON.stringify(m.research.army) === '["shop a","shop b"]', JSON.stringify(local.macros));
-  ok('the Macros list shows them', /morning/.test($('macroList').textContent) && /research/.test($('macroList').textContent));
+    && m.hourly.schedule.hours === 6 && JSON.stringify(m.shopcheck.army) === '["shop a","shop b"]', JSON.stringify(local.macros));
+  ok('the Macros list shows them', /morning/.test($('macroList').textContent) && /shopcheck/.test($('macroList').textContent));
 
   // ---- alarms
   const al = alarms.get('macro:morning'), ah = alarms.get('macro:hourly');
   const when = al && new Date(al.when);
   ok('a daily macro gets an alarm at the next HH:MM, every day', al && al.when > Date.now() - 1000 && al.when <= Date.now() + 25 * 3600e3 && when.getHours() === 8 && when.getMinutes() === 30 && al.periodInMinutes === 1440, JSON.stringify(al));
   ok('an every-N-hours macro gets an alarm of N x 60 minutes', ah && ah.periodInMinutes === 360 && ah.delayInMinutes === 360, JSON.stringify(ah));
-  ok('a macro with no schedule has no alarm', !alarms.has('macro:research') && !alarms.has('macro:daily-news'));
+  ok('a macro with no schedule has no alarm', !alarms.has('macro:shopcheck') && !alarms.has('macro:daily-news'));
   $('macroList').querySelector('[data-name="hourly"] .macro-del').click();
   await wait(80);
   ok('removing a macro removes its alarm', !alarms.has('macro:hourly') && !macros().some(x => x.name === 'hourly'));
@@ -145,7 +145,7 @@ function makePanel(windowId) {
   let c = chatsToHelper();
   ok('/name sends the macro text', c.length === 1 && c[0].text === 'Summarize the news' && c[0].model !== 'army', JSON.stringify(c[0]));
   await helperSays({ type: 'chat_done', id: c[0].id, ok: true, sessionId: '11111111-1111-1111-1111-111111111111' });
-  await A.say('/research');
+  await A.say('/shopcheck');
   c = chatsToHelper();
   ok('a macro with army tasks sends in Quality with the army on and lists the tasks', c.length === 2 && c[1].model === 'army' && /Compare prices/.test(c[1].text) && /1\. shop a/.test(c[1].text) && /2\. shop b/.test(c[1].text), JSON.stringify(c[1]));
   await helperSays({ type: 'chat_done', id: c[1].id, ok: true });

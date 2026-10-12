@@ -10,8 +10,8 @@
 //                                lowercase, no www., no duplicates.
 //
 // cizSiteGate (one object; a message is one chat turn)
-//   begin(id, { tabUrl, windowId, text, newChat, allow }) -> string[]   starts a message. newChat clears the chat list. The message
-//        list is the site of tabUrl plus cizSitesInText(text); allow is the sites marked "allow" in storage `sites`.
+//   begin(id, { tabUrl, windowId, text, newChat, allow, extra }) -> string[]   starts a message. newChat clears the chat list. The message
+//        list is the site of tabUrl plus cizSitesInText(text) plus extra (the sites of the tabs the text mentions with @); allow is the sites marked "allow" in storage `sites`.
 //        Returns the effective list (allow + chat + message, no duplicates).
 //   end(id)            ends the message: its list, its denials and the page-read flag go. An end() for another id than the
 //                      running message is ignored. Outside a turn the message scope lives until the next begin().
@@ -189,6 +189,7 @@ const cizSiteGate = (() => {
       winId = typeof x.windowId === 'number' ? x.windowId : null;
       push(msg, cizSiteOf(x.tabUrl));
       cizSitesInText(x.text).forEach(s => push(msg, s));
+      (x.extra || []).forEach(s => push(msg, String(s).toLowerCase()));   // the sites of the tabs the text mentions with @
       return list();
     },
     end(id) {

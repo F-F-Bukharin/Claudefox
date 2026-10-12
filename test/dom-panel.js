@@ -35,7 +35,7 @@ ok('the panel scripts: panel.js first, the background link (panel-link.js) last,
  const slashKey=k=>$('input').dispatchEvent(new w.KeyboardEvent('keydown',{key:k,bubbles:true}));
  const slashNames=()=>[...$('slashMenu').querySelectorAll('button')].map(b=>b.dataset.cmd);
  slashTyped('/');
- ok('slash menu: / lists the nine commands, help first', !$('slashMenu').hidden && slashNames().length===9 && slashNames()[0]==='help', slashNames().join(','));
+ ok('slash menu: / lists the ten commands, help first', !$('slashMenu').hidden && slashNames().length===10 && slashNames()[0]==='help', slashNames().join(','));
  slashTyped('/ta');
  ok('slash menu: /ta narrows to tabs', slashNames().join(',')==='tabs', slashNames().join(','));
  slashTyped('/'); slashKey('ArrowDown'); slashKey('Enter');

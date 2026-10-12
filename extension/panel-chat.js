@@ -54,8 +54,8 @@ refreshContext();
 // ------------------------------------------------------------ chat
 
 const input = $('input');
-input.addEventListener('input', () => { autoGrow(); slashIndex = 0; renderSlash(); });
-input.addEventListener('blur', closeSlash);
+input.addEventListener('input', () => { autoGrow(); slashIndex = 0; tabIndex = 0; renderSlash(); renderTabs(); });
+input.addEventListener('blur', () => { closeSlash(); closeTabs(); });
 
 // ------------------------------------------------------------ attachments (+ button, paste, drop, tab screenshot)
 
@@ -310,17 +310,19 @@ async function submit() {
   renderAttachments();
   input.value = ''; autoGrow();
   input.focus();
+  let sendText = text, tabSites = [];
+  if (!improveOn && TAB_TOKEN_TEST.test(text)) ({ text: sendText, sites: tabSites } = await tabsToText(text));   // only a text that mentions a tab waits here
   const id = `p${Date.now().toString(36)}${chatSeq++}`;
-  const extra = improveOn ? { improve: true } : histResumeExtra();
+  const extra = Object.assign(improveOn ? { improve: true } : histResumeExtra(), tabSites.length ? { tabSites } : {});
   const waits = isBusy();   // an answer runs (here or in another window): this message waits its turn, in a pending bubble
-  addMsg(Object.assign({ role: 'user', cid: id, text: text || (improveOn ? IMPROVE_EMPTY : ''), files: files.map(a => ({ name: a.name, size: a.size })) }, waits ? { queued: true } : {}));
+  addMsg(Object.assign({ role: 'user', cid: id, text: sendText || (improveOn ? IMPROVE_EMPTY : ''), files: files.map(a => ({ name: a.name, size: a.size })) }, waits ? { queued: true } : {}));
   if (!waits) addMsg({ role: 'assistant', id, text: '', steps: [], pending: true, startedAt: Date.now() });
-  if (!files.length) { send('chat', Object.assign({ id, text }, extra)); return; }
+  if (!files.length) { send('chat', Object.assign({ id, text: sendText }, extra)); return; }
   let payload = [];
   try { payload = await Promise.all(files.map(readAttachment)); }
   catch (e) { return onChatDone({ id, ok: false, error: e.message }); }
   finally { for (const a of files) if (a.url && a.url.startsWith('blob:')) URL.revokeObjectURL(a.url); }
-  send('chat', Object.assign({ id, text, attachments: payload }, extra));
+  send('chat', Object.assign({ id, text: sendText, attachments: payload }, extra));
 }
 
 // The account card. A chat runs on the Claude Code account, and this browser is signed in to claude.ai as state.account. When the
@@ -345,6 +347,7 @@ $('accountOpen').addEventListener('click', () => { $('accountCard').hidden = tru
 const COMMANDS = [
   { cmd: 'help', text: 'What the commands do' },
   { cmd: 'tabs', text: 'List my open tabs' },
+  { cmd: 'research', text: 'Compare the tabs you mention with @' },
   { cmd: 'screenshot', act: 'snap', text: 'Screenshot of this tab' },
   { cmd: 'upload', act: 'upload', text: 'Upload files' },
   { cmd: 'caveman', act: 'caveman', text: 'Caveman mode: short replies' },
@@ -368,6 +371,11 @@ async function runSlash(text) {
     return addMsg({ role: 'error', text: `Unknown command /${cmd}. Try /help.` });
   }
   if (known.act) return doAct(known.act);
+  if (cmd === 'research') {   // "Read these tabs and compare them." plus the mentioned tabs; the army runs when Quality has it on
+    const named = await tabsToText(text.slice(1 + cmd.length).trim());
+    if (!named.sites.length) return addMsg({ role: 'error', text: 'Mention at least one tab with @' });
+    return sendMacro({ text: 'Read these tabs and compare them.' }, named.text, named.sites);
+  }
   if (cmd === 'help') return addMsg({ role: 'assistant', text: helpText() });
   if (cmd === 'clear') { histNewChat(); chat = []; resetAcctCard(); saveChat(); send('newChat'); return renderChat(); }
   const tool = { tabs: 'tabs_list', ping: 'ping' }[cmd];
@@ -378,13 +386,13 @@ async function runSlash(text) {
 }
 
 // A macro sends its text like a typed message. With army tasks it sends in Quality with the army on and lists the tasks.
-async function sendMacro(macro, more) {
+async function sendMacro(macro, more, tabSites) {
   if (state.agent === 'stopped') { addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' }); return; }
   if (!state.signedIn) { addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' }); return; }
   const tasks = macro.army || [];
   const text = macro.text + (more ? '\n\n' + more : '') + (tasks.length ? '\n\nTasks for the army:\n' + tasks.map((t, i) => `${i + 1}. ${t}`).join('\n') : '');
   const id = `p${Date.now().toString(36)}${chatSeq++}`;
-  const extra = Object.assign(histResumeExtra(), tasks.length ? { army: true } : {});
+  const extra = Object.assign(histResumeExtra(), tasks.length ? { army: true } : {}, tabSites && tabSites.length ? { tabSites } : {});
   const waits = isBusy();
   addMsg(Object.assign({ role: 'user', cid: id, text, files: [] }, waits ? { queued: true } : {}));
   if (!waits) addMsg({ role: 'assistant', id, text: '', steps: [], pending: true, startedAt: Date.now() });
@@ -430,6 +438,99 @@ function runCommand(cmd) {
   input.value = '/' + cmd;
   autoGrow();
   submit();
+}
+
+// ------------------------------------------------------------ "@" mentions a tab
+// "@" at the start of a word lists this window's web tabs (title and site), narrowed as you type. A choice goes into the text as
+// @[title](tab:id). On a send the tokens of this window's tabs become [tab id: title (site)], and the sites go with the message.
+const tabMenu = $('tabMenu');
+const TAB_AT = /(^|\s)@([^\s@]*)$/;
+const TAB_TOKEN_TEST = /@\[[^\]]*\]\(tab:\d+\)/;
+let tabShown = [], tabIndex = 0, tabAsk = 0;
+const tabTitle = (t, max) => String(t || '').replace(/[\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, max).trim();
+function tabSite(url) {
+  try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? u.hostname.replace(/^www\./, '').toLowerCase() : ''; } catch { return ''; }
+}
+async function windowTabs() {
+  await winReady;
+  let all = [];
+  try { all = await browser.tabs.query(winId == null ? { currentWindow: true } : { windowId: winId }); } catch {}
+  return all.filter(t => tabSite(t.url)).map(t => ({ id: t.id, title: t.title || '', site: tabSite(t.url) }));
+}
+async function renderTabs() {
+  const ask = ++tabAsk;
+  const m = TAB_AT.exec(input.value.slice(0, input.selectionStart == null ? input.value.length : input.selectionStart));
+  if (!m) return closeTabs();
+  const q = m[2].toLowerCase();
+  const list = (await windowTabs()).filter(t => (t.title + ' ' + t.site).toLowerCase().includes(q));
+  if (ask !== tabAsk) return;   // typed on while the tabs were read
+  if (!list.length) { tabShown = []; tabMenu.hidden = true; return; }
+  tabShown = list;
+  tabIndex = Math.min(tabIndex, list.length - 1);
+  drawTabs();
+}
+function drawTabs() {
+  const list = tabShown;
+  tabMenu.replaceChildren(...list.map((t, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', String(i === tabIndex));
+    b.dataset.tab = String(t.id);
+    const x = document.createElement('span');
+    x.className = 'mtext';
+    const a = document.createElement('span');
+    a.className = 'ttl';
+    a.textContent = tabTitle(t.title, 80) || t.site;
+    const c = document.createElement('span');
+    c.className = 'site';
+    c.textContent = t.site;
+    x.append(a, c);
+    b.append(x);
+    b.addEventListener('mousedown', e => e.preventDefault());   // the text bar keeps the focus
+    b.addEventListener('click', () => pickTab(t));
+    return b;
+  }));
+  tabMenu.hidden = false;
+}
+function closeTabs() { tabAsk++; tabShown = []; tabMenu.hidden = true; }
+function pickTab(t) {
+  const caret = input.selectionStart == null ? input.value.length : input.selectionStart;
+  const m = TAB_AT.exec(input.value.slice(0, caret));
+  closeTabs();
+  if (!m) return;
+  const start = caret - m[2].length - 1;
+  const token = `@[${tabTitle(t.title, 80) || t.site}](tab:${t.id}) `;
+  input.value = input.value.slice(0, start) + token + input.value.slice(caret);
+  input.setSelectionRange(start + token.length, start + token.length);
+  autoGrow();
+  input.focus();
+}
+// Before the "/" menu's own handler: the picker owns the arrows, Enter and Escape while it is open.
+input.addEventListener('keydown', e => {
+  if (tabMenu.hidden || !tabShown.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault(); e.stopImmediatePropagation();
+    tabIndex = (tabIndex + (e.key === 'ArrowDown' ? 1 : -1) + tabShown.length) % tabShown.length;
+    drawTabs();
+  } else if (e.key === 'Escape') {
+    e.preventDefault(); e.stopImmediatePropagation(); closeTabs();
+  } else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault(); e.stopImmediatePropagation(); pickTab(tabShown[tabIndex]);
+  }
+}, true);
+// The text with this window's tab mentions as [tab id: title (site)] and the sites they name. A mention of another window's tab stays.
+async function tabsToText(text) {
+  if (!TAB_TOKEN_TEST.test(text)) return { text, sites: [] };
+  const byId = new Map((await windowTabs()).map(t => [String(t.id), t]));
+  const sites = [];
+  const out = text.replace(/@\[[^\]]*\]\(tab:(\d+)\)/g, (all, id) => {
+    const t = byId.get(id);
+    if (!t) return all;
+    if (!sites.includes(t.site)) sites.push(t.site);
+    return `[tab ${t.id}: ${tabTitle(t.title, 100) || t.site} (${t.site})]`;
+  });
+  return { text: out, sites };
 }
 
 // ------------------------------------------------------------ improve Claude in Zen (the + menu)

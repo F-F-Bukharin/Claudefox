@@ -121,7 +121,8 @@ async function startChatNow(msg, id, text, improve, attachments, fail) {
     let blocks = {};
     try { blocks = (await browser.storage.local.get('sites')).sites || {}; } catch {}
     const allow = Object.keys(blocks).filter(k => blocks[k] === 'allow');
-    sites = cizSiteGate.begin(id, { tabUrl: tab && tab.url, windowId, text, newChat: !resume, allow });
+    const extra = (Array.isArray(msg.tabSites) ? msg.tabSites : []).slice(0, 20).map(s => cizSiteOf('http://' + s)).filter(Boolean);   // the tabs the text mentions with @
+    sites = cizSiteGate.begin(id, { tabUrl: tab && tab.url, windowId, text, newChat: !resume, allow, extra });
   }
   const sent = sendNative({ type: 'chat', id, text, model, tab, resume, files, folder: files ? s.filesFolder : '',
     unsafe: !improve && !sched && !!s.unsafe, caveman: !improve && !sched && !!s.caveman, attachments, improve,

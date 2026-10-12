@@ -500,6 +500,12 @@ textarea:focus-visible { outline: none; }
 .slash-menu .mcmd { flex: none; min-width: 88px; font: 650 12px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--ink); }
 .slash-menu .mtext { flex: 1; font-size: 12.5px; color: var(--muted); }
 .slash-menu button[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* the "@" menu: this window's tabs, a title over its site */
+.tab-menu { min-width: 280px; }
+.tab-menu button { align-items: flex-start; }
+.tab-menu .ttl { display: block; font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-menu .site { display: block; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-menu .mtext { min-width: 0; }
 @keyframes menu-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
 
 /* files attached to a sent message */
