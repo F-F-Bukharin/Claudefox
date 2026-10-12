@@ -2,7 +2,7 @@
 // outside them. Plain browser script (no modules); loaded in the background scripts before lib/pageTools.js.
 // This file is the logic only; pageTools.js, bg-router.js, bg-chat.js and army.js call it.
 //
-// Sites
+// Sites (cizSiteOf and cizSiteMatch are defined in lib/policy.js, loaded first)
 //   cizSiteOf(url)            -> lowercase host of an http(s) URL without one leading "www." and one trailing dot; IPv4, [IPv6] and
 //                                localhost as they are; '' for anything else.
 //   cizSiteMatch(list, site)  -> true when an entry equals site or site ends with "." + entry. IPs, [IPv6] and localhost: exact only.
@@ -34,29 +34,6 @@
 //        joins the open card; others queue and are re-checked when their turn comes. siteAsk goes back to null when a card ends.
 //   shown(id), answer(id, choice), cancel()   cancel refuses the open card and everything queued (Stop, helper gone).
 //   SHOWN_MS = 5000, ANSWER_MS = 120000   setTimeout/clearTimeout are looked up at call time.
-
-function cizSiteOf(url) {
-  const m = /^https?:\/\/([^\/?#\s]*)/i.exec(String(url == null ? '' : url).trim());
-  if (!m) return '';
-  let h = m[1].slice(m[1].lastIndexOf('@') + 1).toLowerCase();
-  if (h.charAt(0) === '[') {
-    const end = h.indexOf(']');
-    return end < 0 ? '' : h.slice(0, end + 1);
-  }
-  h = h.replace(/:\d*$/, '').replace(/\.$/, '').replace(/^www\./, '');
-  return /^[a-z0-9._-]+$/.test(h) ? h : '';
-}
-
-function cizSiteMatch(list, site) {
-  if (!site || !list) return false;
-  const exact = site.charAt(0) === '[' || site === 'localhost' || /^\d+(\.\d+){3}$/.test(site);
-  for (let i = 0; i < list.length; i++) {
-    const e = String(list[i] || '').toLowerCase();
-    if (!e) continue;
-    if (e === site || (!exact && site.length > e.length && site.slice(-(e.length + 1)) === '.' + e)) return true;
-  }
-  return false;
-}
 
 const CIZ_BARE_DOMAIN = /(^|[^\w@.\-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|net|org|edu|gov|io|dev|app|ai|co|me|tv|info|br|pt|uk|us|de|fr|es|it))(?![\w@-]|\.\w)/gi;
 

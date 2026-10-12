@@ -43,7 +43,7 @@ async function cizLocalGate(gate) {
 }
 
 // The site gate (lib/siteGate.js) for web tabs. Acting tools are 'act'; everything else that looks at a tab is 'read'.
-const CIZ_ACT_TOOLS = new Set(['click', 'hover', 'fill', 'fill_form', 'type_text', 'press_key', 'scroll', 'media', 'navigate']);
+const CIZ_ACT_TOOLS = new Set(['click', 'hover', 'fill', 'fill_form', 'type_text', 'press_key', 'scroll', 'media', 'navigate', 'upload_attach']);
 
 async function cizSiteOpts(args) {
   let blocks = {};
@@ -296,6 +296,111 @@ function cizFillShown(id) {
 function cizFillAnswer(id, allow) { if (cizFillCard && cizFillCard.id === id) cizFillEnd(cizFillCard, !!allow); }
 function cizFillCancel() { if (cizFillCard) cizFillEnd(cizFillCard, false); }
 
+// ---------------------------------------------------------------- uploads (upload_file) and page dialogs
+
+// "2.4 MB", "35 KB": the size in the upload card (the same rule as sizeText in panel-chat.js).
+function cizSizeText(n) { return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`; }
+
+// The upload card: "Claude wants to upload <name> (<size>) to <site>". Every upload asks, Trusted mode too. The panel calls
+// shown(id) when the card is on screen (SHOWN_MS), then answer(id, allow) (ANSWER_MS); no shown or no answer refuses. One
+// card at a time: wait() refuses a second one while one is open. cancel() (Stop) refuses the open card. State: uploadAsk
+// { id, name, size, site } while the card is open, else null. Timers are looked up at call time and always cleared.
+const cizUploadGate = (() => {
+  const SHOWN_MS = 5000, ANSWER_MS = 120000;
+  let cur = null;   // { id, resolve, timer }
+  const end = allow => {
+    if (!cur) return;
+    const c = cur;
+    cur = null;
+    clearTimeout(c.timer);
+    cizState.set({ uploadAsk: null });
+    c.resolve(allow === true);
+  };
+  return {
+    // Resolves true (Allow) or false (Deny, a timer, Stop, or another card already open).
+    wait(ask) {
+      return new Promise(resolve => {
+        if (cur) { resolve(false); return; }
+        cur = { id: ask.id, resolve, timer: setTimeout(() => end(false), SHOWN_MS) };
+        cizState.set({ uploadAsk: { id: ask.id, name: ask.name, size: cizSizeText(ask.size), site: ask.site } });
+      });
+    },
+    shown(id) {
+      if (!cur || cur.id !== id) return;
+      clearTimeout(cur.timer);
+      cur.timer = setTimeout(() => end(false), ANSWER_MS);
+    },
+    answer(id, allow) { if (cur && cur.id === id) end(allow === true); },
+    cancel() { cizUploads.clear(); end(false); },
+  };
+})();
+
+// The upload the user allowed and the parts of its bytes that reached the add-on: id -> { tabId, key, site, count, parts[], target, name, type }.
+// An upload stays here between its card and its attach; Stop (cizUploadGate.cancel) and a refusal drop it.
+const cizUploads = new Map();
+const CIZ_UPLOAD_REFUSED = 'The user did not allow this upload.';
+const CIZ_UPLOAD_PART_MAX = 720000;   // base64 characters in one part (the helper sends 700 KB parts)
+const CIZ_UPLOAD_MAX_PARTS = 64;
+
+// The line a click, key press or typing result gets when the page showed an alert, confirm or prompt meanwhile.
+function cizDialogNote(res) {
+  const d = res && res.dialog;
+  if (!d) return res;
+  const more = res.more_dialogs ? ` (and ${res.more_dialogs} more)` : '';
+  res.note = `The page showed a ${d.kind}: "${d.text}" (answered ${d.answered}).${more}`;
+  return res;
+}
+
+async function cizUploadAttach(args) {
+  const id = String(args.id || '').slice(0, 40);
+  if (!id) throw new Error('Missing upload id.');
+  if (args.ask) {
+    const name = String(args.name || '').replace(/[\r\n]+/g, ' ').slice(0, 200);
+    const size = Number(args.size);
+    const count = Number(args.parts);
+    if (!name || !Number.isFinite(size) || size < 0 || !Number.isInteger(count) || count < 1 || count > CIZ_UPLOAD_MAX_PARTS) throw new Error('Bad upload request.');
+    if (!args.ref && !args.selector) throw new Error('Give a ref or a CSS selector for the file field.');
+    const tab = await cizPageTab(args, 'upload_attach');
+    const site = cizSiteOf(tab.url);
+    const where = site || (/^file:/i.test(tab.url || '') ? 'a local page' : 'this page');
+    const target = args.ref ? { ref: String(args.ref) } : { selector: String(args.selector) };
+    const allowed = await cizUploadGate.wait({ id, name, size, site: where });
+    if (!allowed) throw new Error(CIZ_UPLOAD_REFUSED);
+    cizUploads.set(id, { tabId: tab.id, key: site || String(tab.url || '').split(/[?#]/)[0], site: where, count, parts: [], target, name, type: String(args.type || 'application/octet-stream').slice(0, 100) });
+    return { accepted: true };
+  }
+  const up = cizUploads.get(id);
+  if (!up) throw new Error(CIZ_UPLOAD_REFUSED);
+  try {
+    for (let i = 0; i < up.count; i++) if (typeof up.parts[i] !== 'string') throw new Error('Part ' + i + ' of the file did not arrive.');
+    // The page may have moved to another site while the user was asked or the bytes travelled: attach only where it was allowed.
+    const tab = await cizPageTab({ tab_id: up.tabId }, 'upload_attach');
+    const now = cizSiteOf(tab.url) || String(tab.url || '').split(/[?#]/)[0];
+    if (now !== up.key) throw new Error('The tab moved to another site after the upload was allowed, so the file was not attached.');
+    const base = Object.assign({ name: up.name, type: up.type }, up.target);
+    let res;
+    if (up.count === 1) res = await cizInPage(tab, 'attach', Object.assign({ data: up.parts[0] }, base));
+    else {
+      for (let i = 0; i < up.count; i++) await cizInPage(tab, 'attachpart', { id, index: i, data: up.parts[i] });
+      res = await cizInPage(tab, 'attach', Object.assign({ id }, base));
+    }
+    return Object.assign({}, res, { site: up.site });
+  } finally {
+    cizUploads.delete(id);
+  }
+}
+
+async function cizUploadPart(args) {
+  const id = String(args.id || '').slice(0, 40);
+  const up = cizUploads.get(id);
+  if (!up) throw new Error(CIZ_UPLOAD_REFUSED);
+  const index = Number(args.index);
+  if (!Number.isInteger(index) || index < 0 || index >= up.count) throw new Error('Bad part number.');
+  if (typeof args.data !== 'string' || args.data.length > CIZ_UPLOAD_PART_MAX) throw new Error('Bad part.');
+  up.parts[index] = args.data;
+  return { stored: index };
+}
+
 const CIZ_TOOLS = {
   async ping() { return { pong: true, version: browser.runtime.getManifest().version }; },
 
@@ -382,7 +487,7 @@ const CIZ_TOOLS = {
   async click(args) {
     const tab = await cizPageTab(args, 'click');
     await cizRiskCheck(tab, args);
-    return cizAfterAction(tab, () => cizInPage(tab, 'click', args));
+    return cizDialogNote(await cizAfterAction(tab, () => cizInPage(tab, 'click', args)));
   },
   async hover(args) { return cizInPage(await cizPageTab(args, 'hover'), 'hover', args); },
   async fill(args) { return cizInPage(await cizPageTab(args, 'fill'), 'fill', args); },
@@ -413,14 +518,17 @@ const CIZ_TOOLS = {
   async type_text(args) {
     const tab = await cizPageTab(args, 'type_text');
     if (args.submit) await cizRiskCheck(tab, args);
-    return args.submit ? cizAfterAction(tab, () => cizInPage(tab, 'type', args)) : cizInPage(tab, 'type', args);
+    return cizDialogNote(await (args.submit ? cizAfterAction(tab, () => cizInPage(tab, 'type', args)) : cizInPage(tab, 'type', args)));
   },
   async press_key(args) {
     const tab = await cizPageTab(args, 'press_key');
     if (String(args.key) === 'Enter') await cizRiskCheck(tab, args);
-    return String(args.key) === 'Enter' ? cizAfterAction(tab, () => cizInPage(tab, 'press', args)) : cizInPage(tab, 'press', args);
+    return cizDialogNote(await (String(args.key) === 'Enter' ? cizAfterAction(tab, () => cizInPage(tab, 'press', args)) : cizInPage(tab, 'press', args)));
   },
   async scroll(args) { return cizInPage(await cizPageTab(args, 'scroll'), 'scroll', args); },
+  // upload_file (host/lib/upload.js): the card and the bytes arrive in three steps (see cizUploadAttach).
+  async upload_attach(args) { return cizUploadAttach(args || {}); },
+  async upload_part(args) { return cizUploadPart(args || {}); },
   async media(args) { return cizInPage(await cizPageTab(args, 'media'), 'media', args); },
 
   async wait_for(args, signal) {

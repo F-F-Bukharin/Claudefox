@@ -529,6 +529,11 @@ const HELPER_TOOLS = {
   local_file_read: args => local.read(args),
   watch_video: args => watchvideo.watchVideo(args, watchDeps()),
   download_image: args => downloadImage(args),
+  // upload_file (lib/upload.js): a file from a local-page folder or the file-tools folder into a file field, after a card in the panel.
+  upload_file: args => require('./lib/upload').uploadFile(args, {
+    folders: () => [...grants.list(), ...(confirmed.files ? [confirmed.files.folder] : [])],
+    callAddon: (t, a) => callAddon(t, a, null, 150000),
+  }),
   read_document(args) {
     const run = chatTurns.current();
     const raw = String((args && args.path) || '').trim();

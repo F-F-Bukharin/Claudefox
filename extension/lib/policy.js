@@ -144,3 +144,29 @@ function cizSensitiveField(desc) {
   if (/current-password|new-password|passwd|password|senha|contrasena|clave/.test(hay)) return 'password field';
   return null;
 }
+
+// The site of a page address and the site-list match (used by the site gate, the page tools and the upload card).
+// cizSiteOf(url): lowercase host of an http(s) URL without one leading "www." and one trailing dot; IPv4, [IPv6] and localhost as they
+// are; '' for anything else. cizSiteMatch(list, site): an entry equals site or site ends with "." + entry (IPs, [IPv6], localhost: exact).
+function cizSiteOf(url) {
+  const m = /^https?:\/\/([^\/?#\s]*)/i.exec(String(url == null ? '' : url).trim());
+  if (!m) return '';
+  let h = m[1].slice(m[1].lastIndexOf('@') + 1).toLowerCase();
+  if (h.charAt(0) === '[') {
+    const end = h.indexOf(']');
+    return end < 0 ? '' : h.slice(0, end + 1);
+  }
+  h = h.replace(/:\d*$/, '').replace(/\.$/, '').replace(/^www\./, '');
+  return /^[a-z0-9._-]+$/.test(h) ? h : '';
+}
+
+function cizSiteMatch(list, site) {
+  if (!site || !list) return false;
+  const exact = site.charAt(0) === '[' || site === 'localhost' || /^\d+(\.\d+){3}$/.test(site);
+  for (let i = 0; i < list.length; i++) {
+    const e = String(list[i] || '').toLowerCase();
+    if (!e) continue;
+    if (e === site || (!exact && site.length > e.length && site.slice(-(e.length + 1)) === '.' + e)) return true;
+  }
+  return false;
+}

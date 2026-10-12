@@ -70,6 +70,11 @@
         <p id="downloadCardFolder" class="mono small"></p>
         <div class="row"><button id="downloadAllow" type="button">Allow</button> <button id="downloadDeny" type="button">Deny</button></div>
       </div>
+      <!-- Claude asks to put a file from this computer into a page: only Allow and Deny answer it, in Trusted mode too. -->
+      <div id="uploadCard" class="card" hidden>
+        <p id="uploadCardText"></p>
+        <div class="row"><button id="uploadAllow" type="button">Allow</button> <button id="uploadDeny" type="button">Deny</button></div>
+      </div>
       <!-- Claude asks before it uses a page on a site. Allow and Deny are the only answers to a risky step. -->
       <div id="siteCard" class="card" hidden>
         <p>Claude wants to use <span id="siteCardSite" class="mono"></span></p>

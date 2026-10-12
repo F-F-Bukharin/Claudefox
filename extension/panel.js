@@ -199,6 +199,16 @@ function render(s, log) {
     $('downloadCardFolder').textContent = String(s.downloadAsk.folder || '').slice(0, 500);
     if (prevId !== dlId) send('downloadShown', { id: dlId });   // once per card
   }
+  // The upload card (upload_file): one line, and its id rides on the card (dataset.id) for the answer.
+  const uc = $('uploadCard');
+  const upPrev = uc.dataset.id || '';
+  const upId = s.uploadAsk ? String(s.uploadAsk.id) : '';
+  uc.dataset.id = upId;
+  uc.hidden = !upId;
+  if (upId) {
+    $('uploadCardText').textContent = `Claude wants to upload ${String(s.uploadAsk.name || '').slice(0, 200)} (${String(s.uploadAsk.size || '').slice(0, 20)}) to ${String(s.uploadAsk.site || '').slice(0, 253)}`;
+    if (upPrev !== upId) send('uploadShown', { id: upId });   // once per card
+  }
   $('watchCard').hidden = !s.watchAsk;
   if (s.watchAsk) {
     $('watchCardSource').textContent = String(s.watchAsk.source || '').slice(0, 200);

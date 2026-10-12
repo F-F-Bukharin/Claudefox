@@ -118,6 +118,8 @@ async function handlePanel(msg, port) {
       return;
     case 'fillShown':      if (typeof cizFillShown === 'function') cizFillShown(String(msg.id || '').slice(0, 40)); return;
     case 'fillAnswer':     if (typeof cizFillAnswer === 'function') cizFillAnswer(String(msg.id || '').slice(0, 40), !!msg.allow); return;
+    case 'uploadShown':    if (typeof cizUploadGate !== 'undefined') cizUploadGate.shown(String(msg.id || '').slice(0, 40)); return;
+    case 'uploadAnswer':   if (typeof cizUploadGate !== 'undefined') cizUploadGate.answer(String(msg.id || '').slice(0, 40), msg.allow === true); return;
     case 'setTrusted':     return setTrusted(!!msg.on);
     case 'siteListSet':    return siteListSet(msg.site, msg.value);
     case 'localGrantRemove': return cizLocal.remove(String(msg.folder || '').slice(0, 1000));

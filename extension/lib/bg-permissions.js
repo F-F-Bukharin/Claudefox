@@ -11,7 +11,7 @@ async function stopAll(source) {
   // arrives while the tabs close below already finds the agent stopped and the helper gone. (set() changes the state
   // at once; only saving it waits.)
   if (typeof cizFillCancel === 'function') cizFillCancel();
-  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, downloadAsk: null, trusted: false, siteAsk: null, fillAsk: null, pending: 0 });
+  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, downloadAsk: null, trusted: false, siteAsk: null, fillAsk: null, uploadAsk: null, pending: 0 });
   for (const [id, a] of pendingActions) {
     try { a.controller.abort(new Error('Stopped')); } catch {}
     pendingActions.delete(id);
@@ -22,6 +22,7 @@ async function stopAll(source) {
   disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
   endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)
   if (typeof cizSiteGate !== 'undefined') cizSiteGate.cancel();   // an open site card counts as no
+  if (typeof cizUploadGate !== 'undefined') cizUploadGate.cancel();   // an open upload card counts as no
   failChats('Stopped.');
   cizNetReset();                 // forget recorded requests, stop watching consoles, the network log's listeners go
   await stopped;

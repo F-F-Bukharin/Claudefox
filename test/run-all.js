@@ -26,6 +26,7 @@ const TESTS = [
   'host/test/downloadgate-smoke.js', 'test/dom-download.js',
   'test/dom-macros.js', 'test/dom-tabs.js',
   'host/test/scheduled-smoke.js',
+  'test/dom-upload.js', 'host/test/upload-smoke.js',
 ];
 // A test that cannot run here (no jsdom, or a POSIX-only test on Windows) prints SKIP and exits 0: it counts as
 // skipped, never as passed.

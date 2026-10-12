@@ -231,6 +231,10 @@ $('watchDeny').addEventListener('click', () => answerWatch(false));
 function answerDownloadCard(allow) { const id = $('downloadCard').dataset.id; if (id) send('downloadAnswer', { id, allow }); }
 $('downloadAllow').addEventListener('click', () => answerDownloadCard(true));
 $('downloadDeny').addEventListener('click', () => answerDownloadCard(false));
+// The upload card: the same, by the id panel.js put on the card.
+function answerUploadCard(allow) { const id = $('uploadCard').dataset.id; if (id) send('uploadAnswer', { id, allow }); }
+$('uploadAllow').addEventListener('click', () => answerUploadCard(true));
+$('uploadDeny').addEventListener('click', () => answerUploadCard(false));
 function answerWatch(allow) { if (state.watchAsk) send('watchAnswer', { id: state.watchAsk.id, allow }); }
 $('siteMsg').addEventListener('click', () => answerSite('message'));
 $('siteChat').addEventListener('click', () => answerSite('chat'));

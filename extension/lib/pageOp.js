@@ -443,19 +443,21 @@ function cizPageOp(op, args, sensitiveField) {
     case 'analyze': return cizOpAnalyze(env, args);
     case 'selection': return cizOpSelection(env, args);
     case 'find': return cizOpFind(env, args);
-    case 'click': return cizOpClick(env, args);
+    case 'click': return cizDialogGuard(args, () => cizOpClick(env, args));
     case 'hover': return cizOpHover(env, args);
-    case 'type': return cizOpType(env, args);
+    case 'type': return cizDialogGuard(args, () => cizOpType(env, args));
     case 'media': return cizOpMedia(env, args);
     case 'viewport': return cizOpViewport(env, args);
     case 'fill': return cizOpFill(env, args);
-    case 'press': return cizOpPress(env, args);
+    case 'press': return cizDialogGuard(args, () => cizOpPress(env, args));
     case 'scroll': return cizOpScroll(env, args);
     case 'scrollto': return cizOpScrollto(env, args);
     case 'exists': return cizOpExists(env, args);
     case 'ctype': return cizOpCtype(env, args);
     case 'classify': return cizOpClassify(env, args);
     case 'formlabels': return cizOpFormLabels(env, args);
+    case 'attach': return cizOpAttach(env, args);
+    case 'attachpart': return cizOpAttachPart(env, args);
   }
   throw new Error('Unknown page operation: ' + op);
 }
@@ -465,7 +467,8 @@ function cizPageBody() {
   if (cizPageBody.text) return cizPageBody.text;
   const parts = [ cizPageEnv, cizPageOp, cizOpRead, cizOpText, cizOpAnalyze, cizOpSelection,
       cizOpFind, cizOpClick, cizOpHover, cizOpType, cizOpMedia, cizOpViewport, cizOpFill,
-      cizOpPress, cizOpScroll, cizOpScrollto, cizOpExists, cizOpCtype, cizOpClassify, cizOpFormLabels ];
+      cizOpPress, cizOpScroll, cizOpScrollto, cizOpExists, cizOpCtype, cizOpClassify, cizOpFormLabels,
+      cizOpAttach, cizOpAttachPart, cizDialogGuard ];
   return (cizPageBody.text = 'var sensitiveField = ' + cizSensitiveField.toString() + ';\n' + parts.map(f => f.toString() + '\n').join(''));
 }
 

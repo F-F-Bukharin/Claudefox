@@ -7,7 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'extension', 'lib', 'siteGate.js'), 'utf8');
+// cizSiteOf and cizSiteMatch live in policy.js (loaded before siteGate.js in the manifest), so the vm gets both.
+const src = fs.readFileSync(path.join(__dirname, '..', 'extension', 'lib', 'policy.js'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, '..', 'extension', 'lib', 'siteGate.js'), 'utf8');
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) { passed++; console.log(`PASS ${name}`); } else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

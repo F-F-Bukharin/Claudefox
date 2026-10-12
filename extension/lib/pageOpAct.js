@@ -237,3 +237,87 @@ function cizOpFormLabels(env, args) {
     return { label: labelOf(el), sensitive: sensitiveField(fieldDesc(el)) || null };
   }) };
 }
+
+// upload_file, the page side. attachpart keeps one part of the file's base64 under the upload id (the add-on sends the parts
+// one by one: a call carries at most about 700 KB); attach puts the file on a file field with a DataTransfer, the way a
+// person's pick would, and fires input and change. With an id the bytes are the stored parts, joined; without, args.data.
+function cizOpAttachPart(env, args) {
+  const { st } = env;
+  const id = String(args.id || '');
+  const index = Number(args.index);
+  if (!id || !Number.isInteger(index) || index < 0 || index >= 64 || typeof args.data !== 'string') throw new Error('Bad upload part.');
+  const held = st.uploads || (st.uploads = new Map());
+  if (!held.has(id)) held.set(id, []);
+  held.get(id)[index] = args.data;
+  return { stored: index };
+}
+
+function cizOpAttach(env, args) {
+  const { st, target, labelOf } = env;
+  const id = String(args.id || '');
+  const parts = id && st.uploads ? st.uploads.get(id) : null;
+  if (id && st.uploads) st.uploads.delete(id);
+  const el = target();
+  if (!el || el.tagName !== 'INPUT' || String(el.type).toLowerCase() !== 'file') throw new Error('That element is not a file field (an input of type file). Find the field with find or read_page.');
+  if (el.disabled) throw new Error('That file field is disabled.');
+  let b64 = id ? '' : String(args.data == null ? '' : args.data);
+  if (id) {
+    if (!parts) throw new Error('The file parts did not reach the page.');
+    for (let i = 0; i < parts.length; i++) if (typeof parts[i] !== 'string') throw new Error('The file parts did not reach the page.');
+    b64 = parts.join('');
+  }
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const name = String(args.name || 'file').slice(0, 200);
+  const dt = new DataTransfer();
+  dt.items.add(new File([bytes], name, { type: String(args.type || '') }));
+  el.files = dt.files;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return { attached: name, bytes: bytes.length, field: labelOf(el).slice(0, 80) };
+}
+
+// Page dialogs. A click, a key press or typing by Claude (and 1 s after) replaces alert, confirm and prompt in the page: an
+// alert is dismissed, a confirm answers args.accept_dialog === true, a prompt answers null (or args.dialog_text when
+// accepted, else the prompt's default). What the page showed goes in the result as dialog: { kind, text, answered }.
+// State on window.__cizDialogs: the originals are kept at the first arm, a new arm clears the restore timer, the restore
+// runs 1 s after the last arm. In Firefox the page's own window is window.wrappedJSObject and the replacements are exported to it.
+function cizDialogGuard(args, run) {
+  const NAMES = ['alert', 'confirm', 'prompt'];
+  const hook = window.wrappedJSObject || null;
+  const page = hook || window;
+  const g = window.__cizDialogs || (window.__cizDialogs = { orig: null, timer: 0, accept: false, text: null, seen: [] });
+  g.accept = !!args && args.accept_dialog === true;
+  g.text = args && args.dialog_text != null ? String(args.dialog_text) : null;
+  g.seen = [];
+  if (g.timer) { window.clearTimeout(g.timer); g.timer = 0; }
+  if (!g.orig) {
+    g.orig = {};
+    for (const n of NAMES) g.orig[n] = page[n];
+    for (const n of NAMES) {
+      const fn = function () {
+        const text = String(arguments.length ? arguments[0] : '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        g.seen.push({ kind: n, text, answered: n === 'alert' || g.accept ? 'OK' : 'Cancel' });
+        if (n === 'alert') return undefined;
+        if (n === 'confirm') return g.accept;
+        return g.accept ? (g.text != null ? g.text : (arguments.length > 1 && arguments[1] != null ? String(arguments[1]) : '')) : null;
+      };
+      if (hook && typeof exportFunction === 'function') exportFunction(fn, hook, { defineAs: n });
+      else page[n] = fn;
+    }
+  }
+  const restore = () => {
+    g.timer = 0;
+    if (!g.orig) return;
+    for (const n of NAMES) { try { page[n] = g.orig[n]; } catch (e) {} }
+    g.orig = null;
+  };
+  let res;
+  try { res = run(); } finally { g.timer = window.setTimeout(restore, 1000); }
+  if (res && typeof res === 'object' && g.seen.length) {
+    res.dialog = g.seen[0];
+    if (g.seen.length > 1) res.more_dialogs = g.seen.length - 1;
+  }
+  return res;
+}
