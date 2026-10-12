@@ -350,7 +350,7 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
   onMsg({type:'state',state:{...ready,chatModel:'quality',chatArmy:true,armyToday:6},log:[]});
   ok('army: aria-pressed and the switch follow chatArmy', $('armyBtn').getAttribute('aria-pressed')==='true' && $('armyToggle').checked===true && !$('armyCard').hidden);
   ok('army: the runs line past 5 warns', $('armyRuns').textContent==="Runs today: 6. That's past the recommended 5, so usage is high." && $('armyRuns').classList.contains('warnnote'));
-  ok('army: the model line names the army', $('modelLine').textContent==='Opus 5.5 · max effort · army of 5 Haiku');
+  ok('army: the model line names the army (high effort, the Max effort switch being off)', $('modelLine').textContent==='Opus 5.5 · high effort · army of 5 Haiku');
   $('armyToggle').checked=false; $('armyToggle').dispatchEvent(new w.Event('change'));
   ok('army: the switch sends setArmy off', sent.filter(m=>m.type==='setArmy').pop()?.value===false);
   onMsg({type:'state',state:{...ready,chatModel:'quality',chatArmy:true,armyToday:6,agent:'stopped'},log:[]});

@@ -32,6 +32,7 @@ function onFileCreated(f) {
   const m = chat.find(x => x.id === f.msg) || [...chat].reverse().find(x => x.role === 'assistant' && x.pending);
   if (!m) return;
   m.files = (m.files || []).filter(x => x.id !== f.id).concat([{ id: f.id, name: f.name, size: f.size, title: f.title || '' }]);
+  bump(m);
   saveChat();
   renderChat();
 }

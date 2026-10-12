@@ -26,6 +26,7 @@ function onChatEvent(id, ev) {
     const step = (ev.id && m.steps.find(st => st.id === String(ev.id))) || m.steps.find(st => st.state === 'run');
     if (step) { step.state = ev.error ? 'bad' : 'ok'; step.result = String(ev.text || ''); }
   }
+  bump(m);
   scheduleRender();
 }
 
@@ -76,6 +77,7 @@ function onChatDone(msg) {
   if (!m) return;
   m.pending = false;
   m.endedAt = Date.now();
+  bump(m);
   for (const st of m.steps) if (st.state === 'run') st.state = msg.ok ? 'ok' : 'bad';
   if (!msg.ok) {
     m.error = msg.error || 'Something went wrong.';
@@ -92,22 +94,27 @@ function onChatRuns(ids) {
   liveRuns = new Set(ids);
   let changed = false;
   for (const m of chat) {
-    if (m.pending && !liveRuns.has(m.id)) { m.pending = false; m.error = m.error || 'This answer was interrupted.'; changed = true; }
+    if (m.pending && !liveRuns.has(m.id)) { m.pending = false; m.error = m.error || 'This answer was interrupted.'; bump(m); changed = true; }
   }
   if (changed) { saveChat(); renderChat(); }
 }
 
 function addMsg(m) {
-  chat.push(Object.assign({ t: Date.now() }, m));
+  chat.push(Object.assign({ t: Date.now(), rev: 1 }, m));
   if (chat.length > 200) chat.splice(0, chat.length - 200);
   saveChat();
   renderChat();
 }
 
+// Every change to a message bumps its rev; renderChat redraws a message only when its rev (or what the panel adds around it) changed.
+function bump(m) { m.rev = (m.rev || 0) + 1; }
+
+// The chat is saved once changes have stopped for a moment: 300 ms normally, 1 s while an answer is streaming (so a burst of
+// tokens never writes), and when the turn ends the normal wait applies again.
 let saveTimer = null;
 function saveChat() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { try { browser.storage.session.set({ chat }); } catch {} }, 300);
+  saveTimer = setTimeout(() => { try { browser.storage.session.set({ chat }); } catch {} }, busyMsg() ? 1000 : 300);
 }
 
 let renderQueued = false;
@@ -339,12 +346,17 @@ async function copyText(text, btn) {
 // Each message keeps its own node and is rebuilt only when its own content changes. A streamed token changes the reply
 // being written and nothing else, so the rest of the chat is not redrawn: it keeps its text selection and focus, and it
 // does not replay its entrance.
-const msgNodes = new WeakMap();   // message -> { sig, el }
+const msgNodes = new WeakMap();   // message -> { rev, view, at, el }
 let chatPainted = false;          // the chat as first drawn (on open) does not animate
 
-function msgSig(m) {
-  return JSON.stringify(m) + '|' + (m.limit && state.switching ? 1 : 0) + '|' + (expandedSteps.has(m.id) ? 1 : 0) + (expandedArmy.has(m.id) ? 1 : 0);
+// What the panel adds around a message's own rev: the switch button state and the two open/closed trails.
+function msgView(m) {
+  return (m.limit && state.switching ? 1 : 0) + '|' + (expandedSteps.has(m.id) ? 1 : 0) + (expandedArmy.has(m.id) ? 1 : 0);
 }
+
+// A streaming reply is redrawn (its Markdown parsed) at most this often; the final text always renders at once.
+const STREAM_DRAW_MS = 150;
+let drawTimer = null;
 
 function buildMsg(m) {
   const div = document.createElement('div');
@@ -460,10 +472,13 @@ function renderChat() {
   for (const m of chat) { const h = msgNodes.get(m); if (h) live.add(h.el); }
   for (const node of box.querySelectorAll('.msg')) if (!live.has(node)) node.remove();
   let prev = $('emptyState');
+  const t = Date.now();
+  let wait = 0;
   for (const m of chat) {
-    const sig = msgSig(m);
+    const view = msgView(m);
     let hit = msgNodes.get(m);
-    if (!hit || hit.sig !== sig) {
+    if (hit && hit.at && hit.rev !== m.rev && hit.view === view && m.pending && t - hit.at < STREAM_DRAW_MS) wait = Math.max(wait, STREAM_DRAW_MS - (t - hit.at));   // too soon: keep what is drawn, draw again later
+    else if (!hit || hit.rev !== m.rev || hit.view !== view) {
       if (hit) hit.el.remove();
       const node = buildMsg(m);
       // Only a message's first appearance animates. Rebuilding it on a streamed token must not replay that.
@@ -471,13 +486,15 @@ function renderChat() {
         node.classList.add('enter');
         node.addEventListener('animationend', e => { if (e.target === node) node.classList.remove('enter'); });
       }
-      hit = { sig, el: node };
+      hit = { rev: m.rev, view, at: m.text ? t : 0, el: node };   // at: when the reply's Markdown was last parsed; the first words draw at once
       msgNodes.set(m, hit);
     }
     if (prev.nextElementSibling !== hit.el) prev.after(hit.el);
     prev = hit.el;
   }
   chatPainted = true;
+  clearTimeout(drawTimer);
+  if (wait) drawTimer = setTimeout(renderChat, wait);
   $('emptyState').hidden = chat.length > 0;
   $('page-chat').classList.toggle('is-empty', chat.length === 0);
   if (atBottom || busyMsg()) box.scrollTop = box.scrollHeight;

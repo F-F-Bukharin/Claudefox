@@ -27,8 +27,8 @@ $('armyBtn').addEventListener('click', e => { e.stopPropagation(); if ($('armyCa
 $('armyClose').addEventListener('click', () => closeArmy(true));
 $('armyToggle').addEventListener('change', e => send('setArmy', { value: e.target.checked }));
 // Max effort: remembered in storage.local (the background reads it when an army chat starts).
-$('armyMax').addEventListener('change', e => { try { browser.storage.local.set({ armyMax: e.target.checked }); } catch {} });
-(async () => { try { $('armyMax').checked = (await browser.storage.local.get('armyMax')).armyMax === true; } catch {} })();
+$('armyMax').addEventListener('change', e => { try { browser.storage.local.set({ armyMax: e.target.checked }); } catch {} paintModelLine(state); });
+(async () => { try { $('armyMax').checked = (await browser.storage.local.get('armyMax')).armyMax === true; paintModelLine(state); } catch {} })();
 document.addEventListener('click', e => { if (!$('armyCard').hidden && !e.target.closest('#armyCard, #armyBtn')) closeArmy(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('armyCard').hidden) { e.preventDefault(); closeArmy(true); } });
 function armyRunsText(n, tokens) {
@@ -433,6 +433,7 @@ function setProposalState(id, st) {
   const m = chat.find(x => x.proposal && x.proposal.id === id);
   if (!m) return;
   m.proposalState = st;
+  bump(m);
   saveChat();
   renderChat();
 }

@@ -235,8 +235,7 @@ function render(s, log) {
   $('armyRuns').textContent = armyRunsText(runs, Number(s.armyTokensToday) || 0);
   $('armyRuns').classList.toggle('warnnote', runs > ARMY_RECOMMENDED);
   // the line under the outputs: what the next message runs on
-  $('modelLine').textContent = (army ? 'Opus 5.5 · max effort · army of 5 Haiku' : quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort')
-    + (s.caveman && s.agent !== 'stopped' && s.signedIn ? ' · caveman' : '');
+  paintModelLine(s);
 
   // notice under the composer: why nothing will run right now
   $('composerHint').textContent =
@@ -258,6 +257,15 @@ function render(s, log) {
 }
 
 // First-run guide: the real setup state, in order, with the next action for each open step.
+// The line under the outputs: what the next message runs on. The army lead runs at high effort, and at max when the Max effort switch is on.
+function paintModelLine(s) {
+  const quality = s.chatModel === 'quality';
+  const plus = !quality && !!s.chatPlus;
+  const armyEffort = $('armyMax').checked ? 'max' : 'high';
+  $('modelLine').textContent = (quality && s.chatArmy ? `Opus 5.5 · ${armyEffort} effort · army of 5 Haiku` : quality ? 'Opus 5.5 · high effort' : plus ? 'Haiku 5.5 · max effort' : 'Haiku 5.5 · high effort')
+    + (s.caveman && s.agent !== 'stopped' && s.signedIn ? ' · caveman' : '');
+}
+
 function renderSetup(s) {
   const c = s.claude || {};
   const steps = [
