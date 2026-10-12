@@ -128,6 +128,19 @@ const TOOLS = [
     }, ['value']),
   },
   {
+    name: 'fill_form',
+    title: 'Fill form',
+    description: 'Fill several form fields at once. The user approves the list (label and value) in a card first. Never submits; never fills passwords, two-step codes or payment fields.',
+    timeoutMs: 150000,
+    inputSchema: obj({
+      ...TAB,
+      fields: {
+        type: 'array', maxItems: 30, description: 'The fields to fill, in order: each a ref or a CSS selector, and the value.',
+        items: obj({ ...REF, ...SELECTOR, value: { type: 'string', description: 'Text to enter, or the option to choose in a select.' } }, ['value']),
+      },
+    }, ['fields']),
+  },
+  {
     name: 'type_text',
     title: 'Type',
     description: 'Type text key by key into a field (ref, or the focused field), for search boxes and editors that react to typing. clear empties the field first; submit presses Enter after. Refuses password, 2FA and payment fields.',
@@ -339,7 +352,7 @@ const TOOLS = [
 ];
 
 // The calls that work on a page or a run wait up to 150 s; a longer limit they already have stays.
-const WAIT_150 = ['read_page', 'get_page_text', 'analyze_page', 'get_selection', 'find', 'click', 'hover', 'fill', 'type_text', 'press_key', 'scroll', 'media', 'wait_for', 'screenshot', 'console_log', 'network_log', 'navigate', 'tab_open'];
+const WAIT_150 = ['read_page', 'get_page_text', 'analyze_page', 'get_selection', 'find', 'click', 'hover', 'fill', 'fill_form', 'type_text', 'press_key', 'scroll', 'media', 'wait_for', 'screenshot', 'console_log', 'network_log', 'navigate', 'tab_open'];
 for (const t of TOOLS) if (WAIT_150.includes(t.name)) t.timeoutMs = Math.max(t.timeoutMs || 0, 150000);
 
 // Tools whose results carry page content, which the tool server labels as untrusted.

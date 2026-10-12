@@ -221,3 +221,19 @@ function cizOpClassify(env, args) {
   const link = a ? siteOf(a.getAttribute('href')) : '';
   return { submitsPost, leavesTo: link && link !== siteOf(location.href) ? link : null, found: true };
 }
+
+// fill_form's list: each field's label (its <label>, else aria-label, else placeholder, else '(no label)') and the reason the
+// page gives for a sensitive field (null when it is not). Changes nothing on the page: no value, focus or scroll.
+function cizOpFormLabels(env, args) {
+  const { target, squash, fieldDesc, sensitiveField } = env;
+  const labelOf = el => {
+    const native = el.labels && el.labels.length ? squash(Array.from(el.labels).map(l => l.textContent).join(' ')) : '';
+    const aria = squash(el.getAttribute('aria-label') || '');
+    const ph = squash(el.getAttribute('placeholder') || '');
+    return (native || aria || ph || '(no label)').slice(0, 160);
+  };
+  return { fields: (args.fields || []).map(f => {
+    const el = target(f);
+    return { label: labelOf(el), sensitive: sensitiveField(fieldDesc(el)) || null };
+  }) };
+}

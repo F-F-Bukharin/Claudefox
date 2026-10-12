@@ -105,6 +105,7 @@ function claudeLabel(s) {
 // The site card: the line under "Claude wants to use <site>" for each thing Claude asks to do on the page.
 const SITE_ACTIONS = { read: 'Read the page', act: 'Act on the page', open: 'Open the page', post: 'Submit a form', leave: 'Leave for this site' };
 let siteShownId = '';   // the site card id last shown to the helper: siteShown goes once per id
+let fillShownId = '', fillCardId = '';   // the fill card id last shown to the helper: fillShown goes once per id
 function render(s, log) {
   const pill = $('agentPill');
   pill.className = 'pill ' + (s.agent === 'stopped' ? 'stopped' : s.signedIn ? 'active' : '');
@@ -213,6 +214,21 @@ function render(s, log) {
     $('siteChat').hidden = risky;
     $('siteAllow').hidden = !risky;
     if (siteShownId !== s.siteAsk.id) { siteShownId = s.siteAsk.id; send('siteShown', { id: s.siteAsk.id }); }
+  }
+  $('fillCard').hidden = !s.fillAsk;
+  if (s.fillAsk) {
+    fillCardId = s.fillAsk.id;
+    $('fillCardSite').textContent = String(s.fillAsk.site || '').slice(0, 200);
+    $('fillRows').replaceChildren(...(s.fillAsk.rows || []).map(r => {
+      const tr = document.createElement('tr'), th = document.createElement('th'), td = document.createElement('td');
+      th.textContent = String(r.label || '').slice(0, 200);
+      td.className = 'mono'; td.textContent = String(r.value || '').slice(0, 200);
+      tr.append(th, td);
+      return tr;
+    }));
+    $('fillApprove').onclick = () => send('fillAnswer', { id: fillCardId, allow: true });
+    $('fillDeny').onclick = () => send('fillAnswer', { id: fillCardId, allow: false });
+    if (fillShownId !== s.fillAsk.id) { fillShownId = s.fillAsk.id; send('fillShown', { id: s.fillAsk.id }); }
   }
   $('googleVal').textContent = s.unsafe ? 'allowed (Unsafe mode)' : 'always hands-off';
   $('googleVal').classList.toggle('warn', !!s.unsafe);

@@ -43,7 +43,7 @@ async function cizLocalGate(gate) {
 }
 
 // The site gate (lib/siteGate.js) for web tabs. Acting tools are 'act'; everything else that looks at a tab is 'read'.
-const CIZ_ACT_TOOLS = new Set(['click', 'hover', 'fill', 'type_text', 'press_key', 'scroll', 'media', 'navigate']);
+const CIZ_ACT_TOOLS = new Set(['click', 'hover', 'fill', 'fill_form', 'type_text', 'press_key', 'scroll', 'media', 'navigate']);
 
 async function cizSiteOpts(args) {
   let blocks = {};
@@ -263,6 +263,39 @@ async function cizGoogleExport(tab, args) {
   return null;
 }
 
+// fill_form's card (the panel shows it): one at a time. The panel shows it within CIZ_FILL_MS.shown and answers within
+// CIZ_FILL_MS.answer; a card never shown, never answered, or ended by Stop is a Deny. Trusted mode does not skip it.
+const CIZ_FILL_MS = { shown: 5000, answer: 120000 };
+let cizFillCard = null, cizFillSeq = 0;
+function cizFillCut(v) {
+  const chars = [...(v == null ? '' : String(v))];
+  return chars.length > 80 ? chars.slice(0, 79).join('') + '…' : chars.join('');
+}
+function cizFillAsk(site, rows) {
+  return new Promise(resolve => {
+    const card = { id: 'fill-' + (++cizFillSeq), shown: false, timer: null, done: resolve };
+    cizFillCard = card;
+    card.timer = setTimeout(() => cizFillEnd(card, false), CIZ_FILL_MS.shown);
+    cizState.set({ fillAsk: { id: card.id, site, rows } });
+  });
+}
+function cizFillEnd(card, allow) {
+  if (cizFillCard !== card) return;
+  cizFillCard = null;
+  clearTimeout(card.timer);
+  cizState.set({ fillAsk: null });
+  card.done(allow);
+}
+function cizFillShown(id) {
+  const card = cizFillCard;
+  if (!card || card.id !== id || card.shown) return;
+  card.shown = true;
+  clearTimeout(card.timer);
+  card.timer = setTimeout(() => cizFillEnd(card, false), CIZ_FILL_MS.answer);
+}
+function cizFillAnswer(id, allow) { if (cizFillCard && cizFillCard.id === id) cizFillEnd(cizFillCard, !!allow); }
+function cizFillCancel() { if (cizFillCard) cizFillEnd(cizFillCard, false); }
+
 const CIZ_TOOLS = {
   async ping() { return { pong: true, version: browser.runtime.getManifest().version }; },
 
@@ -353,6 +386,30 @@ const CIZ_TOOLS = {
   },
   async hover(args) { return cizInPage(await cizPageTab(args, 'hover'), 'hover', args); },
   async fill(args) { return cizInPage(await cizPageTab(args, 'fill'), 'fill', args); },
+  // Several fields at once. The page gives each field's label first: a sensitive field refuses the call before any card.
+  // The user approves the list in a card; Approve fills each field as fill does. Nothing is submitted.
+  async fill_form(args) {
+    const fields = Array.isArray(args.fields) ? args.fields : [];
+    if (fields.length < 1 || fields.length > 30) throw new Error('fill_form takes 1 to 30 fields.');
+    const tab = await cizPageTab(args, 'fill_form');
+    const site = cizSiteOf(tab.url);
+    const labels = (await cizInPage(tab, 'formlabels', { fields: fields.map(f => ({ ref: f.ref, selector: f.selector })) })).fields;
+    const sensitive = labels.find(l => l.sensitive);
+    if (sensitive) throw new Error(`Refused: this is a ${sensitive.sensitive}. Ask the user to type it themselves.`);
+    if (cizFillCard) throw new Error("Another form fill is waiting for the user's answer. Try again when it is done.");
+    const rows = fields.map((f, i) => ({ label: labels[i].label, value: cizFillCut(f.value) }));
+    if (!(await cizFillAsk(site, rows))) throw new Error('The user did not approve filling this form.');
+    const now = await cizTabFor(args);
+    if (now.id !== tab.id || cizSiteOf(now.url) !== site) throw new Error('The tab moved to another site while the user was asked. Read the page again.');
+    const out = [];
+    for (let i = 0; i < fields.length; i++) {
+      try {
+        const r = await cizInPage(tab, 'fill', { ref: fields[i].ref, selector: fields[i].selector, value: fields[i].value });
+        out.push({ label: labels[i].label, filled: r.filled || r.selected });
+      } catch (e) { out.push({ label: labels[i].label, error: String((e && e.message) || e) }); }
+    }
+    return { submitted: false, fields: out };
+  },
   async type_text(args) {
     const tab = await cizPageTab(args, 'type_text');
     if (args.submit) await cizRiskCheck(tab, args);

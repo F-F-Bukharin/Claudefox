@@ -10,7 +10,8 @@ async function stopAll(source) {
   // Everything is cut in this first step, before any await: a tool call, a worker's call or a folder question that
   // arrives while the tabs close below already finds the agent stopped and the helper gone. (set() changes the state
   // at once; only saving it waits.)
-  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, downloadAsk: null, trusted: false, siteAsk: null, pending: 0 });
+  if (typeof cizFillCancel === 'function') cizFillCancel();
+  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, downloadAsk: null, trusted: false, siteAsk: null, fillAsk: null, pending: 0 });
   for (const [id, a] of pendingActions) {
     try { a.controller.abort(new Error('Stopped')); } catch {}
     pendingActions.delete(id);

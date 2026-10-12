@@ -115,6 +115,8 @@ async function handlePanel(msg, port) {
     case 'siteAnswer':
       if (typeof cizSiteGate !== 'undefined' && ['message', 'chat', 'deny', 'allow'].includes(msg.choice)) cizSiteGate.answer(String(msg.id || '').slice(0, 40), msg.choice);
       return;
+    case 'fillShown':      if (typeof cizFillShown === 'function') cizFillShown(String(msg.id || '').slice(0, 40)); return;
+    case 'fillAnswer':     if (typeof cizFillAnswer === 'function') cizFillAnswer(String(msg.id || '').slice(0, 40), !!msg.allow); return;
     case 'setTrusted':     return setTrusted(!!msg.on);
     case 'siteListSet':    return siteListSet(msg.site, msg.value);
     case 'localGrantRemove': return cizLocal.remove(String(msg.folder || '').slice(0, 1000));

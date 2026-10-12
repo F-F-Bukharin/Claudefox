@@ -76,6 +76,11 @@
         <p id="siteCardAction" class="muted small"></p>
         <div class="row"><button id="siteMsg" type="button">Allow this message</button> <button id="siteChat" type="button">Allow this chat</button> <button id="siteAllow" type="button">Allow</button> <button id="siteDeny" type="button">Deny</button></div>
       </div>
+      <div id="fillCard" class="card" hidden>
+        <p>Claude wants to fill these fields on <span id="fillCardSite" class="mono"></span>. Nothing is submitted.</p>
+        <table class="small"><tbody id="fillRows"></tbody></table>
+        <div class="row"><button id="fillApprove" type="button">Approve</button> <button id="fillDeny" type="button">Deny</button></div>
+      </div>
       <!-- Claude asks to look in a folder on this computer: the answer is given in the helper's confirm window -->
       <div id="grantAsk" class="confirm grant-ask" role="status" aria-labelledby="grantTitle" aria-describedby="grantFolder" hidden>
         <p id="grantTitle"><b>Claude asks to look in this folder</b></p>

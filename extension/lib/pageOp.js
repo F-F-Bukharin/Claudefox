@@ -115,15 +115,16 @@ function cizPageEnv(args, sensitiveField) {
     st.refs.set(id, el);
     return id;
   }
-  function target() {
-    if (args.ref) {
-      const el = st.refs.get(String(args.ref));
+  function target(a) {
+    a = a || args;
+    if (a.ref) {
+      const el = st.refs.get(String(a.ref));
       if (!el || !el.isConnected) throw new Error('That element is gone or the page changed. Call read_page or find again for fresh refs.');
       return el;
     }
-    if (args.selector) {
+    if (a.selector) {
       let el;
-      try { el = document.querySelector(String(args.selector)); } catch (e) { throw new Error('Not a valid CSS selector.'); }
+      try { el = document.querySelector(String(a.selector)); } catch (e) { throw new Error('Not a valid CSS selector.'); }
       if (!el) throw new Error('No element matches that selector.');
       return el;
     }
@@ -428,7 +429,7 @@ function cizPageEnv(args, sensitiveField) {
     }
     return text.trim();
   }
-  return { MAX_REFS, st, INTERACTIVE, HEADINGS, clamp, squash, isVisible, boxOf, centerOf,
+  return { MAX_REFS, sensitiveField, st, INTERACTIVE, HEADINGS, clamp, squash, isVisible, boxOf, centerOf,
       PointerCtor, hoverEvents, realClick, labelOf, roleOf, refOf, target, targetOrPoint, focusDesc,
       fieldDesc, refuseSensitive, isTextField, setValue, describe, page, shown, mainRoot, markdown,
       metaInfo, words, structuredData, notices, selectionText };
@@ -454,6 +455,7 @@ function cizPageOp(op, args, sensitiveField) {
     case 'exists': return cizOpExists(env, args);
     case 'ctype': return cizOpCtype(env, args);
     case 'classify': return cizOpClassify(env, args);
+    case 'formlabels': return cizOpFormLabels(env, args);
   }
   throw new Error('Unknown page operation: ' + op);
 }
@@ -463,7 +465,7 @@ function cizPageBody() {
   if (cizPageBody.text) return cizPageBody.text;
   const parts = [ cizPageEnv, cizPageOp, cizOpRead, cizOpText, cizOpAnalyze, cizOpSelection,
       cizOpFind, cizOpClick, cizOpHover, cizOpType, cizOpMedia, cizOpViewport, cizOpFill,
-      cizOpPress, cizOpScroll, cizOpScrollto, cizOpExists, cizOpCtype, cizOpClassify ];
+      cizOpPress, cizOpScroll, cizOpScrollto, cizOpExists, cizOpCtype, cizOpClassify, cizOpFormLabels ];
   return (cizPageBody.text = 'var sensitiveField = ' + cizSensitiveField.toString() + ';\n' + parts.map(f => f.toString() + '\n').join(''));
 }
 

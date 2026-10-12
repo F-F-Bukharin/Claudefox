@@ -7,7 +7,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const TESTS = [
   'host/test/smoke.js', 'host/test/mcp-smoke.js', 'host/test/chat-smoke.js', 'host/test/session-smoke.js', 'host/test/selfimprove-smoke.js', 'host/test/mods-smoke.js', 'host/test/output-smoke.js', 'host/test/army-smoke.js', 'host/test/local-smoke.js',
-  'test/addon-smoke.js', 'test/watch-startup.js', 'test/army-addon.js', 'test/local-addon.js', 'test/dom-page-tools.js', 'test/dom-panel.js', 'test/dom-mods.js', 'test/dom-watch.js', 'test/dom-bar.js', 'test/dom-sites.js', 'test/docx.js',
+  'test/addon-smoke.js', 'test/watch-startup.js', 'test/army-addon.js', 'test/local-addon.js', 'test/dom-page-tools.js', 'test/dom-panel.js', 'test/dom-fillform.js', 'test/dom-mods.js', 'test/dom-watch.js', 'test/dom-bar.js', 'test/dom-sites.js', 'test/docx.js',
   'test/dom-usage.js',
   'test/dom-a11y.js',
   'test/dom-classify.js',
