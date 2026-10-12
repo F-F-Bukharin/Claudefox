@@ -458,12 +458,38 @@ function cizPageOp(op, args, sensitiveField) {
   throw new Error('Unknown page operation: ' + op);
 }
 
-// The script cizInPage runs in the tab: sensitiveField (from policy.js), the page-side functions, then one call.
-function cizPageCode(op, args) {
+// The page code, the same for every call: sensitiveField (from policy.js), then the page-side functions. Built once.
+function cizPageBody() {
+  if (cizPageBody.text) return cizPageBody.text;
   const parts = [ cizPageEnv, cizPageOp, cizOpRead, cizOpText, cizOpAnalyze, cizOpSelection,
       cizOpFind, cizOpClick, cizOpHover, cizOpType, cizOpMedia, cizOpViewport, cizOpFill,
       cizOpPress, cizOpScroll, cizOpScrollto, cizOpExists, cizOpCtype, cizOpClassify ];
-  return '(function () { var sensitiveField = ' + cizSensitiveField.toString() + ';\n'
-    + parts.map(f => f.toString() + '\n').join('')
-    + 'return cizPageOp(' + JSON.stringify(op) + ', ' + JSON.stringify(args) + ', sensitiveField);\n})();';
+  return (cizPageBody.text = 'var sensitiveField = ' + cizSensitiveField.toString() + ';\n' + parts.map(f => f.toString() + '\n').join(''));
+}
+
+// The version of the page code: a hash of its source (FNV-1a), computed once. A page that holds another version is
+// given the new code.
+function cizPageVersion() {
+  if (cizPageVersion.v) return cizPageVersion.v;
+  let h = 0x811c9dc5;
+  const b = cizPageBody();
+  for (let i = 0; i < b.length; i++) { h ^= b.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return (cizPageVersion.v = h.toString(36) + '.' + b.length.toString(36));
+}
+
+// The script cizInPage runs in the tab the first time: installs the page operation as window.__cizOp with its version in
+// window.__cizOpV, then runs the operation. Self-contained: it works on a fresh page. The tab's isolated content-script
+// world holds window.__cizOp, so page scripts cannot see or replace it.
+function cizPageCode(op, args) {
+  return '(function () {\n' + cizPageBody()
+    + 'window.__cizOp = function (op, args) { return cizPageOp(op, args, sensitiveField); };\n'
+    + 'window.__cizOpV = ' + JSON.stringify(cizPageVersion()) + ';\n'
+    + 'return window.__cizOp(' + JSON.stringify(op) + ', ' + JSON.stringify(args) + ');\n})();';
+}
+
+// The small script every later call sends: runs the installed operation when it is this version, else answers with
+// the marker that tells cizInPage to send cizPageCode.
+function cizPageProbe(op, args) {
+  return '(function () { return window.__cizOpV === ' + JSON.stringify(cizPageVersion()) + ' && typeof window.__cizOp === "function"'
+    + ' ? window.__cizOp(' + JSON.stringify(op) + ', ' + JSON.stringify(args) + ') : { __cizNeedInstall: true }; })();';
 }

@@ -104,17 +104,22 @@ async function cizPageTab(args, tool) {
 
 async function cizInPage(tab, op, args) {
   const { __army, ...pageArgs } = args || {};   // which worker is calling is the add-on's business, not the page's
-  const code = cizPageCode(op, pageArgs);
-  let res;
-  try {
-    res = await browser.tabs.executeScript(tab.id, { code, runAt: 'document_idle' });
-  } catch (e) {
-    const why = String((e && e.message) || e).replace(/^Error:\s*/, '');
-    // Zen's "Access local files" switch is off (or was turned off since the last check).
-    if (/^file:/i.test(tab.url || '') && /permission|not allowed|denied|cannot access/i.test(why)) throw new Error(CIZ_FILE_ACCESS_OFF);
-    throw new Error(why);
-  }
-  return res && res[0];
+  // The page code is installed once per document (window.__cizOp, version window.__cizOpV): a call first sends a small
+  // probe, and sends the full code only when the page answers that it has none of this version.
+  const run = async code => {
+    try {
+      const res = await browser.tabs.executeScript(tab.id, { code, runAt: 'document_idle' });
+      return res && res[0];
+    } catch (e) {
+      const why = String((e && e.message) || e).replace(/^Error:\s*/, '');
+      // Zen's "Access local files" switch is off (or was turned off since the last check).
+      if (/^file:/i.test(tab.url || '') && /permission|not allowed|denied|cannot access/i.test(why)) throw new Error(CIZ_FILE_ACCESS_OFF);
+      throw new Error(why);
+    }
+  };
+  const first = await run(cizPageProbe(op, pageArgs));
+  if (first && first.__cizNeedInstall === true) return run(cizPageCode(op, pageArgs));
+  return first;
 }
 
 async function cizWaitLoaded(tabId, ms) {

@@ -22,14 +22,30 @@ function cizOpRead(env, args) {
 }
 
 function cizOpText(env, args) {
-  const { clamp, page, mainRoot, markdown, metaInfo, words } = env;
+  const { clamp, page, mainRoot, markdown, metaInfo, words, st } = env;
   const max = clamp(args.max_chars, 1000, 200000, 40000);
   const start = clamp(args.start_at, 0, 50000000, 0);
+  // The converted text is kept in window.__cizSt for 60 s per URL, format and scope, and only while the page looks the same
+  // (element count and text length): reading the same page again, or in pieces, converts it once. A Markdown conversion that
+  // was cut short is redone when a longer one is needed. Nothing but this text is kept.
+  const kept = (kind, scope, limit, make) => {
+    const now = Date.now();
+    const sig = document.getElementsByTagName('*').length + ':' + String((document.body && document.body.textContent) || '').length;
+    const key = [location.href, kind, scope || ''].join('|');
+    const cache = st.textCache || (st.textCache = new Map());
+    for (const [k, c] of cache) if (now - c.at >= 60000 || now < c.at) cache.delete(k);
+    const c = cache.get(key);
+    if (c && c.sig === sig && (c.limit >= limit || !c.cut)) return c.value;
+    const value = make();
+    cache.delete(key);
+    cache.set(key, { sig, at: now, limit, cut: !!(value && value.cut), value });
+    while (cache.size > 6) cache.delete(cache.keys().next().value);
+    return value;
+  };
   if (typeof args.query === 'string' && args.query.trim()) {
     // Query: the Markdown blocks (paragraphs, list items, table rows, code) that have a query word of 3 letters or more, in
     // any case, in page order, each under its nearest heading. Nothing matches: the first 40 headings instead.
-    const root = mainRoot(args.scope);
-    const md = markdown(root, 400000, { skipChrome: root === document.body && args.scope !== 'full' });
+    const md = kept('md', args.scope, 400000, () => { const root = mainRoot(args.scope); return markdown(root, 400000, { skipChrome: root === document.body && args.scope !== 'full' }); });
     const blocks = [], heads = [];
     let heading = null, cur = null, kind = null;   // kind: the open block, 'para', 'item' or 'code'
     for (const line of md.text.split('\n')) {
@@ -61,14 +77,12 @@ function cizOpText(env, args) {
     return page({ text: out.slice(0, max), truncated: out.length > max });
   }
   if (args.format === 'text') {
-    const root = mainRoot(args.scope);
-    let text = String((root && root.innerText) || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    let text = kept('text', args.scope, Infinity, () => { const root = mainRoot(args.scope); return String((root && root.innerText) || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim(); });
     const total = text.length;
     text = text.slice(start, start + max);
     return page({ text, truncated: start + max < total, next_start: start + max < total ? start + max : null, total_chars: total });
   }
-  const root = mainRoot(args.scope);
-  const md = markdown(root, start + max + 2000, { skipChrome: root === document.body && args.scope !== 'full' });
+  const md = kept('md', args.scope, start + max + 2000, () => { const root = mainRoot(args.scope); return markdown(root, start + max + 2000, { skipChrome: root === document.body && args.scope !== 'full' }); });
   const total = md.text.length;
   const more = md.cut || start + max < total;
   const body = md.text.slice(start, start + max);
