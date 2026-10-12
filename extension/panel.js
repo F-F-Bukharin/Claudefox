@@ -861,11 +861,30 @@ dropZone.addEventListener('drop', e => {
 
 // The small button beside +: more options.
 const menu = $('moreMenu');
+// In an empty chat the starter chips show. While the menu is open they move to its right and the menu comes down to their
+// bottom line; if no chip fits beside the menu, the chips hide (visibility) and the menu still comes down. panel.css reads
+// the numbers from the composer's custom properties (.composer.menu-open). Closed, or with no chips shown, nothing is set.
+const menuBar = menu.parentElement;
+const starters = document.querySelector('.starters');
+function placeMenuBar() {
+  menuBar.classList.remove('menu-open', 'chips-hidden');
+  menuBar.style.removeProperty('--chips-ml');
+  menuBar.style.removeProperty('--menu-bottom');
+  if (menu.hidden || !starters.offsetHeight) return;   // closed, or no chips shown (a chat with messages)
+  const chipsLeft = menu.offsetLeft + menu.offsetWidth + 12;   // 12px between the menu's right edge and the chips
+  const widest = Math.max(...[...starters.querySelectorAll('.chip')].map(c => c.offsetWidth));
+  if (starters.offsetLeft + starters.offsetWidth - chipsLeft < widest) menuBar.classList.add('chips-hidden');   // no room: hide them
+  else menuBar.style.setProperty('--chips-ml', `${chipsLeft - starters.offsetLeft}px`);
+  menuBar.classList.add('menu-open');
+  menuBar.style.setProperty('--menu-bottom', `${starters.offsetTop + starters.offsetHeight}px`);
+}
 function openMenu(open) {
   menu.hidden = !open;
   $('moreBtn').setAttribute('aria-expanded', String(open));
+  placeMenuBar();
   if (open) { const first = menu.querySelector('button'); if (first) first.focus(); }
 }
+window.addEventListener('resize', placeMenuBar);
 $('moreBtn').addEventListener('click', e => { e.stopPropagation(); openMenu(menu.hidden); });
 document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('#moreMenu')) openMenu(false); });
 menu.addEventListener('keydown', e => {
