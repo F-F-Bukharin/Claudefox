@@ -54,11 +54,13 @@ $('stopBtn').addEventListener('click', () => send('stop'));
 $('startBtn').addEventListener('click', () => send('start'));
 $('retryNative').addEventListener('click', () => send('retryNative'));
 $('checkClaude').addEventListener('click', () => send('checkClaude'));
-$('switchClaude').addEventListener('click', () => {
+// Opens the Accounts group on the Profile page: the switch button, and the account card's "Open Accounts".
+function openAccounts() {
   showPage('profile');
   const group = $('accountsGroup');
   if (group.scrollIntoView) group.scrollIntoView({ block: 'start' });
-});
+}
+$('switchClaude').addEventListener('click', openAccounts);
 $('updateBtn').addEventListener('click', () => send('updateAddon'));
 $('clearLog').addEventListener('click', () => send('clearLog'));
 // The log button in the chat header opens the Action log (Settings > Advanced).

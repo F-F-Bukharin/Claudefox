@@ -179,7 +179,7 @@ function doAct(act) {
   else if (act === 'caveman') send('setCaveman', { value: !state.caveman });
   else if (act === 'tools') { showPage('settings'); setSection('toolsHead', 'toolsBody', true); setTimeout(() => { const c = $('toolsCard'); if (c.scrollIntoView) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); }
   else if (act === 'improve') startImprove();
-  else if (act === 'new') { leaveImprove(); histNewChat(); chat = []; saveChat(); send('newChat'); renderChat(); input.focus(); }
+  else if (act === 'new') { leaveImprove(); histNewChat(); chat = []; resetAcctCard(); saveChat(); send('newChat'); renderChat(); input.focus(); }
 }
 for (const b of menu.querySelectorAll('button')) {
   b.addEventListener('click', () => { openMenu(false); doAct(b.dataset.act); });
@@ -258,6 +258,7 @@ async function submit() {
   if (text.startsWith('/') && !attachments.length) { input.value = ''; autoGrow(); addMsg({ role: 'user', text }); return runSlash(text); }
   if (state.agent === 'stopped') { addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' }); return; }
   if (!state.signedIn) { addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' }); return; }
+  if (chat.length === 0 && !accountChoice && acctMismatch()) return showAcctCard();
   const files = attachments;
   attachments = [];
   renderAttachments();
@@ -275,6 +276,23 @@ async function submit() {
   finally { for (const a of files) if (a.url && a.url.startsWith('blob:')) URL.revokeObjectURL(a.url); }
   send('chat', Object.assign({ id, text, attachments: payload }, extra));
 }
+
+// The account card. A chat runs on the Claude Code account, and this browser is signed in to claude.ai as state.account. When the
+// two differ, the first message of a chat waits here: the card names both, and the message stays in the input until the user picks
+// the Claude Code account for this chat (then it is sent) or opens Accounts (then it is not). New chat asks again.
+let accountChoice = false;   // "Use <B> for this chat" was pressed in this chat
+function acctMismatch() {
+  const a = state.account && state.account.email, b = state.claude && state.claude.email;
+  return !!(a && b && a.toLowerCase() !== b.toLowerCase());
+}
+function showAcctCard() {
+  $('accountCardText').textContent = `This browser is signed in to claude.ai as ${state.account.email}, but chats run on Claude Code as ${state.claude.email}.`;
+  $('accountUse').textContent = `Use ${state.claude.email} for this chat`;
+  $('accountCard').hidden = false;
+}
+function resetAcctCard() { accountChoice = false; $('accountCard').hidden = true; }
+$('accountUse').addEventListener('click', () => { accountChoice = true; $('accountCard').hidden = true; submit(); });
+$('accountOpen').addEventListener('click', () => { $('accountCard').hidden = true; openAccounts(); });
 
 // The slash commands. The "/" menu lists them all, and the starter chips show only the essentials. A command with an act
 // runs the same action as the + menu; the rest are the test commands (no Claude needed).
@@ -305,7 +323,7 @@ async function runSlash(text) {
   }
   if (known.act) return doAct(known.act);
   if (cmd === 'help') return addMsg({ role: 'assistant', text: helpText() });
-  if (cmd === 'clear') { histNewChat(); chat = []; saveChat(); send('newChat'); return renderChat(); }
+  if (cmd === 'clear') { histNewChat(); chat = []; resetAcctCard(); saveChat(); send('newChat'); return renderChat(); }
   const tool = { tabs: 'tabs_list', ping: 'ping' }[cmd];
   const out = await call(tool);
   if (!out.ok) return addMsg({ role: 'error', text: out.error });
