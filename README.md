@@ -106,6 +106,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `extension/lib/policy.js` | Fixed rules: blocked pages, sensitive fields. |
 | `extension/lib/state.js` | Session state and action log in `storage.session` (cleared when Zen quits; the sign-in marker lives in `storage.local`). |
 | `extension/lib/pageTools.js` | The tools Claude uses on Zen; page code runs in the add-on's isolated content-script world. Google Docs export. |
+| `extension/lib/pageOp.js`, `pageOpRead.js`, `pageOpAct.js` | The page-side code the tools run inside a tab: shared helpers, then the read and act operations. pageTools.js joins it and injects it. |
 | `extension/lib/netlog.js` | `network_log` and `console_log` (metadata only). |
 | `extension/lib/docx.js` | Builds real Word and Excel files (and web pages) from what Claude wrote. |
 | `extension/lib/files.js`, `extension/viewer.*` | Files Claude made, kept in the add-on; the viewer with Save as. |

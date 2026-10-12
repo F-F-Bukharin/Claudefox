@@ -4,7 +4,7 @@ let JSDOM;
 try { ({ JSDOM } = require('jsdom')); } catch { console.log('SKIP  jsdom not installed'); process.exit(0); }
 const EXT = require('path').join(__dirname, '..', 'extension') + '/';
 const fs=require('fs'), vm=require('vm');
-const src=fs.readFileSync(EXT+'lib/policy.js','utf8')+'\n'+fs.readFileSync(EXT+'lib/pageTools.js','utf8');
+const src=fs.readFileSync(EXT+'lib/policy.js','utf8')+'\n'+['pageOp.js','pageOpRead.js','pageOpAct.js'].map(f=>fs.readFileSync(EXT+'lib/'+f,'utf8')).join('\n');
 let pass=0,fail=0; const ok=(n,c,x)=>{c?pass++:fail++;console.log((c?'PASS ':'FAIL ')+n+(x?'  '+x:''))};
 const html=`<h1>Shop</h1><form id=f><label for=q>Search</label><input id=q name=q>
 <input type=password id=pw name=pw><input name=cardnumber autocomplete=cc-number placeholder="Card number">
@@ -15,9 +15,9 @@ const w=dom.window;
 w.Element.prototype.getBoundingClientRect=()=>({width:10,height:10});
 Object.defineProperty(w.HTMLElement.prototype,'innerText',{get(){return this.textContent}});
 w.Element.prototype.scrollIntoView=()=>{};
-// run cizPageOp inside the jsdom window, the way executeScript does
-const ctx=vm.createContext({URL});vm.runInContext(src+';this.cizPageOp=cizPageOp;this.cizSensitiveField=cizSensitiveField;this.cizUrlBlocked=cizUrlBlocked;',ctx);
-const run=(op,args)=>w.eval('('+ctx.cizPageOp.toString()+')('+JSON.stringify(op)+','+JSON.stringify(args)+',('+ctx.cizSensitiveField.toString()+'))');
+// run the injected page code (cizPageCode) inside the jsdom window, the way executeScript does
+const ctx=vm.createContext({URL});vm.runInContext(src+';this.cizPageCode=cizPageCode;this.cizSensitiveField=cizSensitiveField;this.cizUrlBlocked=cizUrlBlocked;',ctx);
+const run=(op,args)=>w.eval(ctx.cizPageCode(op,args));
 const err=(op,args)=>{try{run(op,args);return null}catch(e){return e.message}};
 const r=run('read',{});
 ok('read lists heading and controls', /h1: Shop/.test(r.text)&&/textbox "Search"/.test(r.text)&&/button "Add to cart"/.test(r.text), '\n'+r.text);
