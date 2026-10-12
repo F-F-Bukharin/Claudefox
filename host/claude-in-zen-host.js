@@ -21,7 +21,7 @@ const P = require('./lib/paths');
 const log = require('./lib/log');
 const { NativeChannel } = require('./lib/nm');
 const { onLines, sendLine } = require('./lib/lines');
-const { createToolbox, norm } = require('./lib/toolbox');
+const { createToolbox, norm } = require('./lib/plugins');
 const guard = require('./lib/guard');
 const uploads = require('./lib/uploads');
 const OUTPUT = require('./lib/output');
@@ -216,7 +216,7 @@ function onAddon(msg) {
       cancelChat(String(msg.id || '*'), 'Cancelled.');
       return;
 
-    // Settings > Tools and plugins (lib/toolbox.js)
+    // Settings > Tools and plugins (lib/plugins.js)
     case 'tools':
       toolbox.scan(activeId()).then(() => toolbox.push(activeId())).catch(e => log.warn('tools scan', e.message));
       toolbox.push(activeId());

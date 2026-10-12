@@ -13,7 +13,7 @@ const net = require('net');
 const P = require('./lib/paths');
 const log = require('./lib/log');
 const { onLines, sendLine } = require('./lib/lines');
-const { TOOLS, PAGE_CONTENT } = require('./lib/tools');
+const { TOOLS, PAGE_CONTENT } = require('./lib/toolSchemas');
 const { WORKER_TOOLS } = require('./lib/armyguard');
 
 // Startup effects (the log, the console redirect, the stdin loop and the crash handler) run only when this file is the

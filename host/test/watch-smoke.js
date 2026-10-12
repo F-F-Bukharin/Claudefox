@@ -327,7 +327,7 @@ function listedTools(extraEnv, base) {
 }
 
 async function surfaceSection() {
-  const { TOOLS, PAGE_CONTENT } = require('../lib/tools');
+  const { TOOLS, PAGE_CONTENT } = require('../lib/toolSchemas');
   const { WORKER_TOOLS, checkCall } = require('../lib/armyguard');
   const { chatPrompt } = require('../lib/chatargs');
   const { format } = require('../zen-mcp');   // loads without starting the tool server: its startup runs only as the main module
