@@ -42,7 +42,7 @@ function New-ClaudefoxStage([string]$Root, [string]$Stage) {
   Copy-Item (Join-Path $Root 'extension') (Join-Path $Stage 'extension') -Recurse
   Get-ChildItem (Join-Path $Stage 'extension\mods') -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
   Get-ChildItem (Join-Path $Stage 'extension\output') -Exclude 'README.txt' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
-  foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1') { Copy-Item (Join-Path $Root "host\$f") (Join-Path $Stage "host\$f") }
+  foreach ($f in 'claude-in-zen-host.js', 'zen-mcp.js', 'webfetch-hook.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1') { Copy-Item (Join-Path $Root "host\$f") (Join-Path $Stage "host\$f") }
   Copy-Item (Join-Path $Root 'host\lib\*.js') (Join-Path $Stage 'host\lib')
   # The trimmed claude-video engine of the watch tool (its LICENSE and NOTICE.md come along).
   Copy-Item (Join-Path $Root 'host\vendor\claude-video') (Join-Path $Stage 'host\vendor\claude-video') -Recurse

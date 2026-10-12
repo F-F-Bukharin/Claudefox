@@ -32,7 +32,7 @@ function stage() {
     if (!fs.existsSync(d)) continue;
     for (const n of fs.readdirSync(d)) if (n !== 'README.txt') fs.rmSync(path.join(d, n), { recursive: true, force: true });
   }
-  for (const f of ['claude-in-zen-host.js', 'zen-mcp.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1']) copy(path.join(root, 'host', f), path.join(s, 'host', f));
+  for (const f of ['claude-in-zen-host.js', 'zen-mcp.js', 'webfetch-hook.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1']) copy(path.join(root, 'host', f), path.join(s, 'host', f));
   for (const f of fs.readdirSync(path.join(root, 'host', 'lib')).filter(f => f.endsWith('.js'))) copy(path.join(root, 'host', 'lib', f), path.join(s, 'host', 'lib', f));
   for (const f of ['Set up Claudefox.bat', 'START HERE.txt']) copy(path.join(root, 'friends', f), path.join(s, f));
   copy(path.join(root, 'tools', 'Sign in Claude Code.bat'), path.join(s, 'tools', 'Sign in Claude Code.bat'));
@@ -147,6 +147,8 @@ check('updates.json links the release asset with its sha256, written without a B
 check('the public clone gets the branded build and keeps its README, LICENSE, .gitattributes and .git', /New-ClaudefoxStage \$root \$stage/.test(rel)
   && /robocopy .*\/MIR/.test(rel) && /\/XD \.git/.test(rel) && /\/XF README\.md LICENSE \.gitattributes/.test(rel));
 check('the release files keep CRLF and the .bat runs the script', rel !== '' && relBat !== '' && [rel, relBat].every(t => t.includes('\r\n') && !/[^\r]\n/.test(t)) && /prepare-release\.ps1/.test(relBat));
+
+check('the friends build ships the WebFetch hook (page safety, A3)', /'webfetch-hook\.js'/.test(stageFn));
 
 console.log(`${passed} checks passed${failed ? `, ${failed} failed` : ''}`);
 process.exitCode = failed ? 1 : 0;
