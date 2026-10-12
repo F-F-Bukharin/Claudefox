@@ -453,6 +453,7 @@ function cizPageOp(op, args, sensitiveField) {
     case 'scrollto': return cizOpScrollto(env, args);
     case 'exists': return cizOpExists(env, args);
     case 'ctype': return cizOpCtype(env, args);
+    case 'classify': return cizOpClassify(env, args);
   }
   throw new Error('Unknown page operation: ' + op);
 }
@@ -461,7 +462,7 @@ function cizPageOp(op, args, sensitiveField) {
 function cizPageCode(op, args) {
   const parts = [ cizPageEnv, cizPageOp, cizOpRead, cizOpText, cizOpAnalyze, cizOpSelection,
       cizOpFind, cizOpClick, cizOpHover, cizOpType, cizOpMedia, cizOpViewport, cizOpFill,
-      cizOpPress, cizOpScroll, cizOpScrollto, cizOpExists, cizOpCtype ];
+      cizOpPress, cizOpScroll, cizOpScrollto, cizOpExists, cizOpCtype, cizOpClassify ];
   return '(function () { var sensitiveField = ' + cizSensitiveField.toString() + ';\n'
     + parts.map(f => f.toString() + '\n').join('')
     + 'return cizPageOp(' + JSON.stringify(op) + ', ' + JSON.stringify(args) + ', sensitiveField);\n})();';

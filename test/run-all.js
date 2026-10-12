@@ -8,6 +8,7 @@ const root = path.join(__dirname, '..');
 const TESTS = [
   'host/test/smoke.js', 'host/test/mcp-smoke.js', 'host/test/chat-smoke.js', 'host/test/selfimprove-smoke.js', 'host/test/mods-smoke.js', 'host/test/output-smoke.js', 'host/test/army-smoke.js', 'host/test/local-smoke.js',
   'test/addon-smoke.js', 'test/watch-startup.js', 'test/army-addon.js', 'test/local-addon.js', 'test/dom-page-tools.js', 'test/dom-panel.js', 'test/dom-mods.js', 'test/dom-watch.js', 'test/dom-bar.js', 'test/docx.js',
+  'test/dom-classify.js',
   'test/menu-static.js', 'test/wall-ink.js', 'test/brand.js', 'test/shared-code.js', 'test/injection-page.js', 'test/hardening.js', 'test/harden-confirm.js', 'test/harden-turns.js', 'test/harden-native.js',
   'test/watch-static.js', 'test/site-gate.js', 'host/test/watch-engine-smoke.js', 'host/test/watch-smoke.js',
 ];

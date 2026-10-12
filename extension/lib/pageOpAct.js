@@ -1,5 +1,5 @@
 'use strict';
-// The page operations that act on the page: click, hover, type, media, fill, press, scroll, scrollto.
+// The page operations that act on the page: click, hover, type, media, fill, press, scroll, scrollto. classify (last) only reads.
 // Same shape as pageOpRead.js: declarations joined into the injected script by cizPageCode (pageOp.js).
 
 function cizOpClick(env, args) {
@@ -184,4 +184,40 @@ function cizOpScrollto(env, args) {
   const { clamp } = env;
   window.scrollTo(0, clamp(args.y, 0, 1e9, 0));
   return { y: Math.round(window.scrollY) };
+}
+
+// What a click, an Enter or a submitting type_text on the target would do: post a form, or leave the site. The target is
+// found as click, type and press find theirs. Read only: no click, focus, scroll or change, and no field values back.
+function cizOpClassify(env, args) {
+  const { target } = env;
+  let el = null;
+  if (args.x != null && args.y != null && !args.ref && !args.selector) {
+    const x = Number(args.x), y = Number(args.y);
+    el = Number.isFinite(x) && Number.isFinite(y) ? document.elementFromPoint(x, y) : null;
+  } else if (args.ref || args.selector) {
+    try { el = target(); } catch (e) { el = null; }   // a stale ref, no match or a bad selector: not found
+  } else {
+    el = document.activeElement;
+    if (el === document.body || el === document.documentElement) el = null;
+  }
+  if (!el) return { submitsPost: false, leavesTo: null, found: false };
+  // The form posts when its method says POST (any case). formmethod on a submit control wins over its form's method.
+  const formPosts = f => !!f && String(f.getAttribute('method') || '').toLowerCase() === 'post';
+  const controlPosts = c => c.hasAttribute('formmethod') ? String(c.getAttribute('formmethod')).toLowerCase() === 'post' : formPosts(c.form);
+  // A click often lands on text or an icon inside the button, so the button around the target counts too.
+  const ctl = el.tagName === 'INPUT' ? el : el.closest('button');
+  const submitControl = !!ctl && ((ctl.tagName === 'BUTTON' && ctl.type === 'submit') || (ctl.tagName === 'INPUT' && (ctl.type === 'submit' || ctl.type === 'image')));
+  // Enter in a field, or type_text with submit, sends the field's form with the form's own method (cizOpPress and cizOpType do that).
+  const fieldPosts = (args.key === 'Enter' || !!args.submit) && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && formPosts(el.form);
+  const submitsPost = (submitControl && controlPosts(ctl)) || fieldPosts;
+  // The site of an http(s) URL: lowercase host, one leading www. dropped; '' for any other. The page cannot call the add-on's
+  // cizSiteOf, so the same rule is repeated here.
+  const siteOf = s => {
+    let u;
+    try { u = new URL(String(s), document.baseURI); } catch (e) { return ''; }
+    return /^https?:$/.test(u.protocol) ? u.hostname.replace(/^www\./, '') : '';
+  };
+  const a = el.closest('a[href]');
+  const link = a ? siteOf(a.getAttribute('href')) : '';
+  return { submitsPost, leavesTo: link && link !== siteOf(location.href) ? link : null, found: true };
 }
