@@ -20,7 +20,7 @@ const check = (name, cond, detail) => {
 function fakeAddon(dir, runnerExit) {
   const files = {
     'extension/panel.js': 'const a = 1;\nconst b = 2;\nconsole.log(a + b);\n',
-    'extension/lib/tools.js': 'module.exports = { x: 1 };\n',
+    'extension/lib/pageTools.js': 'module.exports = { x: 1 };\n',
     'extension/manifest.json': '{ "version": "0.9.0" }\n',
     'extension/lib/policy.js': 'module.exports = {};\n',
     'extension/mods/wider-composer/mod.json': '{ "name": "Wider composer", "description": "Gives the text bar room." }\n',

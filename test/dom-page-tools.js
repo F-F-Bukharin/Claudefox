@@ -4,7 +4,7 @@ let JSDOM;
 try { ({ JSDOM } = require('jsdom')); } catch { console.log('SKIP  jsdom not installed'); process.exit(0); }
 const EXT = require('path').join(__dirname, '..', 'extension') + '/';
 const fs=require('fs'), vm=require('vm');
-const src=fs.readFileSync(EXT+'lib/policy.js','utf8')+'\n'+fs.readFileSync(EXT+'lib/tools.js','utf8');
+const src=fs.readFileSync(EXT+'lib/policy.js','utf8')+'\n'+fs.readFileSync(EXT+'lib/pageTools.js','utf8');
 let pass=0,fail=0; const ok=(n,c,x)=>{c?pass++:fail++;console.log((c?'PASS ':'FAIL ')+n+(x?'  '+x:''))};
 const html=`<h1>Shop</h1><form id=f><label for=q>Search</label><input id=q name=q>
 <input type=password id=pw name=pw><input name=cardnumber autocomplete=cc-number placeholder="Card number">

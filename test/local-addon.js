@@ -1,6 +1,6 @@
 'use strict';
 // Local pages in the add-on background: the path rules (lib/policy.js), folder questions and grants (lib/local.js),
-// the page-tool gate on file: tabs (lib/tools.js), and the helper's local_grant and local_tab messages.
+// the page-tool gate on file: tabs (lib/pageTools.js), and the helper's local_grant and local_tab messages.
 // Runs the real background scripts against a mocked browser API, like army-addon.   node test/local-addon.js
 const fs = require('fs');
 const path = require('path');

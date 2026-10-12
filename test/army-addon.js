@@ -340,7 +340,7 @@ const answerConfirm = async ok => {
     check('a fresh start with armyOn comes up with the army on and Quality, and today\'s count', s2s.chatArmy === true && s2s.chatModel === 'quality' && s2s.armyToday === 3, JSON.stringify({ a: s2s.chatArmy, m: s2s.chatModel, t: s2s.armyToday }));
 
     // 16. static: nothing a worker can reach brings a tab or a window to the front
-    const toolsSrc = fs.readFileSync(path.join(ext, 'lib', 'tools.js'), 'utf8');
+    const toolsSrc = fs.readFileSync(path.join(ext, 'lib', 'pageTools.js'), 'utf8');
     const armySrc = fs.readFileSync(path.join(ext, 'lib', 'army.js'), 'utf8');
     const armyTools = [...g('CIZ_ARMY_TOOLS')];
     const bodies = {};
