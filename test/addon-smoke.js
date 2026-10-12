@@ -158,7 +158,8 @@ const answerConfirm = async ok => {
     const sent = native.sent.find(m => m.type === 'chat');
     check('chat goes to the helper, Speed by default', sent && sent.id === 'p1' && sent.text === 'hi' && sent.files === '' && sent.model === 'speed');
     await fromPanel({ type: 'chat', id: 'p2', text: 'again' });
-    check('second message refused while busy', panelIn.some(m => m.type === 'chatDone' && m.id === 'p2' && !m.ok));
+    check('second message waits in the queue while busy, not refused', panelIn.some(m => m.type === 'chatQueued' && m.id === 'p2') && !panelIn.some(m => m.type === 'chatDone' && m.id === 'p2') && native.sent.filter(m => m.type === 'chat').length === 1);
+    await fromPanel({ type: 'chatUnqueue', id: 'p2' });   // the x on the waiting bubble
     await helperSays({ type: 'chat_event', id: 'p1', event: { kind: 'text', text: 'Hel' } });
     await helperSays({ type: 'chat_event', id: 'zzz', event: { kind: 'text', text: 'stray' } });
     check('stream reaches the panel, strays dropped', panelIn.some(m => m.type === 'chatEvent' && m.event.text === 'Hel') && !panelIn.some(m => m.type === 'chatEvent' && m.id === 'zzz'));

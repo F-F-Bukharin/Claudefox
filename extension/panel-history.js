@@ -21,8 +21,10 @@ const histReal = m => m.role === 'user' && !String(m.text || '').startsWith('/')
 
 (async () => {   // the chat that was open when the panel closed is still the open one
   try {
-    const g = await browser.storage.session.get('histMeta');
-    if (g.histMeta && g.histMeta.id && !histCur) { histCur = { id: g.histMeta.id, acct: g.histMeta.acct, created: g.histMeta.created }; histSession = g.histMeta.session || ''; }
+    await winReady;
+    const g = await browser.storage.session.get(winKey() || 'histMeta');
+    const hm = (winKey() ? (g[winKey()] || {}) : g).histMeta;   // this window's open chat
+    if (hm && hm.id && !histCur) { histCur = { id: hm.id, acct: hm.acct, created: hm.created }; histSession = hm.session || ''; }
   } catch {}
 })();
 
@@ -71,7 +73,14 @@ function histNoteDone(msg) {
   if (!msg.ok && /No conversation found/i.test(err)) histSession = '';
   if (msg.ok || msg.sessionId || /No conversation found/i.test(err)) histResume = null;
 }
-function histResumeExtra() { return histResume === null ? {} : { resume: histResume }; }
+// A window sends its chat's session itself, unless an earlier message of this chat is still answering or waiting (the background then
+// continues from that message's session).
+function histResumeExtra() {
+  if (winId != null && (busyMsg() || chat.some(m => m.queued))) return {};
+  return histResume !== null ? { resume: histResume } : winId != null ? { resume: histSession } : {};
+}
+// What saveChat writes to storage.session: this window's chat under win:<id> (the chat and which history entry is open).
+function sessionDoc(hist) { const d = Object.assign({ chat }, hist); return winKey() ? { [winKey()]: d } : d; }
 
 // A new chat (+ menu, /clear): the chat that is open stays in History, the next message starts a new entry.
 function histReset() { histCur = null; histSession = ''; histResume = null; }
@@ -176,7 +185,7 @@ function histRow(c) {
 // Open: the chat goes into this window and its Claude session is the one the next message resumes.
 async function histOpen(id) {
   if (histCur && histCur.id === id) return histShow(false);
-  if (busyMsg()) return;
+  if (busyMsg() || chat.some(m => m.queued)) return;
   await histQueue;
   const acct = histAcct();
   const got = await browser.storage.local.get(['chats:' + acct, 'chat:' + id]);
@@ -186,6 +195,7 @@ async function histOpen(id) {
   leaveImprove();
   histNewChat();   // keeps the chat that was open
   for (const m of msgs) if (m.pending) { m.pending = false; m.error = m.error || 'This answer was interrupted.'; bump(m); }
+  for (const m of msgs) if (m.queued) { m.queued = false; m.error = 'This message was not sent.'; bump(m); }
   chat = msgs;
   histCur = { id, acct, created: meta.created };
   histSession = meta.sessionId || '';

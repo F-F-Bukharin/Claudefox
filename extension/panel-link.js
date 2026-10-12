@@ -2,7 +2,7 @@
 // Sidebar panel, loaded last (see panel.html): connects to the background page, takes its messages and restores the saved chat. Every other panel file is loaded by the time this runs.
 
 const port = browser.runtime.connect({ name: 'panel' });
-const send = (type, extra) => port.postMessage(Object.assign({ type }, extra || {}));
+const send = (type, extra) => port.postMessage(Object.assign({ type }, winId == null ? {} : { windowId: winId }, extra || {}));   // every message names this window
 // ------------------------------------------------------------ background link
 
 port.onMessage.addListener(msg => {
@@ -13,7 +13,10 @@ port.onMessage.addListener(msg => {
   }
   if (msg.type === 'chatEvent') onChatEvent(msg.id, msg.event || {});
   if (msg.type === 'chatDone') onChatDone(msg);
-  if (msg.type === 'chatRuns') onChatRuns(msg.ids || []);
+  if (msg.type === 'chatRuns') onChatRuns(msg.ids || [], msg.queued || []);
+  if (msg.type === 'chatBusy') onChatBusy(msg.ids || [], msg.queued || []);
+  if (msg.type === 'chatQueued') onChatQueued(msg.id);
+  if (msg.type === 'chatStarted') onChatStarted(msg.id);
   if (msg.type === 'fileCreated') onFileCreated(msg.file || {});
   if (msg.type === 'snap') onSnap(msg);
   if (msg.type === 'toolResult') onToolResult(msg);
@@ -49,9 +52,11 @@ function call(tool, args) {
 
 (async () => {
   try {
-    const got = await browser.storage.session.get(['chat', 'panelPage']);
-    chat = Array.isArray(got.chat) ? got.chat : [];
-    if (liveRuns) onChatRuns([...liveRuns]);
+    await winReady;
+    const got = await browser.storage.session.get([winKey() || 'chat', 'panelPage']);
+    const mine = winKey() ? got[winKey()] || {} : got;   // this window's saved chat (win:<id>)
+    chat = Array.isArray(mine.chat) ? mine.chat : [];
+    if (liveRuns) onChatRuns([...liveRuns], liveQueued);
     renderChat();
     showPage(PAGES.includes(got.panelPage) ? got.panelPage : 'chat');
   } catch { renderChat(); showPage('chat'); }

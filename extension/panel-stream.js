@@ -73,9 +73,14 @@ function onArmyEvent(m, ev) {
 }
 
 function onChatDone(msg) {
+  const own = chat.find(x => x.id === msg.id || x.cid === msg.id);
+  if (!own) return;   // another window's answer
   histNoteDone(msg);
   const m = chat.find(x => x.id === msg.id);
-  if (!m) return;
+  if (!m) {   // a waiting message that never started (Stop, a full queue): it stays, with the reason
+    own.queued = false; own.error = 'Not sent. ' + (msg.error || 'Something went wrong.'); bump(own);
+    saveChat(); renderChat(); return;
+  }
   m.pending = false;
   m.endedAt = Date.now();
   bump(m);
@@ -91,13 +96,58 @@ function onChatDone(msg) {
 }
 
 // Answers that were running when the panel was closed and have since ended elsewhere.
-function onChatRuns(ids) {
+function onChatRuns(ids, queued) {
   liveRuns = new Set(ids);
+  liveQueued = queued || [];
   let changed = false;
+  for (const m of chat) {   // waiting messages the background no longer has: started while the panel was closed, or gone
+    if (!m.queued || liveQueued.includes(m.cid)) continue;
+    m.queued = false; bump(m); changed = true;
+    if (liveRuns.has(m.cid)) startedAnswer(m); else m.error = 'This message was not answered.';
+  }
   for (const m of chat) {
     if (m.pending && !liveRuns.has(m.id)) { m.pending = false; m.error = m.error || 'This answer was interrupted.'; bump(m); changed = true; }
   }
   if (changed) { saveChat(); renderChat(); }
+}
+
+// The background's word on what runs and what waits (any window): the hint under the input follows it.
+let liveQueued = [];
+function onChatBusy(ids, queued) { liveRuns = new Set(ids); liveQueued = queued || []; syncBusy(); }
+// A message that waits in the queue: the user's bubble, pending, with a x. When it starts, Claude's answer opens under it.
+function onChatQueued(id) {
+  const u = chat.find(x => x.cid === id);
+  if (!u) return;
+  const a = chat.findIndex(x => x.id === id);
+  if (a >= 0) chat.splice(a, 1);   // the placeholder a free panel showed too early
+  u.queued = true; bump(u); saveChat(); renderChat();
+}
+function startedAnswer(u) {
+  chat.splice(chat.indexOf(u) + 1, 0, { t: Date.now(), rev: 1, role: 'assistant', id: u.cid, text: '', steps: [], pending: true, startedAt: Date.now() });
+}
+function onChatStarted(id) {
+  const u = chat.find(x => x.cid === id && x.queued);
+  if (!u) return;
+  u.queued = false; bump(u);
+  if (!chat.some(x => x.id === id)) startedAnswer(u);
+  saveChat(); renderChat();
+}
+function unqueue(id) {
+  const i = chat.findIndex(x => x.cid === id && x.queued);
+  if (i < 0) return;
+  chat.splice(i, 1);
+  send('chatUnqueue', { id });
+  saveChat(); renderChat();
+}
+// Claude answers now (this window's answer, or any other window's): sending only queues.
+const BUSY_HINT = 'Claude is answering · stops after 1 hour';
+let lastBusy = false;
+function isBusy() { return !!busyMsg() || !!(liveRuns && liveRuns.size); }
+function syncBusy() {
+  const b = isBusy();
+  if (b === lastBusy) return;
+  lastBusy = b;
+  $('composerHint').textContent = state.agent === 'stopped' ? 'Stopped. Press Start to let Claude act again.' : !state.signedIn ? 'Not signed in. Open the Profile page to sign in.' : b ? BUSY_HINT : '';
 }
 
 function addMsg(m) {
@@ -115,7 +165,7 @@ function bump(m) { m.rev = (m.rev || 0) + 1; }
 let saveTimer = null;
 function saveChat() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { const hist = histSave(); try { browser.storage.session.set(Object.assign({ chat }, hist)); } catch {} }, busyMsg() ? 1000 : 300);
+  saveTimer = setTimeout(() => { const hist = histSave(); try { browser.storage.session.set(sessionDoc(hist)); } catch {} }, busyMsg() ? 1000 : 300);
 }
 
 let renderQueued = false;
@@ -361,7 +411,7 @@ let drawTimer = null;
 
 function buildMsg(m) {
   const div = document.createElement('div');
-  div.className = 'msg ' + m.role + (m.pending ? ' pending' : '');
+  div.className = 'msg ' + m.role + (m.pending ? ' pending' : '') + (m.queued ? ' queued' : '');
   const who = document.createElement('div');
   who.className = 'who';
   who.textContent = WHO[m.role] || '';
@@ -420,6 +470,14 @@ function buildMsg(m) {
     const files = document.createElement('div'); files.className = 'files-out';
     for (const f of m.files) files.appendChild(fileCard(f));
     div.appendChild(files);
+  }
+  if (m.queued) {
+    const row = el('div', 'qrow', 'Waiting for Claude to finish');
+    const x = el('button', 'link qx', '×');
+    x.type = 'button'; x.title = 'Remove from the queue'; x.setAttribute('aria-label', 'Remove from the queue');
+    x.addEventListener('click', () => unqueue(m.cid));
+    row.appendChild(x);
+    div.appendChild(row);
   }
   if (m.pending) {
     const row = document.createElement('div');
@@ -499,6 +557,6 @@ function renderChat() {
   $('emptyState').hidden = chat.length > 0;
   $('page-chat').classList.toggle('is-empty', chat.length === 0);
   if (atBottom || busyMsg()) box.scrollTop = box.scrollHeight;
-  $('sendBtn').disabled = !!busyMsg();
+  syncBusy();
 }
 

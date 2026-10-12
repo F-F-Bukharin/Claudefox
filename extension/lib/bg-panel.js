@@ -14,11 +14,13 @@ browser.runtime.onConnect.addListener(port => {
     cizState.addLog('error', `${msg && msg.type}: ${err.message || err}`);
   }));
   port.postMessage({ type: 'state', state: cizState.get(), log: cizState.log() });
-  port.postMessage({ type: 'chatRuns', ids: [...chatRuns.keys()] });
+  port.postMessage({ type: 'chatRuns', ids: [...chatRuns.keys()], queued: chatQueue.map(q => q.id) });
   // The helper replies with watch_state and asks the first-run question once. With no helper port yet, connectNative sends it (bg-chat.js).
   if (nativePort) sendNative({ type: 'watch_load' }); else watchLoadWanted = true;
   refreshArmyToday();   // the army card shows today's runs, even when Zen stayed open past midnight
 });
+
+try { if (browser.windows && browser.windows.onRemoved) browser.windows.onRemoved.addListener(id => chatWindowGone(id)); } catch {}
 
 function postToPanels(msg) {
   for (const p of panelPorts) {
@@ -64,7 +66,7 @@ async function handlePanel(msg, port) {
     case 'openTab':    return openTab(Number(msg.id));
     case 'openFile':   return openFile(String(msg.id || ''));
     case 'downloadFile': return downloadFile(String(msg.id || ''), !!msg.saveAs, String(msg.format || ''));
-    case 'snapTab':    return snapTab(port, String(msg.req || ''));
+    case 'snapTab':    return snapTab(port, String(msg.req || ''), msg.windowId);
     case 'setOutput': {
       const value = msg.value === 'store' ? 'store' : 'download';
       try { await browser.storage.local.set({ outputMode: value }); } catch {}
@@ -93,9 +95,10 @@ async function handlePanel(msg, port) {
     case 'call':       return panelCall(msg, port);
     case 'chat':       return startChat(msg);
     case 'chatCancel': return cancelChat(String(msg.id || ''));
+    case 'chatUnqueue': return chatUnqueue(String(msg.id || ''));
     case 'selfApply':   return sendNative({ type: 'self_apply', id: String(msg.id || '') });
     case 'selfDiscard': return sendNative({ type: 'self_discard', id: String(msg.id || '') });
-    case 'newChat':    return cizState.set({ chatSession: '' });
+    case 'newChat':    if (typeof msg.windowId === 'number') winSessions.delete(msg.windowId); return cizState.set({ chatSession: '' });
     case 'histLog':    return cizState.addLog('info', String(msg.text || '').slice(0, 200));
     case 'setModel':   return setModel(msg.value === 'quality' ? 'quality' : 'speed');
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
@@ -223,10 +226,10 @@ function storeOutput(out) {
 }
 
 // The + menu's "Screenshot of this tab": a PNG of the current tab, attached to the next message.
-async function snapTab(port, req) {
+async function snapTab(port, req, windowId) {
   const reply = m => { try { port.postMessage(Object.assign({ type: 'snap', req }, m)); } catch {} };
   try {
-    const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+    const [tab] = await browser.tabs.query(typeof windowId === 'number' ? { active: true, windowId } : { active: true, lastFocusedWindow: true });
     if (!tab) return reply({ error: 'No tab to capture.' });
     const gate = cizUrlBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
     if (gate.blocked) return reply({ error: `This tab can't be captured: ${gate.reason}.` });

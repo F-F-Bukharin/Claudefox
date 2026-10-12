@@ -5,7 +5,32 @@
 // ---------------------------------------------------------------- chat
 // One Claude Code turn at a time, run by the helper. The panel shows the stream.
 
-const chatRuns = new Map();   // chat id -> { startedAt, model }
+const chatRuns = new Map();   // chat id -> { startedAt, model, windowId }
+// Messages sent while an answer runs wait here, in order, across all windows: { id, msg }. One answer runs at a time.
+const chatQueue = [];
+const CHAT_QUEUE_MAX = 10;
+let chatReserved = false;      // a message is being started (between the busy check and chatRuns.set)
+const winSessions = new Map(); // window id -> the Claude session of that window's chat
+// Every panel hears which answers run and which messages wait (the hint under the input, the pending bubbles).
+function chatBusyPush() { postToPanels({ type: 'chatBusy', ids: [...chatRuns.keys()], queued: chatQueue.map(q => q.id) }); }
+function chatUnqueue(id) {
+  const i = chatQueue.findIndex(q => q.id === id);
+  if (i >= 0) { chatQueue.splice(i, 1); chatBusyPush(); }
+}
+// A window that closes takes its waiting messages and its saved chat with it.
+function chatWindowGone(windowId) {
+  winSessions.delete(windowId);
+  for (let i = chatQueue.length - 1; i >= 0; i--) if (chatQueue[i].msg.windowId === windowId) chatQueue.splice(i, 1);
+  try { browser.storage.session.remove('win:' + windowId); } catch {}
+  chatBusyPush();
+}
+// When no answer runs, the next waiting message starts. The panel that sent it draws its answer from chatStarted on.
+function drainChatQueue() {
+  if (chatRuns.size || chatReserved || !chatQueue.length) return;
+  const next = chatQueue.shift();
+  postToPanels({ type: 'chatStarted', id: next.id });
+  startChat(next.msg).then(drainChatQueue, drainChatQueue);
+}
 // The log's names for the army turns: the Max effort switch picks armymax.
 const ARMY_LABEL = { army: 'army (Opus 5.5 at high effort, with Haiku workers)', armymax: 'army (Opus 5.5 at max effort, with Haiku workers)' };
 
@@ -47,9 +72,19 @@ async function startChat(msg) {
   const attachments = improve ? [] : cleanAttachments(msg.attachments);
   const fail = error => postToPanels({ type: 'chatDone', id, ok: false, error });
   if (!id || (!text.trim() && !attachments.length && !improve)) return;
+  if (chatRuns.size || chatReserved) {
+    if (chatQueue.length >= CHAT_QUEUE_MAX) return fail('Too many messages are waiting. Wait for Claude to catch up.');
+    chatQueue.push({ id, msg });
+    postToPanels({ type: 'chatQueued', id });
+    return chatBusyPush();
+  }
+  chatReserved = true;
+  try { return await startChatNow(msg, id, text, improve, attachments, fail); } finally { chatReserved = false; }
+}
+
+async function startChatNow(msg, id, text, improve, attachments, fail) {
   const s = cizState.get();
   const armyMax = !improve && s.chatModel === 'quality' && s.chatArmy ? await armyMaxOn() : false;
-  if (chatRuns.size) return fail('Claude is still answering. Wait, or press Cancel.');
   if (s.agent !== 'active') return fail('Claude is stopped. Press Start first.');
   if (!s.signedIn) return fail('Not signed in. Open the Profile page and sign in first.');
   if (s.native !== 'connected') return fail('The helper is not connected. Run "Set up Claude in Zen.bat", then press retry in Settings.');
@@ -57,17 +92,21 @@ async function startChat(msg) {
   if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Double-click "Sign in Claude Code.bat" in the tools folder.');
   const files = !improve && s.filesEnabled ? s.filesMode : '';
   const model = improve ? 'selfimprove' : s.chatModel === 'quality' ? (s.chatArmy ? (armyMax ? 'armymax' : 'army') : 'quality') : s.chatPlus ? 'speedplus' : 'speed';
-  chatRuns.set(id, { startedAt: Date.now(), model });
-  let tab = null, windowId = null;
+  const winId = typeof msg.windowId === 'number' ? msg.windowId : null;
+  chatRuns.set(id, { startedAt: Date.now(), model, windowId: winId });
+  chatBusyPush();
+  let tab = null, windowId = winId;
   if (!improve) {
     try {
-      const [t] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+      const [t] = await browser.tabs.query(winId != null ? { active: true, windowId: winId } : { active: true, lastFocusedWindow: true });
       if (t) { tab = { id: t.id, title: t.title || '', url: t.url || '' }; windowId = t.windowId; }
     } catch {}
   }
   // The sites Claude may use in this message: the open page's, the ones the text names, the chat's, and the ones the user marked allow.
   // Opening a chat from History sends its Claude session id, so the next message resumes that conversation.
-  const resume = improve ? '' : typeof msg.resume === 'string' ? msg.resume.slice(0, 100) : (s.chatSession || '');
+  // A window's own chat resumes that window's session (a message that waited in the queue takes the one its predecessor made).
+  const resume = improve ? '' : typeof msg.resume === 'string' ? msg.resume.slice(0, 100) : winId != null ? (winSessions.get(winId) || '') : (s.chatSession || '');
+  if (!improve && winId != null) winSessions.set(winId, resume);
   let sites = [];
   if (!improve) {
     let blocks = {};
@@ -78,7 +117,7 @@ async function startChat(msg) {
   const sent = sendNative({ type: 'chat', id, text, model, tab, resume, files, folder: files ? s.filesFolder : '',
     unsafe: !improve && !!s.unsafe, caveman: !improve && !!s.caveman, attachments, improve,
     sites, trusted: !improve && !!s.trusted });
-  if (!sent) { chatRuns.delete(id); cizSiteGate.end(id); return fail('Could not reach the helper.'); }
+  if (!sent) { chatRuns.delete(id); chatBusyPush(); cizSiteGate.end(id); return fail('Could not reach the helper.'); }
   await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
     : `chat → Claude Code, ${ARMY_LABEL[model] || model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
 }
@@ -93,17 +132,26 @@ function failChats(error) {
   cizSiteGate.cancel();   // a card that waits for an answer nobody can give now
   for (const id of chatRuns.keys()) { postToPanels({ type: 'chatDone', id, ok: false, error }); cizSiteGate.end(id); }
   chatRuns.clear();
+  for (const q of chatQueue.splice(0)) postToPanels({ type: 'chatDone', id: q.id, ok: false, error });   // Stop clears every waiting message
+  chatBusyPush();
 }
 
 async function onChatDone(msg) {
   const id = String(msg.id || '');
+  const run = chatRuns.get(id);
   chatRuns.delete(id);
   cizSiteGate.end(id);
   const err = String(msg.error || '');
+  if (run && run.windowId != null) {
+    if (msg.sessionId) winSessions.set(run.windowId, String(msg.sessionId));
+    if (!msg.ok && /No conversation found/i.test(err)) winSessions.set(run.windowId, '');
+  }
   if (msg.sessionId) await cizState.set({ chatSession: String(msg.sessionId) });
   if (!msg.ok && /No conversation found/i.test(err)) await cizState.set({ chatSession: '' });
   if (!msg.ok) await cizState.addLog(msg.limit ? 'warn' : 'error', `Chat: ${err.split('\n')[0].slice(0, 200)}`);
   postToPanels({ type: 'chatDone', id, ok: !!msg.ok, error: err, limit: !!msg.limit, sessionId: String(msg.sessionId || '') });
+  chatBusyPush();
+  drainChatQueue();
 }
 
 // ---------------------------------------------------------------- helper (native host)

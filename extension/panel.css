@@ -698,3 +698,8 @@ html[data-wall="picture"] body {
 .hist-date { font-size: 11.5px; color: var(--card-muted); }
 .hist-acts { display: flex; gap: 12px; }
 .hist-foot { margin-top: auto; }
+
+/* ---------- one chat per window: the queue (panel-stream.js) ---------- */
+.msg.queued .body { opacity: .6; border: 1px dashed var(--line); }
+.msg.queued .qrow { align-self: flex-end; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.msg.queued .qx { font-size: 15px; line-height: 1; padding: 0 4px; }

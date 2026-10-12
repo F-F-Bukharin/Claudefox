@@ -255,7 +255,6 @@ function busyMsg() { return chat.find(m => m.role === 'assistant' && m.pending);
 async function submit() {
   const text = input.value.trim();
   if (!text && !attachments.length && !improveOn) return;
-  if (busyMsg()) { $('composerHint').textContent = 'Claude is still answering. Wait, or press Cancel.'; return; }
   if (text.startsWith('/') && !attachments.length) { input.value = ''; autoGrow(); addMsg({ role: 'user', text }); return runSlash(text); }
   if (state.agent === 'stopped') { addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' }); return; }
   if (!state.signedIn) { addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' }); return; }
@@ -263,10 +262,11 @@ async function submit() {
   attachments = [];
   renderAttachments();
   input.value = ''; autoGrow();
-  addMsg({ role: 'user', text: text || (improveOn ? IMPROVE_EMPTY : ''), files: files.map(a => ({ name: a.name, size: a.size })) });
   const id = `p${Date.now().toString(36)}${chatSeq++}`;
-  addMsg({ role: 'assistant', id, text: '', steps: [], pending: true, startedAt: Date.now() });
   const extra = improveOn ? { improve: true } : histResumeExtra();
+  const waits = isBusy();   // an answer runs (here or in another window): this message waits its turn, in a pending bubble
+  addMsg(Object.assign({ role: 'user', cid: id, text: text || (improveOn ? IMPROVE_EMPTY : ''), files: files.map(a => ({ name: a.name, size: a.size })) }, waits ? { queued: true } : {}));
+  if (!waits) addMsg({ role: 'assistant', id, text: '', steps: [], pending: true, startedAt: Date.now() });
   if (!files.length) { send('chat', Object.assign({ id, text }, extra)); return; }
   let payload = [];
   try { payload = await Promise.all(files.map(readAttachment)); }

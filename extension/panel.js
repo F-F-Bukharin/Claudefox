@@ -7,6 +7,10 @@ const $ = id => document.getElementById(id);
 
 let state = {};
 let chat = [];
+// This window's id (the sidebar belongs to one window). Each window keeps its own chat in storage.session under win:<id>.
+let winId = null;
+const winKey = () => (winId == null ? '' : 'win:' + winId);
+const winReady = (async () => { try { const w = await browser.windows.getCurrent(); if (w && typeof w.id === 'number') winId = w.id; } catch {} })();
 const pendingCalls = new Map();
 let callSeq = 1;
 
@@ -57,6 +61,13 @@ $('switchClaude').addEventListener('click', () => {
 });
 $('updateBtn').addEventListener('click', () => send('updateAddon'));
 $('clearLog').addEventListener('click', () => send('clearLog'));
+// The log button in the chat header opens the Action log (Settings > Advanced).
+$('logBtn').addEventListener('click', () => {
+  showPage('settings');
+  setSection('advancedHead', 'advancedBody', true);
+  const card = document.querySelector('.logcard');
+  if (card && card.scrollIntoView) card.scrollIntoView({ block: 'start' });
+});
 const filesMode = () => (state.filesMode === 'write' ? 'write' : 'read');
 $('filesToggle').addEventListener('change', e => send('setFiles', { value: e.target.checked, mode: filesMode(), folder: $('filesFolder').value }));
 $('filesFolder').addEventListener('change', e => send('setFiles', { value: !!state.filesEnabled, mode: filesMode(), folder: e.target.value }));
@@ -252,7 +263,7 @@ function render(s, log) {
   // notice under the composer: why nothing will run right now
   $('composerHint').textContent =
     s.agent === 'stopped' ? 'Stopped. Press Start to let Claude act again.' :
-    !s.signedIn ? 'Not signed in. Open the Profile page to sign in.' : '';
+    !s.signedIn ? 'Not signed in. Open the Profile page to sign in.' : isBusy() ? BUSY_HINT : '';
 
   // caveman mode (the + menu)
   const cave = document.querySelector('#moreMenu [data-act="caveman"]');

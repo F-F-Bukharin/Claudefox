@@ -79,7 +79,7 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  await new Promise(r=>setTimeout(r,60));
  ok('stream renders text and a progress bar, no tool chips', /You have 3 tabs/.test($('messages').textContent) && $('messages').querySelector('.progress .pfill') && !$('messages').querySelector('.step'));
  ok('a chat with messages leaves the empty layout', !$('page-chat').classList.contains('is-empty') && $('emptyState').hidden);
- ok('send disabled while answering', $('sendBtn').disabled===true);
+ ok('send stays enabled while answering (a message sent then waits its turn)', $('sendBtn').disabled===false);
  onMsg({type:'chatDone',id:chatMsg.id,ok:false,error:'Claude AI usage limit reached',limit:true});
  const btn=[...$('messages').querySelectorAll('button')].find(b=>/another account/.test(b.textContent));
  ok('limit shows switch button', !!btn && $('sendBtn').disabled===false);
@@ -279,7 +279,7 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
 // message does not play its entrance again (the .enter class is set only when a message first appears).
 {
   const frame = () => new Promise(r => w.requestAnimationFrame(() => r()));
-  if ($('sendBtn').disabled) { const last=sent.filter(m=>m.type==='chat').pop(); onMsg({type:'chatDone',id:last.id,ok:true}); }
+  if (w.document.querySelector('.msg.pending')) { const last=sent.filter(m=>m.type==='chat').pop(); onMsg({type:'chatDone',id:last.id,ok:true}); }
   $('input').value='stream check'; $('composer').dispatchEvent(new w.Event('submit',{cancelable:true}));
   const sm=sent.filter(m=>m.type==='chat').pop();
   await frame();
@@ -329,7 +329,7 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
  {
   // The army: the octopus (Quality only), its card, the model line, and the trail of workers in a reply
   const frame3 = () => new Promise(r => w.requestAnimationFrame(() => r()));
-  if ($('sendBtn').disabled) { const last=sent.filter(m=>m.type==='chat').pop(); onMsg({type:'chatDone',id:last.id,ok:true}); }
+  if (w.document.querySelector('.msg.pending')) { const last=sent.filter(m=>m.type==='chat').pop(); onMsg({type:'chatDone',id:last.id,ok:true}); }
   onMsg({type:'state',state:{...ready,chatModel:'speed',chatArmy:false},log:[]});
   ok('army: the octopus is hidden in Speed, the + shows', $('armyBtn').hidden===true && $('plusBtn').hidden===false);
   onMsg({type:'state',state:{...ready,chatModel:'quality',chatArmy:false,armyToday:2},log:[]});
