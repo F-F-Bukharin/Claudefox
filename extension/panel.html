@@ -1,0 +1,410 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claudefox</title>
+<script src="lib/wall.js"></script>
+<script src="theme.js"></script>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="20" height="20">
+      <h1>Claude</h1>
+      <span id="agentPill" class="pill">…</span>
+      <span id="unsafeBadge" class="pill unsafe" hidden title="Unsafe mode is on: Claude may act on Google sign-in pages">Unsafe</span>
+    </div>
+    <button id="stopBtn" class="stopchip" title="Stop: cancel actions, cut the connection, turn file tools off">Stop</button>
+    <button id="startBtn" class="startchip" hidden>Start</button>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <span id="tabThumb" class="tab-thumb" role="presentation" aria-hidden="true"></span>
+    <button role="tab" data-page="chat" aria-selected="true" title="Claudefox">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4h0A1.5 1.5 0 0 1 4 14.5z"/></svg>
+      <span>Claude</span></button>
+    <button role="tab" data-page="profile" title="Profile">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+      <span>Profile</span></button>
+    <button role="tab" data-page="settings" title="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>
+      <span>Settings</span></button>
+  </nav>
+
+  <!-- ============================== CHAT ============================== -->
+  <main id="page-chat" class="page chat is-empty" role="tabpanel">
+    <div id="messages" class="messages" aria-live="polite">
+      <div id="emptyState" class="empty">
+        <div class="empty-mark"><img src="icons/icon.svg" alt="" width="40" height="40"></div>
+        <h2 id="emptyTitle">What should Claude do in Firefox?</h2>
+        <p id="emptyText">Ask me to read, summarize or do things in your tabs.</p>
+        <ol id="setup" class="setup" hidden></ol>
+      </div>
+    </div>
+
+    <div id="improveBar" class="improve-bar" role="status" hidden>
+      <b>Improving Claudefox</b>
+      <span>Opus 5.5 at max effort. You approve each change. <button type="button" id="improveLeave" class="link">Leave</button></span>
+    </div>
+    <div class="composer">
+      <div class="chips starters">
+        <button class="chip" data-fill="Summarize this page">Summarize this page</button>
+        <button class="chip" data-fill="/tabs">/tabs</button>
+        <button class="chip" data-fill="/help">/help</button>
+      </div>
+      <!-- Claude asks to watch a video: only Allow and Deny answer it, and Allow opens the helper's confirm window -->
+      <div id="watchCard" class="card" hidden>
+        <p><strong>Claude wants to watch a video</strong></p>
+        <p id="watchCardSource" class="mono small"></p>
+        <p class="muted small">Watching runs Python, yt-dlp and ffmpeg on this PC.</p>
+        <div class="row"><button id="watchAllow" type="button">Allow</button> <button id="watchDeny" type="button">Deny</button></div>
+      </div>
+      <!-- Claude asks to look in a folder on this computer: the answer is given in the helper's confirm window -->
+      <div id="grantAsk" class="confirm grant-ask" role="status" aria-labelledby="grantTitle" aria-describedby="grantFolder" hidden>
+        <p id="grantTitle"><b>Claude asks to look in this folder</b></p>
+        <p id="grantFolder" class="mono grant-folder"></p>
+        <p class="muted small">Answer in the Claudefox window that opened: Allow this folder, or Deny. Allowing covers the folder and its subfolders until you remove it in Profile, Permissions. Army workers never look there.</p>
+        <p id="grantAccess" class="warnnote small" hidden></p>
+      </div>
+      <form id="composer" class="inputbox">
+        <div class="attach">
+          <button type="button" id="attachBtn" class="attach-main" title="Add files: Word, PDF, images, slides, sheets… You can also paste or drop them here." aria-label="Add files">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" id="moreBtn" class="attach-more" title="More options" aria-label="More options" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu">
+            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="field">
+          <div id="attachList" class="attlist" hidden></div>
+          <textarea id="input" rows="1" placeholder="Message Claude…" autocomplete="off"></textarea>
+        </div>
+        <button id="sendBtn" type="submit" class="send" aria-label="Send">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <input type="file" id="fileInput" multiple hidden>
+      </form>
+      <div id="moreMenu" class="menu" role="menu" aria-label="More options" hidden>
+        <button type="button" role="menuitem" data-act="upload">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5 12.2 19.3a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+          <span class="mtext">Upload files<small>or paste, or drop them in</small></span></button>
+        <button type="button" role="menuitem" data-act="snap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <span class="mtext">Screenshot of this tab</span></button>
+        <button type="button" role="menuitemcheckbox" data-act="caveman" aria-checked="false">
+          <span class="memoji" aria-hidden="true">🪨</span>
+          <span class="mtext">Caveman mode<small>short replies, fewer tokens</small></span><span class="mcheck" aria-hidden="true"></span></button>
+        <div class="sep" role="separator"></div>
+        <button type="button" role="menuitem" data-act="tools">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4h4v3a2 2 0 1 0 4 0V4h2v6h-3a2 2 0 1 0 0 4h3v6h-6v-3a2 2 0 1 0-4 0v3H4v-6h3a2 2 0 1 0 0-4H4V4h6z"/></svg>
+          <span class="mtext">Tools and plugins…</span></button>
+        <button type="button" role="menuitem" data-act="improve">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>
+          <span class="mtext">Improve Claudefox…<small>Opus 5.5 at max effort. You approve every change.</small></span></button>
+        <button type="button" role="menuitem" data-act="new">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="mtext">New chat</span></button>
+      </div>
+      <div id="slashMenu" class="menu slash-menu" role="listbox" aria-label="Commands" hidden></div>
+      <div class="composer-row">
+        <div class="context">
+          <span class="ctx-label">Current tab</span>
+          <span id="ctxTab" class="ctx-tab">…</span>
+        </div>
+        <div class="modebox">
+          <div id="modeSeg" class="modeseg" data-mode="speed" role="group" aria-label="Model: Speed or Quality, with Speed Plus (in Speed) or the army (in Quality) on the left">
+            <button type="button" id="armyBtn" hidden aria-pressed="false" aria-label="Army" aria-haspopup="dialog" aria-controls="armyCard" aria-expanded="false" title="Army: Opus 5.5 at max effort leads up to five Haiku 5.5 workers in background tabs. Click for details."><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.6 9.2C3.6 8.3 3 7.1 3 5.7 3 3.3 5.2 1.5 8 1.5s5 1.8 5 4.2c0 1.4-.6 2.6-1.6 3.5M4.6 9.2c-.5 1.7-1.7 2.8-3.1 2.6M6.6 10c0 1.8-.6 3.1-1.9 3.8M9.4 10c0 1.8.6 3.1 1.9 3.8M11.4 9.2c.5 1.7 1.7 2.8 3.1 2.6M6.2 6h0M9.8 6h0"/></svg></button>
+            <button type="button" id="plusBtn" aria-pressed="false" aria-label="Speed Plus" title="Speed Plus: Haiku 5.5 at max effort. Close to Opus quality, still light on usage. Click to turn it on or off."><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3v10M3 8h10"/></svg></button>
+            <button type="button" id="modeBtn" aria-label="Speed. Switch to Quality." title="Click to switch between Speed (Haiku 5.5, high effort) and Quality (Opus 5.5, high effort)."><span id="modeLabel">Speed</span></button>
+          </div>
+          <p id="modelLine" class="model-line">Haiku 5.5 · high effort</p>
+          <div id="armyCard" class="army-card" role="dialog" aria-labelledby="armyTitle" hidden>
+            <div class="army-head">
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4.6 9.2C3.6 8.3 3 7.1 3 5.7 3 3.3 5.2 1.5 8 1.5s5 1.8 5 4.2c0 1.4-.6 2.6-1.6 3.5M4.6 9.2c-.5 1.7-1.7 2.8-3.1 2.6M6.6 10c0 1.8-.6 3.1-1.9 3.8M9.4 10c0 1.8.6 3.1 1.9 3.8M11.4 9.2c.5 1.7 1.7 2.8 3.1 2.6M6.2 6h0M9.8 6h0"/></svg>
+              <h4 id="armyTitle">Army</h4>
+              <button type="button" id="armyClose" class="army-x" aria-label="Close">×</button>
+            </div>
+            <p>Opus 5.5 at max effort leads. For jobs that need several pages, it sends up to five Haiku 5.5 workers (high effort), each in its own background tab. They read, click and type there with your logins. Your current tab stays where it is.</p>
+            <p>They never type passwords, 2FA codes or payment details. Stop ends every worker and closes their tabs.</p>
+            <p class="army-cost">A run uses far more of your plan than a normal reply.</p>
+            <p id="armyRuns" class="army-runs">Runs today: 0 of 5 recommended.</p>
+            <div class="army-row">
+              <label for="armyToggle">Army</label>
+              <input type="checkbox" id="armyToggle" class="switch">
+            </div>
+          </div>
+        </div>
+      </div>
+      <p id="composerHint" class="composer-hint"></p>
+    </div>
+  </main>
+
+  <!-- ============================== PROFILE ============================== -->
+  <main id="page-profile" class="page scroll" role="tabpanel" hidden>
+    <section class="card" id="signedOut" hidden>
+      <h3>Not signed in</h3>
+      <p class="muted">Uses the claude.ai session already open in Firefox. Sign in to claude.ai in a normal tab first, then click below. Firefox remembers it after that, until you sign out here or on claude.ai.</p>
+      <button id="signInBtn" class="primary wide">Sign in with Claude</button>
+      <button id="openClaude" class="ghost wide">Open claude.ai</button>
+    </section>
+
+    <section class="card" id="signedIn" hidden>
+      <div class="acct">
+        <div class="avatar" id="avatar">?</div>
+        <div class="who">
+          <div id="acctName" class="name"></div>
+          <div id="acctEmail" class="muted"></div>
+        </div>
+      </div>
+      <dl class="facts">
+        <dt>Signed in</dt><dd id="acctSince">—</dd>
+        <dt>Checked via</dt><dd id="acctVia">—</dd>
+        <dt>Account ID</dt><dd id="acctId" class="mono">—</dd>
+      </dl>
+      <button id="signOutBtn" class="ghost wide">Sign out of the add-on</button>
+      <p class="muted small">Signing out here leaves claude.ai itself signed in.</p>
+    </section>
+
+    <div class="acctgroup" id="accountsGroup">
+      <h3>Accounts</h3>
+      <p id="acctChat" class="chatline" hidden></p>
+      <div id="acctList" class="acctlist" aria-live="polite"></div>
+      <p id="acctNote" class="note" hidden></p>
+      <p id="acctEmpty" class="muted small" hidden></p>
+      <section class="card" id="acctLogin" hidden>
+        <p><strong>Signing in…</strong></p>
+        <p class="muted small">A sign-in window is open. Pick the Claude account there and click Authorize. This list updates when you are done.</p>
+        <div class="confirm-btns"><button id="acctLoginCancel" class="ghost">Cancel sign-in</button></div>
+      </section>
+      <button id="accountAdd" class="ghost wide">Add account</button>
+      <p class="muted small">Each account keeps its own chats. The chat uses the one marked In use.</p>
+    </div>
+
+    <section class="card rows" id="permCard">
+            <h3>Permissions</h3>
+      <div class="row">
+        <label for="filesToggle">File tools</label>
+        <span class="val"><input type="checkbox" id="filesToggle" class="switch"></span>
+      </div>
+      <div class="files">
+        <div class="pickrow">
+          <p id="folderNow" class="folderNow mono"></p>
+          <button id="chooseFolder" class="ghost" type="button">Choose folder…</button>
+        </div>
+        <details class="typepath">
+          <summary>Type the path instead</summary>
+          <input id="filesFolder" class="textin mono" type="text" spellcheck="false" autocomplete="off"
+            placeholder="Folder, e.g. C:\Users\you\Documents\notes" aria-label="Folder Claude may use">
+        </details>
+        <div class="seg" id="fileSeg" role="radiogroup" aria-label="File access">
+          <button type="button" role="radio" data-mode="read">Read only</button>
+          <button type="button" role="radio" data-mode="write">Read and write</button>
+        </div>
+        <p id="filesNote" class="muted small"></p>
+      </div>
+      <div class="row">
+        <label for="unsafeToggle">Unsafe mode</label>
+        <span class="val"><input type="checkbox" id="unsafeToggle" class="switch"></span>
+      </div>
+      <p id="unsafeNote" class="muted small unsafe-note"></p>
+      <div class="row">
+        <label for="watchToggle">Watch videos</label>
+        <span class="val"><input type="checkbox" id="watchToggle" class="switch"></span>
+      </div>
+      <p id="watchNote" class="muted small"></p>
+      <div class="row">
+        <label for="watchOnLoadToggle">Start with watching on</label>
+        <span class="val"><input type="checkbox" id="watchOnLoadToggle" class="switch"></span>
+      </div>
+      <div class="row">
+        <span>Local folders</span>
+        <span class="val" id="localCount">none allowed</span>
+      </div>
+      <ul id="localList" class="locallist" aria-label="Folders Claude may look in"></ul>
+      <p id="localNote" class="muted small local-note"></p>
+      <div class="row">
+        <span>Google sign-in pages</span>
+        <span class="val" id="googleVal">always hands-off</span>
+      </div>
+      <div class="row">
+        <span>Passwords, 2FA, payment</span>
+        <span class="val">never typed</span>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================== SETTINGS ============================== -->
+  <main id="page-settings" class="page scroll" role="tabpanel" hidden>
+    <section class="card rows">
+      <div class="row">
+        <label for="themeToggle">Dark mode</label>
+        <span class="val"><input type="checkbox" id="themeToggle" class="switch"></span>
+      </div>
+    </section>
+
+    <section class="card wallcard">
+      <h3>Wallpaper</h3>
+      <div class="wallseg" role="radiogroup" aria-label="Wallpaper">
+        <button type="button" role="radio" data-wall="default" aria-checked="true">Default</button>
+        <button type="button" role="radio" data-wall="solid" aria-checked="false">Solid</button>
+        <button type="button" role="radio" data-wall="gradient" aria-checked="false">Gradient</button>
+        <button type="button" role="radio" data-wall="picture" aria-checked="false">Picture</button>
+      </div>
+      <div class="wallopts" id="wallSolid" hidden>
+        <label class="wallrow"><span>Colour</span><input type="color" id="wallColor" value="#f6f4ef"></label>
+      </div>
+      <div class="wallopts" id="wallGradient" hidden>
+        <label class="wallrow"><span>From</span><input type="color" id="wallFrom" value="#f6f4ef"></label>
+        <label class="wallrow"><span>To</span><input type="color" id="wallTo" value="#cfdcef"></label>
+      </div>
+      <div class="wallopts" id="wallPicture" hidden>
+        <div class="wallrow">
+          <button type="button" class="ghost" id="wallPick">Choose picture…</button>
+          <button type="button" class="ghost" id="wallClear">Remove picture</button>
+        </div>
+      </div>
+      <p class="note" id="wallNote" hidden></p>
+      <input type="file" id="wallFile" accept="image/*" hidden>
+      <p class="note">Cards keep their own colour. The text on the page turns black or white to suit the wallpaper. Kept in this browser only.</p>
+    </section>
+
+    <section class="card">
+      <h3>Saving files</h3>
+      <div class="seg" id="outputSeg" role="radiogroup" aria-label="Where a made file goes">
+        <button type="button" role="radio" data-value="download" aria-checked="true">Download now</button>
+        <button type="button" role="radio" data-value="store" aria-checked="false">Store in output folder</button>
+      </div>
+      <p class="note" id="outputNote"></p>
+    </section>
+
+    <section class="card conns">
+      <h3>Connections</h3>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Helper</div>
+          <div class="conn-status"><span id="nativeDot" class="dot"></span><span id="nativeVal">…</span></div>
+          <div class="conn-detail" id="nativeDetail"></div>
+        </div>
+        <div class="conn-acts"><button id="retryNative" class="ghost" hidden>Retry</button></div>
+      </div>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Add-on</div>
+          <div class="conn-status"><span id="addonVal">…</span></div>
+          <div class="conn-detail" id="updateNote" hidden></div>
+        </div>
+        <div class="conn-acts"><button id="updateBtn" class="ghost" hidden>Update</button></div>
+      </div>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Claude Code</div>
+          <div class="conn-status"><span id="claudeDot" class="dot"></span><span id="claudeVal">…</span></div>
+          <div class="conn-detail" id="claudeDetail"></div>
+        </div>
+        <div class="conn-acts">
+          <button id="checkClaude" class="ghost" hidden>Check</button>
+          <button id="switchClaude" class="ghost" hidden>Manage accounts</button>
+        </div>
+      </div>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Using Firefox now</div>
+          <div class="conn-status" id="clientsVal">nobody</div>
+        </div>
+      </div>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Debug port 9222</div>
+          <div class="conn-status"><span id="debugDot" class="dot"></span><span id="debugVal">…</span></div>
+        </div>
+      </div>
+      <div class="conn">
+        <div class="conn-text">
+          <div class="conn-name">Pending actions</div>
+          <div class="conn-status" id="pendingVal">0</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mods" id="modsCard">
+      <h3>Mods</h3>
+      <p class="note">Small add-ons for this panel, kept in <code>extension\mods</code>. A mod that throws is stopped and shown here, and the rest keep running. Switch changes take effect after Reload panel.</p>
+      <ul class="modlist" id="modsList" hidden></ul>
+      <p class="note" id="modsEmpty" hidden></p>
+      <div class="modsacts">
+        <button type="button" class="link" id="modsCheck">Check the folder</button>
+        <button type="button" class="link" id="modsReload">Reload panel</button>
+        <button type="button" class="link" id="modsOff">Turn all mods off</button>
+      </div>
+    </section>
+    <section class="card" id="toolsCard">
+      <button type="button" class="sechead" id="toolsHead" aria-expanded="false" aria-controls="toolsBody">
+        <span class="title">Tools and plugins</span><span class="sumtext" id="toolsSummary"></span><span class="chev" aria-hidden="true"></span>
+      </button>
+      <div id="toolsBody" class="secbody" hidden>
+        <div class="loghead">
+          <p class="muted small">Extra tools the chat can use. The essentials (vidIQ, Caveman) are on; everything else stays off until you switch it on. Anything that runs programs on this PC asks first in the Claudefox window, and shells like Desktop Commander are never on.</p>
+          <button id="toolsCheck" class="link" title="Start every tool once to see which ones answer, and list your claude.ai connectors">check</button>
+        </div>
+      <div id="toolsList" class="tools" aria-live="polite"></div>
+      <p id="toolsNote" class="note bad tools-note" role="status" hidden></p>
+      <div id="toolConfirm" class="confirm" hidden>
+        <p id="toolConfirmText"></p>
+        <div class="confirm-btns">
+          <button id="toolNo" class="ghost">Cancel</button>
+          <button id="toolYes" class="primary">Turn on</button>
+        </div>
+      </div>
+      <details class="addtool" id="addTool">
+        <summary>Add a tool or plugin</summary>
+        <div class="addform">
+          <label class="small muted" for="addName">A tool server (MCP)</label>
+          <input id="addName" class="textin" placeholder="Name, e.g. my-tool" spellcheck="false" autocomplete="off">
+          <input id="addTarget" class="textin mono" placeholder="https://… address, or the command that starts it" spellcheck="false" autocomplete="off">
+          <input id="addHeader" class="textin mono" placeholder="Header, if it needs one: Authorization: Bearer …" spellcheck="false" autocomplete="off">
+          <button id="addBtn" class="primary">Add tool</button>
+          <label class="small muted" for="pluginSpec">A plugin from a marketplace</label>
+          <input id="pluginSpec" class="textin mono" placeholder="name@marketplace, e.g. caveman@anthropic-plugin-directory" spellcheck="false" autocomplete="off">
+          <input id="pluginSource" class="textin mono" placeholder="Marketplace, if it is new: owner/repo or https://…" spellcheck="false" autocomplete="off">
+          <button id="pluginBtn" class="ghost">Install plugin</button>
+          <p class="muted small">Plugins and connectors you add on claude.ai appear here by themselves (press check).</p>
+        </div>
+      </details>
+      </div>
+    </section>
+
+    <section class="card" id="advancedCard">
+      <button type="button" class="sechead" id="advancedHead" aria-expanded="false" aria-controls="advancedBody">
+        <span class="title">Advanced</span><span class="sumtext">Panel, developer, action log</span><span class="chev" aria-hidden="true"></span>
+      </button>
+      <div id="advancedBody" class="secbody" hidden>
+        <div class="sub">
+          <h3>Panel</h3>
+          <p class="muted small">The panel opens in the sidebar. Open and close it with the toolbar button or <b>Alt+Shift+C</b>. Drag the sidebar's inner edge to make it wider.</p>
+        </div>
+        <div class="sub">
+          <h3>Developer</h3>
+          <div class="devbtns">
+            <button id="devPing">Ping</button>
+            <button id="devTabs">List my tabs</button>
+          </div>
+        </div>
+        <div class="sub logcard">
+          <div class="loghead">
+            <h3>Action log</h3>
+            <button id="clearLog" class="link">clear</button>
+          </div>
+          <ol id="log"></ol>
+        </div>
+      </div>
+    </section>
+
+    <p class="muted small center" id="version"></p>
+  </main>
+
+  <script src="lib/markdown.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

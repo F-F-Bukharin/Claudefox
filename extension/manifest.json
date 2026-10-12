@@ -1,0 +1,70 @@
+{
+  "manifest_version": 2,
+  "name": "Claudefox",
+  "version": "0.11.0",
+  "description": "Personal-use agent bridge that lets a Claude session read and act on pages in Firefox. Not affiliated with or endorsed by Anthropic or Mozilla.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "claude-in-zen@f.local",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "websiteContent",
+          "browsingActivity"
+        ]
+      }
+    }
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "nativeMessaging",
+    "downloads",
+    "clipboardWrite",
+    "webRequest",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "lib/policy.js",
+      "lib/state.js",
+      "lib/files.js",
+      "lib/markdown.js",
+      "lib/docx.js",
+      "lib/netlog.js",
+      "lib/army.js",
+      "lib/local.js",
+      "lib/tools.js",
+      "background.js"
+    ],
+    "persistent": true
+  },
+  "sidebar_action": {
+    "default_title": "Claudefox",
+    "default_panel": "panel.html",
+    "default_icon": {
+      "16": "icons/icon.svg",
+      "32": "icons/icon.svg",
+      "64": "icons/icon.svg"
+    },
+    "open_at_install": true
+  },
+  "browser_action": {
+    "default_title": "Claudefox",
+    "default_area": "navbar",
+    "default_icon": {
+      "16": "icons/icon.svg",
+      "32": "icons/icon.svg",
+      "64": "icons/icon.svg"
+    }
+  },
+  "commands": {
+    "_execute_sidebar_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+C"
+      },
+      "description": "Toggle the Claudefox panel"
+    }
+  }
+}

@@ -1,0 +1,42 @@
+:root { color-scheme: light dark; --bg: #f6f4ef; --card: #fff; --ink: #1f1e1c; --muted: #6b6862; --line: #e4e0d8; --accent: #c96442; --code: #efebe3; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1c1b19; --card: #262522; --ink: #eceae4; --muted: #a19d94; --line: #3a3834; --accent: #d97757; --code: #302e2a; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 system-ui, "Segoe UI", sans-serif; }
+.bar { position: sticky; top: 0; display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--card); border-bottom: 1px solid var(--line); z-index: 2; }
+.meta { flex: 1; min-width: 0; }
+.name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.info { font-size: 12px; color: var(--muted); }
+button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button.primary { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+.view { max-width: 860px; margin: 24px auto 60px; padding: 28px 36px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.view.wide { max-width: none; margin: 0; border-radius: 0; border: 0; padding: 0; background: transparent; }
+.view h3, .view h4, .view h5 { font-family: Georgia, "Iowan Old Style", serif; line-height: 1.3; margin: 1.2em 0 .4em; }
+.view h3 { font-size: 1.7em; } .view h4 { font-size: 1.3em; } .view h5 { font-size: 1.1em; }
+.view p, .view ul, .view ol, .view blockquote { margin: .6em 0; }
+.view code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .9em; background: var(--code); border-radius: 4px; padding: 0 4px; }
+.view pre { margin: 0; padding: 12px 14px; overflow: auto; }
+.view pre code { background: none; padding: 0; }
+.codeblock { border: 1px solid var(--line); border-radius: 10px; background: var(--code); margin: .8em 0; overflow: hidden; }
+.codehead { display: flex; justify-content: space-between; padding: 4px 10px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.codecopy { padding: 0 6px; border: 0; font-size: 12px; color: var(--accent); }
+blockquote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
+.tablewrap { overflow-x: auto; } table { border-collapse: collapse; margin: .8em 0; font-size: .95em; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; } th { background: var(--code); }
+a { color: var(--accent); }
+.plain { white-space: pre-wrap; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; margin: 0; }
+iframe.html { width: 100%; height: calc(100vh - 60px); border: 0; background: #fff; display: block; }
+img.svg { max-width: 100%; display: block; margin: 0 auto; }
+.missing { color: var(--muted); text-align: center; }
+/* Download + the small "Save as" button beside it */
+.saveas { position: relative; display: flex; }
+.saveas #download { border-radius: 8px 0 0 8px; }
+.saveas .more { border-radius: 0 8px 8px 0; padding: 6px 8px; margin-left: 1px; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 210px; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 5px; display: flex; flex-direction: column; z-index: 5;
+  transform-origin: top right; animation: pop .14s ease-out; }
+.menu button { border: 0; text-align: left; border-radius: 6px; padding: 7px 10px; }
+.menu button:hover, .menu button:focus-visible { background: var(--code); outline: none; }
+.menu small { color: var(--muted); margin-left: 6px; }
+@keyframes pop { from { opacity: 0; transform: scale(.96) translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .menu { animation: none; } }
+@media print { .bar { display: none; } .view { border: 0; margin: 0; max-width: none; } body { background: #fff; color: #000; } }
