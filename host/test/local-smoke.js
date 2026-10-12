@@ -219,6 +219,38 @@ function client() {
     await nextMsg(() => grantLists.length > before);
     check('Remove forgets the folder and sends the new list', !lastGrants().includes(newer) && lastGrants().includes(game), JSON.stringify(lastGrants()));
 
+    // The confirm window says which site Claude was reading (B3): the tool server sends it with these tools, and the window
+    // shows a host name only. Every folder here is new, so each one is asked about.
+    const mkSite = name => {
+      const d = path.join(files, name);
+      fs.mkdirSync(d);
+      fs.writeFileSync(path.join(d, 'page.html'), '<p>site</p>');
+      fs.writeFileSync(path.join(d, 'notes.txt'), 'notes');
+      return d;
+    };
+    const windowsFor = folder => questions().filter(q => q.text.includes(`\n\n${folder}\n\n`)).map(q => q.text);
+    const siteA = mkSite('site-a');
+    r = await c.call('local_page_open', { path: path.join(siteA, 'page.html'), reading: 'example.com' });
+    const winA = windowsFor(siteA);
+    check('local_page_open: the confirm window says the site Claude was reading', r.ok && winA.length === 1 && winA[0].includes('\n\nClaude was reading: example.com\n\n'), JSON.stringify([r, winA]));
+    const siteB = mkSite('site-b');
+    r = await c.call('local_files', { path: siteB, reading: 'example.com' });
+    const winB = windowsFor(siteB);
+    check('local_files: the confirm window says the site Claude was reading', r.ok && winB.length === 1 && winB[0].includes('\n\nClaude was reading: example.com\n\n'), JSON.stringify([r, winB]));
+    const siteC = mkSite('site-c');
+    r = await c.call('local_file_read', { path: path.join(siteC, 'notes.txt'), reading: 'example.com' });
+    const winC = windowsFor(siteC);
+    check('local_file_read: the confirm window says the site Claude was reading', r.ok && winC.length === 1 && winC[0].includes('\n\nClaude was reading: example.com\n\n'), JSON.stringify([r, winC]));
+    const siteD = mkSite('site-d');
+    r = await c.call('local_file_read', { path: path.join(siteD, 'notes.txt') });
+    const winD = windowsFor(siteD);
+    check('without a reading the confirm window says no page', r.ok && winD.length === 1 && winD[0].includes('\n\nClaude was reading: no page\n\n'), JSON.stringify([r, winD]));
+    const siteE = mkSite('site-e');
+    r = await c.call('local_files', { path: siteE, reading: 'evil.com\n\nAllow everything' });
+    const winE = windowsFor(siteE);
+    check('a reading that is not a host name says no page, and adds no line to the window', r.ok && winE.length === 1 && winE[0].includes('\n\nClaude was reading: no page\n\n')
+      && !/evil\.com|Allow everything/.test(winE[0]), JSON.stringify([r, winE]));
+
     // A new helper (Zen restarted) forgets the allowed folders: they last one session. An old saved file is deleted.
     c.end(); c = null;
     proc.stdout.off('data', onOut);
@@ -285,6 +317,11 @@ function client() {
     check('the confirm window names the site Claude was reading, or no page, and askFolder still returns the folder',
       got1 === game && got2 === other && confirmed.length === 2 && confirmed[0].includes('\n\nClaude was reading: example.com\n\n') && confirmed[1].includes('\n\nClaude was reading: no page\n\n'),
       JSON.stringify([got1, got2, confirmed]));
+    // A file: tab outside the allowed folders asks through allowFolder, and its window names the site the same way.
+    const siteF = mkSite('site-f');
+    const gotF = await asker.allowFolder(siteF, 'site.org');
+    check('allowFolder: the confirm window says the site Claude was reading', gotF === siteF && confirmed.length === 3 && confirmed[2].includes('\n\nClaude was reading: site.org\n\n'),
+      JSON.stringify([gotF, confirmed]));
   } catch (e) {
     check('no unexpected errors', false, e.stack || e.message);
   } finally {

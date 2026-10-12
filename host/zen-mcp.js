@@ -170,6 +170,28 @@ function format(tool, res) {
   return { content: [{ type: 'text', text: typeof r === 'string' ? r : JSON.stringify(r, null, 2) }] };
 }
 
+// ------------------------------------------------------------------ the site Claude was reading
+
+// The site of the last web page a page tool read in this chat message (each message starts its own tool server). The
+// local-page confirm window says "Claude was reading: <site>", so the user sees which page was open when Claude asked
+// for a folder: a page that tells Claude to read the user's files is then visible to them.
+let lastSite = '';
+const LOCAL_PAGE_TOOLS = new Set(['local_page_open', 'local_files', 'local_file_read']);
+// Page tools whose results are files on this computer or documents, not web pages: they never set the site.
+const NOT_WEB_PAGES = new Set(['local_page_open', 'local_files', 'local_file_read', 'read_document']);
+
+// After a successful page read, the site is the URL's host name when the URL is http: or https:. A file: URL, or any other
+// URL, leaves the site as it was.
+function noteSite(tool, res) {
+  if (!res || !res.ok || !res.result || typeof res.result !== 'object') return;
+  if (NOT_WEB_PAGES.has(tool) || !(PAGE_CONTENT.has(tool) || tool === 'screenshot')) return;
+  if (typeof res.result.url !== 'string') return;
+  try {
+    const u = new URL(res.result.url);
+    if (u.protocol === 'http:' || u.protocol === 'https:') lastSite = u.hostname.toLowerCase();
+  } catch {}
+}
+
 // ------------------------------------------------------------------ MCP over stdio
 
 function writeMsg(m) { process.stdout.write(JSON.stringify(m) + '\n'); }
@@ -219,7 +241,11 @@ async function handle(msg) {
       let res;
       // army_wait waits up to its seconds (5 to 110) in the helper: give it 20 s more than that.
       const ms = name === 'army_wait' ? (Math.min(Math.max(Number(args.seconds) > 0 ? Number(args.seconds) : 60, 5), 110) + 20) * 1000 : tool.timeoutMs || 30000;
-      try { res = await callZen(name, args, ms); } catch (e) { res = { ok: false, error: e.message }; }
+      // The local-page tools get the site Claude was reading, on a copy of the arguments: a `reading` Claude put there is
+      // replaced, so Claude cannot choose what the confirm window says.
+      const sent = LOCAL_PAGE_TOOLS.has(name) ? Object.assign({}, args, { reading: lastSite }) : args;
+      try { res = await callZen(name, sent, ms); } catch (e) { res = { ok: false, error: e.message }; }
+      noteSite(name, res);
       log.info(`${name} ${res.ok ? 'ok' : 'error'} ${Date.now() - started} ms`);
       return reply(id, format(name, res));
     }

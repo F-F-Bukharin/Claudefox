@@ -61,6 +61,11 @@ async function findBrowser() {
   return browserFound;
 }
 
+// The site the confirm window may name (what Claude was reading): a host name with an optional port, at most 253 characters.
+// Text from a page must never add a line or a word to that window, so anything else is shown as no page.
+const SITE = /^[a-z0-9.-]+(:\d{1,5})?$/i;
+const siteOf = reading => (typeof reading === 'string' && reading.length <= 253 && SITE.test(reading) ? reading : '');
+
 // A path as Claude gave it (a full path or a file: URL) -> a full path. Network shares and device paths are refused.
 function toPath(raw) {
   let s = String(raw == null ? '' : raw).trim().replace(/^"(.*)"$/, '$1');
@@ -121,8 +126,9 @@ function createGrants(file) {
 // Promise<{ ok, error }>, grants: createGrants(...), changed() (the list changed: tell the add-on),
 // asking(folder) (a question about this folder is on screen, or '' when it is over) }
 function createLocalPages(deps) {
-  // A folder the user has not allowed yet: they answer in the confirm window, which says what Claude was reading
-  // (no reading: no page). Resolves the allowed folder.
+  // A folder the user has not allowed yet: they answer in the confirm window. The window says which site was open when
+  // Claude asked (no site: no page), so a page that tells Claude to read the user's files is visible to the user.
+  // Resolves the allowed folder.
   async function askFolder(folder, reading) {
     const have = deps.grants.covering(folder);
     if (have) return have;
@@ -131,7 +137,7 @@ function createLocalPages(deps) {
     try {
       r = await deps.confirm({
         title: 'Claude in Zen: allow a folder?',
-        text: `Claude asks to look in this folder and its subfolders:\n\n${folder}\n\nClaude was reading: ${reading || 'no page'}\n\nIt may then open, list and read the files there, until you remove the folder in Claude in Zen's Profile, Permissions. Army workers never look there.`,
+        text: `Claude asks to look in this folder and its subfolders:\n\n${folder}\n\nClaude was reading: ${siteOf(reading) || 'no page'}\n\nIt may then open, list and read the files there, until you remove the folder in Claude in Zen's Profile, Permissions. Army workers never look there.`,
         yes: 'Allow this folder', no: 'Deny',
       });
     } finally { if (deps.asking) deps.asking(''); }
@@ -141,26 +147,27 @@ function createLocalPages(deps) {
     return deps.grants.covering(folder) || folder;
   }
 
-  // The path's real place, once the user allows its folder. kind: 'file', 'dir' or 'any'.
-  async function allow(raw, kind) {
+  // The path's real place, once the user allows its folder. kind: 'file', 'dir' or 'any'. reading: the site Claude was
+  // reading, for the confirm window (see askFolder).
+  async function allow(raw, kind, reading) {
     const f = realOf(raw);
     if (kind === 'dir' && !f.dir) throw new Error(`${f.real} is a file. Use local_file_read to read it or local_page_open to open it.`);
     if (kind === 'file' && f.dir) throw new Error(`${f.real} is a folder. Use local_files to see what is in it.`);
     if (!f.dir && !f.file) throw new Error(NOT_A_FILE(f.real));
     const why = guard.localProblem(f.real, f.dir);
     if (why) throw new Error(`Not allowed: ${f.real}: ${why}.`);
-    f.folder = await askFolder(f.dir ? f.real : path.dirname(f.real));
+    f.folder = await askFolder(f.dir ? f.real : path.dirname(f.real), reading);
     if (!guard.within(f.real, f.folder)) throw new Error(`Not allowed: ${f.real} is outside ${f.folder}.`);
     return f;
   }
 
   // The add-on found a file: tab outside the allowed folders (extension/lib/local.js): the same question, for that folder.
-  async function allowFolder(raw) {
+  async function allowFolder(raw, reading) {
     const f = realOf(raw);
     if (!f.dir) throw new Error(`${f.real} is not a folder.`);
     const why = guard.localProblem(f.real, true);
     if (why) throw new Error(`Not allowed: ${f.real}: ${why}.`);
-    return askFolder(f.real);
+    return askFolder(f.real, reading);
   }
 
   // local_page_open: a page or file in a new Zen tab, in front, for Claude to see and play.
@@ -173,7 +180,7 @@ function createLocalPages(deps) {
     if (!first.dir && !SHOWN.test(first.real)) {
       throw new Error(`local_page_open shows web pages, text, PDFs, images, audio and video, not ${path.extname(first.real) || 'files without an extension'}. Use local_file_read for the text of other files.`);
     }
-    const f = await allow(raw, 'any');
+    const f = await allow(raw, 'any', args && args.reading);
     let url = pathToFileURL(f.real).href;
     if (f.dir && !url.endsWith('/')) url += '/';
     const exe = await findBrowser();
@@ -198,7 +205,7 @@ function createLocalPages(deps) {
 
   // local_files: what is in a folder, folders first. Protected folders and secret files are left out.
   async function list(args) {
-    const f = await allow(args && args.path, 'dir');
+    const f = await allow(args && args.path, 'dir', args && args.reading);
     let items;
     try { items = fs.readdirSync(f.real, { withFileTypes: true }).slice(0, MAX_SCAN); } catch (e) { throw new Error(`Could not list ${f.real} (${e.code || e.message}).`); }
     const dirs = [], files = [];
@@ -221,7 +228,7 @@ function createLocalPages(deps) {
 
   // local_file_read: the text of a file (HTML, scripts, text; Office files as Markdown), in parts.
   async function read(args) {
-    const f = await allow(args && args.path, 'file');
+    const f = await allow(args && args.path, 'file', args && args.reading);
     if (f.size > MAX_READ) throw new Error(`${f.real} is ${sizeText(f.size)}, more than local_file_read opens (5 MB). Open it with local_page_open instead.`);
     let text;
     if (kindOf(f.real)) text = extractText(f.real).text;
