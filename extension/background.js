@@ -58,3 +58,7 @@ browser.windows.onCreated.addListener(win => {
 browser.browserAction.onClicked.addListener(() => {
   browser.sidebarAction.toggle().catch(() => browser.sidebarAction.open().catch(() => {}));
 });
+
+// Alt+Shift+X (the stop-claude command in the manifest): the same Stop as the panel's Stop button.
+// A browser stub without commands (the older vm tests) skips the listener.
+if (browser.commands) browser.commands.onCommand.addListener(name => { if (name === 'stop-claude') stopAll('keyboard shortcut'); });

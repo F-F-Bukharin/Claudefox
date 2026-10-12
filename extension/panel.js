@@ -289,18 +289,23 @@ function paintModelLine(s) {
     + (s.caveman && s.agent !== 'stopped' && s.signedIn ? ' · caveman' : '');
 }
 
+const INSTALL_URL = 'https://docs.claude.com/en/docs/claude-code/setup';
+const SETUP_STEPS = 'Close Zen? No: just double-click Set up Claudefox.bat (or Set up Claude in Zen.bat), then press retry in Settings.';
+
 function renderSetup(s) {
   const c = s.claude || {};
   const steps = [
     { done: s.native === 'connected', title: 'Install the helper',
       hint: 'Install Node.js if you don\u2019t have it, then double-click "Set up Claude in Zen.bat" in the Claude in Zen folder.',
-      action: s.agent === 'active' && s.native !== 'connected' ? ['Retry', () => send('retryNative')] : null },
+      action: ['Re-run setup', () => addMsg({ role: 'system', text: SETUP_STEPS })],
+      alt: s.agent === 'active' && s.native !== 'connected' ? ['Retry', () => send('retryNative')] : null },
     { done: !!c.installed, title: 'Install Claude Code',
-      hint: 'Install it from code.claude.com/docs/en/setup, then press Retry.',
-      action: s.native === 'connected' ? ['Retry', () => send('checkClaude')] : null },
+      hint: 'Open the install page, install Claude Code, then press Retry.',
+      action: ['Open install page', () => send('openLink', { url: INSTALL_URL })],
+      alt: s.native === 'connected' ? ['Retry', () => send('checkClaude')] : null },
     { done: !!c.loggedIn, title: 'Sign Claude Code in',
       hint: 'Double-click "Sign in Claude Code.bat" in the tools folder and click Authorize. The chat uses this account.',
-      action: c.installed ? ['Open sign-in', () => send('switchAccount')] : null },
+      action: ['Sign in', () => send('runSignIn')] },
     { done: !!s.signedIn, title: 'Sign in to claude.ai in the panel',
       hint: 'Sign in to claude.ai in a normal tab, then press Sign in. Zen remembers it after that.',
       action: ['Sign in', () => send('signIn')] },
@@ -322,12 +327,13 @@ function renderSetup(s) {
     const box = document.createElement('div'); box.className = 'step-text';
     const t = document.createElement('div'); t.className = 'step-title'; t.textContent = st.title;
     box.appendChild(t);
-    if (!st.done && i === current) {
+    if (!st.done) {
       const h = document.createElement('div'); h.className = 'step-hint'; h.textContent = st.hint;
       box.appendChild(h);
-      if (st.action) {
-        const b = document.createElement('button'); b.className = 'ghost step-btn'; b.textContent = st.action[0];
-        b.addEventListener('click', st.action[1]);
+      for (const a of [st.action, st.alt]) {
+        if (!a) continue;
+        const b = document.createElement('button'); b.className = 'ghost step-btn'; b.textContent = a[0];
+        b.addEventListener('click', a[1]);
         box.appendChild(b);
       }
     }

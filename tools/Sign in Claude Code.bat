@@ -7,7 +7,10 @@ set "ANTHROPIC_API_KEY="
 set "ANTHROPIC_AUTH_TOKEN="
 if not exist "%CLAUDE_CONFIG_DIR%" mkdir "%CLAUDE_CONFIG_DIR%"
 set "CLAUDE_EXE=%USERPROFILE%\.local\bin\claude.exe"
-if not exist "%CLAUDE_EXE%" ( echo Claude Code is not installed. Install it first: https://code.claude.com/docs/en/setup & if /i not "%~1"=="/quiet" pause & exit /b 1 )
+if not exist "%CLAUDE_EXE%" set "CLAUDE_EXE="
+if not defined CLAUDE_EXE for /f "delims=" %%i in ('where claude.exe 2^>nul') do if not defined CLAUDE_EXE set "CLAUDE_EXE=%%i"
+if not defined CLAUDE_EXE if exist "%APPDATA%\npm\claude.cmd" set "CLAUDE_EXE=%APPDATA%\npm\claude.cmd"
+if not defined CLAUDE_EXE ( echo Claude Code is not installed. Install it first: https://code.claude.com/docs/en/setup & if /i not "%~1"=="/quiet" pause & exit /b 1 )
 echo A browser window opens. Sign in with your Claude account and click Authorize.
 echo.
 "%CLAUDE_EXE%" auth login

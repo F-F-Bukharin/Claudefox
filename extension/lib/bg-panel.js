@@ -49,6 +49,7 @@ async function handlePanel(msg, port) {
     case 'switchAccount':                                   // 0.4 panels: "Log out and add another account"
     case 'accountAdd':    return accountAction('account_add');
     case 'accountSignIn': return accountAction('account_signin', msg.id);
+    case 'runSignIn':     return accountAction('account_signin', 'main');   // the Claude Code profile the sign-in .bat signs in
     case 'accountRemove': return accountAction('account_remove', msg.id);
     case 'accountCancel': return sendNative({ type: 'account_cancel' });
     case 'updateAddon':

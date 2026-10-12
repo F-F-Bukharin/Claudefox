@@ -78,6 +78,12 @@
         "default": "Alt+Shift+C"
       },
       "description": "Toggle the Claude in Zen panel"
+    },
+    "stop-claude": {
+      "suggested_key": {
+        "default": "Alt+Shift+X"
+      },
+      "description": "Stop Claude"
     }
   }
 }

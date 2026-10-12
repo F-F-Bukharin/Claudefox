@@ -231,11 +231,24 @@ function progressLabel(m) {
 
 const expandedSteps = new Set();   // finished answers whose action list is open
 
+// The reset time in a usage-limit message ("resets 3pm", "resets at 15:00", "resets 3:30 PM"), as 24-hour HH:MM; '' when there is none.
+function limitResetAt(text) {
+  const m = /\bresets?(?:\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(String(text || ''));
+  if (!m || (!m[2] && !m[3])) return '';
+  let h = Number(m[1]);
+  const min = Number(m[2] || 0), ap = (m[3] || '').toLowerCase();
+  if (min > 59 || (ap ? h < 1 || h > 12 : h > 23)) return '';
+  if (ap === 'pm' && h < 12) h += 12;
+  if (ap === 'am' && h === 12) h = 0;
+  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+}
+
 function progressBlock(m) {
   const box = document.createElement('div');
   if (m.pending) {
     box.className = 'progress';
     box.dataset.id = m.id;
+    box.setAttribute('aria-live', 'polite');
     const track = document.createElement('div'); track.className = 'ptrack';
     const fill = document.createElement('div'); fill.className = 'pfill';
     fill.style.width = Math.round(progressOf(m) * 100) + '%';
@@ -496,7 +509,8 @@ function buildMsg(m) {
     if (m.limit) {
       const hint = document.createElement('div');
       hint.className = 'limit';
-      hint.textContent = 'This Claude account hit its usage limit.';
+      const at = limitResetAt(m.error);
+      hint.textContent = at ? `Your limit resets at ${at}.` : m.error;
       const sw = document.createElement('button');
       sw.className = 'primary limitbtn';
       sw.textContent = 'Log out and add another account';

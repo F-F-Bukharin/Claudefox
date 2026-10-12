@@ -262,6 +262,7 @@ async function submit() {
   attachments = [];
   renderAttachments();
   input.value = ''; autoGrow();
+  input.focus();
   const id = `p${Date.now().toString(36)}${chatSeq++}`;
   const extra = improveOn ? { improve: true } : histResumeExtra();
   const waits = isBusy();   // an answer runs (here or in another window): this message waits its turn, in a pending bubble
