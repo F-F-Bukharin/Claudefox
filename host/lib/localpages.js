@@ -52,11 +52,11 @@ function parentBrowser() {
   }));
 }
 
-// The browser to show local pages in: CLAUDE_IN_ZEN_ZEN_EXE (tests), else the one that started this helper, so Zen
-// opens them in Zen and Firefox in Firefox, else Zen or Firefox where they usually are installed.
+// The browser to show local pages in: CLAUDE_IN_ZEN_ZEN_EXE (tests only, with CLAUDE_IN_ZEN_TEST=1), else the one that
+// started this helper, so Zen opens them in Zen and Firefox in Firefox, else Zen or Firefox where they usually are installed.
 let browserFound = null;
 async function findBrowser() {
-  if (process.env.CLAUDE_IN_ZEN_ZEN_EXE) return process.env.CLAUDE_IN_ZEN_ZEN_EXE;
+  if (process.env.CLAUDE_IN_ZEN_TEST === '1' && process.env.CLAUDE_IN_ZEN_ZEN_EXE) return process.env.CLAUDE_IN_ZEN_ZEN_EXE;
   if (!browserFound) browserFound = (await parentBrowser()) || findZen() || findFirefox();
   return browserFound;
 }
@@ -96,26 +96,23 @@ function realOf(raw) {
 const NOT_A_FILE = p => `${p} is not a regular file (a device, pipe or socket), so it is not opened.`;
 const sizeText = n => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-// The allowed folders, kept in a file of the helper's own (a protected place for every file tool).
+// The allowed folders: kept in memory only, so they last one session. The file an older version saved (`file`) is deleted
+// here, and `note` says so for the helper to log.
 function createGrants(file) {
   let list = [];
-  try {
-    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (Array.isArray(saved)) list = saved.filter(f => typeof f === 'string' && path.isAbsolute(f)).map(f => path.resolve(f));
-  } catch {}
-  const save = () => {
-    try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(list, null, 1)); } catch (e) { log.error('local grants', e.message); }
-  };
+  let note = '';
+  try { fs.unlinkSync(file); note = 'Saved local-page folders were cleared: they now last one session.'; }
+  catch (e) { if (e.code !== 'ENOENT') log.error('local grants', e.message); }
   return {
+    note,
     list: () => list.slice(),
     // The allowed folder that holds this path, or ''.
     covering: p => list.find(f => guard.within(p, f)) || '',
-    add(folder) { const f = path.resolve(folder); if (!list.some(g => guard.within(f, g))) { list = list.filter(g => !guard.within(g, f)).concat([f]); save(); } },
+    add(folder) { const f = path.resolve(folder); if (!list.some(g => guard.within(f, g))) list = list.filter(g => !guard.within(g, f)).concat([f]); },
     remove(folder) {
       const before = list.length;
       list = list.filter(g => !(guard.within(g, folder) && guard.within(folder, g)));
-      if (list.length !== before) { save(); return true; }
-      return false;
+      return list.length !== before;
     },
   };
 }
@@ -124,8 +121,9 @@ function createGrants(file) {
 // Promise<{ ok, error }>, grants: createGrants(...), changed() (the list changed: tell the add-on),
 // asking(folder) (a question about this folder is on screen, or '' when it is over) }
 function createLocalPages(deps) {
-  // A folder the user has not allowed yet: they answer in the confirm window. Resolves the allowed folder.
-  async function askFolder(folder) {
+  // A folder the user has not allowed yet: they answer in the confirm window, which says what Claude was reading
+  // (no reading: no page). Resolves the allowed folder.
+  async function askFolder(folder, reading) {
     const have = deps.grants.covering(folder);
     if (have) return have;
     if (deps.asking) deps.asking(folder);
@@ -133,7 +131,7 @@ function createLocalPages(deps) {
     try {
       r = await deps.confirm({
         title: 'Claude in Zen: allow a folder?',
-        text: `Claude asks to look in this folder and its subfolders:\n\n${folder}\n\nIt may then open, list and read the files there, until you remove the folder in Claude in Zen's Profile, Permissions. Army workers never look there.`,
+        text: `Claude asks to look in this folder and its subfolders:\n\n${folder}\n\nClaude was reading: ${reading || 'no page'}\n\nIt may then open, list and read the files there, until you remove the folder in Claude in Zen's Profile, Permissions. Army workers never look there.`,
         yes: 'Allow this folder', no: 'Deny',
       });
     } finally { if (deps.asking) deps.asking(''); }
@@ -238,7 +236,7 @@ function createLocalPages(deps) {
       total_chars: text.length, next_start: next, truncated: next != null };
   }
 
-  return { open, list, read, allowFolder };
+  return { open, list, read, allowFolder, askFolder };
 }
 
 module.exports = { createLocalPages, createGrants, toPath, findZen, findFirefox, findBrowser, isBrowserExe };

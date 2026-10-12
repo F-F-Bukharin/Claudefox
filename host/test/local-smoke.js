@@ -54,7 +54,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const base = path.join(tmp, 'base');
 fs.mkdirSync(base);
 const env = { ...process.env, HOME: home, LOCALAPPDATA: base, APPDATA: path.join(home, 'AppData', 'Roaming'), CLAUDE_IN_ZEN_PIPE: path.join(base, 'h.sock'),
-  CLAUDE_IN_ZEN_CLAUDE: path.join(tmp, 'no-claude'), CLAUDE_IN_ZEN_ZEN_EXE: zen, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CONFIRM: confirmExe, MOZ_TEST_VAR: '1' };
+  CLAUDE_IN_ZEN_CLAUDE: path.join(tmp, 'no-claude'), CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_ZEN_EXE: zen, CLAUDE_IN_ZEN_CONFIRM: confirmExe, MOZ_TEST_VAR: '1' };
 let proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
 
 // ---- this test plays the add-on
@@ -127,8 +127,8 @@ function client() {
       && r.result.allowed_folder === game && run && run.argv[0] === '-new-tab' && run.argv[1] === `file://${game}/index.html`
       && q0 && asked(game) === 1 && q0.yes === 'Allow this folder' && q0.no === 'Deny', JSON.stringify([r, run, q0]));
     check('the panel hears about the question while the window is open, and when it is over', shown[0] === game && shown[1] === '', JSON.stringify(shown));
-    check('the helper sends the new list of allowed folders, and keeps it in its own file', JSON.stringify(lastGrants()) === JSON.stringify([game])
-      && JSON.stringify(JSON.parse(fs.readFileSync(path.join(base, 'claude-in-zen', 'local-grants.json'), 'utf8'))) === JSON.stringify([game]));
+    check('the helper sends the new list of allowed folders, and writes no file (they last one session)', JSON.stringify(lastGrants()) === JSON.stringify([game])
+      && !fs.existsSync(path.join(base, 'claude-in-zen', 'local-grants.json')));
     check('zen starts without the MOZ_ variables Zen gave the helper', run && !run.moz.length, run && run.moz.join(','));
     check('the add-on is asked which tab shows the page', asks[0] && asks[0].type === 'local_tab' && asks[0].url === run.argv[1]);
 
@@ -219,17 +219,21 @@ function client() {
     await nextMsg(() => grantLists.length > before);
     check('Remove forgets the folder and sends the new list', !lastGrants().includes(newer) && lastGrants().includes(game), JSON.stringify(lastGrants()));
 
-    // A new helper (Zen restarted) keeps the allowed folders.
+    // A new helper (Zen restarted) forgets the allowed folders: they last one session. An old saved file is deleted.
     c.end(); c = null;
     proc.stdout.off('data', onOut);
     proc.kill();
     await new Promise(res => proc.on('exit', res));
+    const oldGrants = path.join(base, 'claude-in-zen', 'local-grants.json');
+    fs.mkdirSync(path.dirname(oldGrants), { recursive: true });
+    fs.writeFileSync(oldGrants, JSON.stringify([game, other]));   // what an older version saved
     grantLists.length = 0; buf = Buffer.alloc(0);
     proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
     proc.stdout.on('data', onOut);
     toHelper({ type: 'hello', version: 'test' });
     await nextMsg(() => grantLists.length > 0);
-    check('after a restart the helper sends the same allowed folders', JSON.stringify(lastGrants()) === JSON.stringify([game, other]), JSON.stringify(lastGrants()));
+    check('after a restart the helper sends no allowed folders', JSON.stringify(lastGrants()) === JSON.stringify([]), JSON.stringify(lastGrants()));
+    check('an old grants file is deleted when the helper starts', !fs.existsSync(oldGrants));
 
     // Which browser shows a local page: the one that started the helper (Zen or Firefox), and only real browsers.
     const lp = require('../lib/localpages');
@@ -246,13 +250,41 @@ function client() {
     if (saved.pf86 !== undefined) process.env['ProgramFiles(x86)'] = saved.pf86;
     fs.rmSync(apps, { recursive: true, force: true });
     check('without Zen, Firefox is found where it is usually installed', ff === path.join(apps, 'Mozilla Firefox', 'firefox.exe') && zz === '', JSON.stringify({ ff, zz }));
-    const keep = process.env.CLAUDE_IN_ZEN_ZEN_EXE, keepTest = process.env.CLAUDE_IN_ZEN_TEST;
+    // The override browser counts only with CLAUDE_IN_ZEN_TEST=1: unset, or any other value, the real browser is found.
+    const keep = process.env.CLAUDE_IN_ZEN_ZEN_EXE, keepFlag = process.env.CLAUDE_IN_ZEN_TEST;
     process.env.CLAUDE_IN_ZEN_ZEN_EXE = '/opt/test/firefox';
+    delete process.env.CLAUDE_IN_ZEN_TEST;
+    const unset = await lp.findBrowser();
+    process.env.CLAUDE_IN_ZEN_TEST = '0';
+    const zero = await lp.findBrowser();
     process.env.CLAUDE_IN_ZEN_TEST = '1';
     const fb = await lp.findBrowser();
     if (keep === undefined) delete process.env.CLAUDE_IN_ZEN_ZEN_EXE; else process.env.CLAUDE_IN_ZEN_ZEN_EXE = keep;
-    if (keepTest === undefined) delete process.env.CLAUDE_IN_ZEN_TEST; else process.env.CLAUDE_IN_ZEN_TEST = keepTest;
+    if (keepFlag === undefined) delete process.env.CLAUDE_IN_ZEN_TEST; else process.env.CLAUDE_IN_ZEN_TEST = keepFlag;
     check('the test override names the browser', fb === '/opt/test/firefox', fb);
+    check('without CLAUDE_IN_ZEN_TEST=1 the override is ignored', unset !== '/opt/test/firefox' && zero !== '/opt/test/firefox', JSON.stringify([unset, zero]));
+
+    // Allowed folders last one session: kept in memory, no file written. An old file is deleted, and `note` says so.
+    const grantFile = path.join(tmp, 'grants', 'local-grants.json');
+    const mem = lp.createGrants(grantFile);
+    mem.add(game); mem.add(other);
+    check('allowed folders are kept in memory, and no grants file is written', JSON.stringify(mem.list()) === JSON.stringify([game, other]) && !fs.existsSync(grantFile), JSON.stringify(mem.list()));
+    fs.mkdirSync(path.dirname(grantFile), { recursive: true });
+    fs.writeFileSync(grantFile, JSON.stringify([game]));
+    const old = lp.createGrants(grantFile);
+    check('an old grants file is deleted, the list starts empty, and the note says so', !fs.existsSync(grantFile) && old.list().length === 0
+      && old.note === 'Saved local-page folders were cleared: they now last one session.', JSON.stringify([old.list(), old.note]));
+    check('there is no note when there was no old grants file', lp.createGrants(grantFile).note === '');
+
+    // The confirm window says what Claude was reading, or 'no page'; the old call shape still works.
+    const confirmed = [];
+    const asker = lp.createLocalPages({ grants: lp.createGrants(path.join(tmp, 'grants', 'ask.json')),
+      confirm: async o => { confirmed.push(o.text); return { ok: true }; } });
+    const got1 = await asker.askFolder(game, 'example.com');
+    const got2 = await asker.askFolder(other);
+    check('the confirm window names the site Claude was reading, or no page, and askFolder still returns the folder',
+      got1 === game && got2 === other && confirmed.length === 2 && confirmed[0].includes('\n\nClaude was reading: example.com\n\n') && confirmed[1].includes('\n\nClaude was reading: no page\n\n'),
+      JSON.stringify([got1, got2, confirmed]));
   } catch (e) {
     check('no unexpected errors', false, e.stack || e.message);
   } finally {
