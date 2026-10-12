@@ -16,9 +16,11 @@ const SECRET_FILES = [
   '.env', '.env.*', '*.kdbx', '*.kdb', '*.keyx', 'id_rsa*', 'id_ed25519*', 'id_ecdsa*', 'id_dsa*', '*.pem', '*.pfx', '*.p12',
   'key3.db', 'key4.db', 'logins.json', 'cookies.sqlite', 'cert9.db', 'Login Data', 'Login Data For Account', 'Cookies',
   'Web Data', '.git-credentials', '.netrc', '_netrc', '.npmrc', '.pypirc', '.credentials.json', 'pipe-token',
+  '*.key', '*.ovpn', 'wallet.dat',
 ];
 
-// Browser profiles (Zen first), Windows credential stores, Claude's own sign-ins and the usual key folders.
+// Browser profiles (Zen first), Windows credential stores, Claude's own sign-ins, the usual key folders, chat apps,
+// the GitHub CLI, PowerShell history and editor storage.
 function protectedPlaces() {
   const home = os.homedir();
   const app = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
@@ -39,6 +41,10 @@ function protectedPlaces() {
     path.join(home, '.config', 'gcloud'), path.join(home, '.kube'), path.join(home, '.docker'),
     path.join(app, 'Bitwarden'), path.join(local, '1Password'), path.join(app, 'KeePass'), path.join(app, 'KeePassXC'),
     path.join(app, 'gnupg'),
+    path.join(app, 'discord'), path.join(app, 'discordcanary'), path.join(app, 'discordptb'), path.join(app, 'Slack'),
+    path.join(app, 'Telegram Desktop'), path.join(app, 'GitHub CLI'), path.join(app, 'Microsoft', 'Windows', 'PowerShell', 'PSReadLine'),
+    path.join(app, 'Code', 'User', 'globalStorage'), path.join(app, 'Cursor', 'User', 'globalStorage'), path.join(app, 'VSCodium', 'User', 'globalStorage'),
+    path.join(home, '.config', 'gh'),
   ];
 }
 
