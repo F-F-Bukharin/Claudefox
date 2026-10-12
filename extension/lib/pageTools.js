@@ -42,25 +42,57 @@ async function cizLocalGate(gate) {
   if (!r.ok) throw new Error(r.error);
 }
 
-// The tab a tool will use, and the gate it passed (view: the looser screenshot rule). A file: tab outside the allowed
-// folders waits for the user's answer in the confirm window, up to two minutes, and the page or the user may move the
-// tab meanwhile. So after an answer the tab is read again and checked from the start: the tool only ever acts on what
-// was allowed, never on whatever the tab shows by then.
-async function cizGatedTab(args, view) {
+// The site gate (lib/siteGate.js) for web tabs. Acting tools are 'act'; everything else that looks at a tab is 'read'.
+const CIZ_ACT_TOOLS = new Set(['click', 'hover', 'fill', 'type_text', 'press_key', 'scroll', 'media', 'navigate']);
+
+async function cizSiteOpts(args) {
+  let blocks = {};
+  try { blocks = (await browser.storage.local.get('sites')).sites || {}; } catch {}
+  return { trusted: !!cizState.get().trusted, blocks, army: (args && args.__army) || null };
+}
+
+// true when the tab may be used; false when the tab moved to another site while the user was asked (read it again).
+async function cizSiteStep(tab, args, tool) {
+  const site = cizSiteOf(tab.url);
+  if (!site) return true;   // not a web page: the folder grants and the fixed rules above decide
+  await cizSiteGate.use(site, CIZ_ACT_TOOLS.has(tool) ? 'act' : 'read', await cizSiteOpts(args));
+  return cizSiteOf((await cizTabFor(args)).url) === site;
+}
+
+// A file: tab read during a turn: the helper hears that local content went to Claude.
+function cizLocalRead(tool) {
+  if (CIZ_ACT_TOOLS.has(tool) || typeof cizChatId !== 'function') return;
+  const id = cizChatId();
+  if (id) sendNative({ type: 'local_read', id });
+}
+
+// The tab a tool will use, and the gate it passed (view: the looser screenshot rule; tool: for the site gate's read/act).
+// A file: tab outside the allowed folders waits for the user's answer in the confirm window, up to two minutes, and a web
+// tab outside the chat's sites waits for the card; the page or the user may move the tab meanwhile. So after an answer
+// the tab is read again and checked from the start: the tool only ever acts on what was allowed, never on whatever the
+// tab shows by then.
+async function cizGatedTab(args, view, tool) {
   for (let round = 0; ; round++) {
     const tab = await cizTabFor(args);
-    if (args && args.__army) { cizArmyRefuse(tab.url); return { tab, gate: { blocked: false } }; }
-    const gate = (view ? cizViewBlocked : cizUrlBlocked)(tab.url || '', cizGateOpts());
-    if (!gate.local && !gate.needGrant) return { tab, gate };
-    await cizLocalGate(gate);
-    if (!gate.needGrant) return { tab, gate };
-    if (round >= 2) throw new Error(`Tab ${tab.id} kept moving to other folders while the user was asked, so Claude did not use it.`);
+    if (args && args.__army) {
+      cizArmyRefuse(tab.url);
+      if (await cizSiteStep(tab, args, tool)) return { tab, gate: { blocked: false } };
+    } else {
+      const gate = (view ? cizViewBlocked : cizUrlBlocked)(tab.url || '', cizGateOpts());
+      if (!gate.local && !gate.needGrant) {
+        if (gate.blocked || await cizSiteStep(tab, args, tool)) return { tab, gate };
+      } else {
+        await cizLocalGate(gate);
+        if (!gate.needGrant) { cizLocalRead(tool); return { tab, gate }; }
+      }
+    }
+    if (round >= 2) throw new Error(`Tab ${tab.id} kept moving to other folders or sites while the user was asked, so Claude did not use it.`);
   }
 }
 
 // A tab Claude may read or act on: not a non-web page, and not a Google sign-in page unless Unsafe mode is on.
-async function cizPageTab(args) {
-  const { tab, gate } = await cizGatedTab(args, false);
+async function cizPageTab(args, tool) {
+  const { tab, gate } = await cizGatedTab(args, false, tool);
   if (gate.blocked) {
     if (/^about:/i.test(tab.url || '') && !cizViewBlocked(tab.url).blocked) {
       throw new Error(`Tab ${tab.id} is a browser page (${String(tab.url).split(/[?#]/)[0]}): add-ons can't read or click inside those, but screenshot shows it.`);
@@ -95,6 +127,43 @@ async function cizWaitLoaded(tabId, ms) {
     }
     await cizSleep(200);
   }
+}
+
+// A click, Enter or submitting type_text, once the message has read page content: would it post a form or leave the site?
+// Asked of the page (the 'classify' op, read only); the gate's risky card decides. An older page script that does not know
+// the op lets the call through; any other failure refuses it.
+async function cizRiskCheck(tab, args) {
+  if (!cizSiteGate.isRead()) return;
+  let c;
+  try { c = await cizInPage(tab, 'classify', args); }
+  catch (e) {
+    if (/Unknown page operation/.test((e && e.message) || '')) return;
+    throw new Error('Could not check what this action does, so Claude did not do it.');
+  }
+  if (!c || c.found === false) return;
+  const opts = await cizSiteOpts(args);
+  if (c.submitsPost) await cizSiteGate.risky(cizSiteOf(tab.url), 'post', opts);
+  if (c.leavesTo) await cizSiteGate.risky(String(c.leavesTo), 'leave', opts);
+}
+
+// navigate to a URL / tab_open: the target site is opened with the gate's 'open' check; a different site than where the
+// page is now is 'leave' (asked only once the message has read a page). Army workers open tabs in the background and
+// are held to the run's list by the 'open' check alone.
+async function cizOpenCheck(url, fromUrl, args) {
+  const site = cizSiteOf(url);
+  if (!site) return;
+  const opts = await cizSiteOpts(args);
+  await cizSiteGate.use(site, 'open', opts);
+  if (site !== cizSiteOf(fromUrl)) await cizSiteGate.risky(site, 'leave', opts);
+}
+
+// The page the chat window shows now: where a new tab "leaves" from.
+async function cizWindowTabUrl() {
+  const wid = cizSiteGate.windowId();
+  try {
+    const [t] = await browser.tabs.query(wid != null ? { active: true, windowId: wid } : { active: true, lastFocusedWindow: true });
+    return (t && t.url) || '';
+  } catch { return ''; }
 }
 
 // After a click or Enter: did the page navigate (or start to), and did a new tab open? Tells Claude what
@@ -193,16 +262,22 @@ const CIZ_TOOLS = {
   async ping() { return { pong: true, version: browser.runtime.getManifest().version }; },
 
   async tabs_list() {
-    const tabs = await browser.tabs.query({});
+    // Only the chat window's tabs, and a site outside the chat's list shows as id and site only (siteGate.tabView).
+    const wid = cizSiteGate.windowId();
+    const tabs = await browser.tabs.query(wid != null ? { windowId: wid } : { lastFocusedWindow: true });
+    const opts = { trusted: !!cizState.get().trusted, blocks: (await cizSiteOpts({})).blocks };
     return tabs.map(t => {
-      const army = cizArmy.owner(t.id);   // a tab an army worker is using, so Claude leaves it to that worker
-      return Object.assign({ id: t.id, windowId: t.windowId, active: t.active, title: t.title, url: t.url, audible: !!t.audible }, army ? { army: army.worker } : {});
+      const view = cizSiteGate.tabView(t, opts);
+      const army = view.url !== undefined && cizArmy.owner(t.id);   // a tab an army worker is using, so Claude leaves it to that worker
+      return army ? Object.assign(view, { army: army.worker }) : view;
     });
   },
 
   async tab_open(args) {
     const url = String(args.url || '').trim();
     cizRefuseUrl(url, args.__army);
+    // A worker's tab opens in the background, so it leaves nothing: the run's list (the 'open' check) is its only rule.
+    await cizOpenCheck(url, args.__army ? url : await cizWindowTabUrl(), args);
     const since = Date.now();
     const tab = await browser.tabs.create({ url, active: args.active !== false });
     // Registered before the page loads, so Stop or the worker's end closes it even mid-load (or at once, when that
@@ -231,19 +306,19 @@ const CIZ_TOOLS = {
   async navigate(args) {
     const want = String(args.url || '').trim();
     if (!want) throw new Error('Give a URL, or "back", "forward" or "reload".');
-    const tab = await cizPageTab(args);
+    const tab = await cizPageTab(args, 'navigate');
     const word = want.toLowerCase();
     if (word === 'back') await browser.tabs.goBack(tab.id);
     else if (word === 'forward') await browser.tabs.goForward(tab.id);
     else if (word === 'reload') await browser.tabs.reload(tab.id);
-    else { cizRefuseUrl(want, args.__army); await browser.tabs.update(tab.id, { url: want }); }
+    else { cizRefuseUrl(want, args.__army); await cizOpenCheck(want, tab.url, args); await browser.tabs.update(tab.id, { url: want }); }
     return cizWaitLoaded(tab.id, 30000);
   },
 
-  async read_page(args) { return cizInPage(await cizPageTab(args), 'read', args); },
+  async read_page(args) { return cizInPage(await cizPageTab(args, 'read_page'), 'read', args); },
 
   async get_page_text(args) {
-    const tab = await cizPageTab(args);
+    const tab = await cizPageTab(args, 'get_page_text');
     const google = await cizGoogleExport(tab, args);
     if (google) return google;
     const pdf = await cizPdfOf(tab);
@@ -260,26 +335,29 @@ const CIZ_TOOLS = {
     finally { if (back != null) { try { await cizInPage(tab, 'scrollto', { y: back }); } catch {} } }
   },
 
-  async analyze_page(args) { return cizInPage(await cizPageTab(args), 'analyze', args); },
-  async get_selection(args) { return cizInPage(await cizPageTab(args), 'selection', args); },
-  async find(args) { return cizInPage(await cizPageTab(args), 'find', args); },
+  async analyze_page(args) { return cizInPage(await cizPageTab(args, 'analyze_page'), 'analyze', args); },
+  async get_selection(args) { return cizInPage(await cizPageTab(args, 'get_selection'), 'selection', args); },
+  async find(args) { return cizInPage(await cizPageTab(args, 'find'), 'find', args); },
 
   async click(args) {
-    const tab = await cizPageTab(args);
+    const tab = await cizPageTab(args, 'click');
+    await cizRiskCheck(tab, args);
     return cizAfterAction(tab, () => cizInPage(tab, 'click', args));
   },
-  async hover(args) { return cizInPage(await cizPageTab(args), 'hover', args); },
-  async fill(args) { return cizInPage(await cizPageTab(args), 'fill', args); },
+  async hover(args) { return cizInPage(await cizPageTab(args, 'hover'), 'hover', args); },
+  async fill(args) { return cizInPage(await cizPageTab(args, 'fill'), 'fill', args); },
   async type_text(args) {
-    const tab = await cizPageTab(args);
+    const tab = await cizPageTab(args, 'type_text');
+    if (args.submit) await cizRiskCheck(tab, args);
     return args.submit ? cizAfterAction(tab, () => cizInPage(tab, 'type', args)) : cizInPage(tab, 'type', args);
   },
   async press_key(args) {
-    const tab = await cizPageTab(args);
+    const tab = await cizPageTab(args, 'press_key');
+    if (String(args.key) === 'Enter') await cizRiskCheck(tab, args);
     return String(args.key) === 'Enter' ? cizAfterAction(tab, () => cizInPage(tab, 'press', args)) : cizInPage(tab, 'press', args);
   },
-  async scroll(args) { return cizInPage(await cizPageTab(args), 'scroll', args); },
-  async media(args) { return cizInPage(await cizPageTab(args), 'media', args); },
+  async scroll(args) { return cizInPage(await cizPageTab(args, 'scroll'), 'scroll', args); },
+  async media(args) { return cizInPage(await cizPageTab(args, 'media'), 'media', args); },
 
   async wait_for(args, signal) {
     if (!args.text && !args.selector) throw new Error('Give text or a CSS selector to wait for.');
@@ -291,8 +369,8 @@ const CIZ_TOOLS = {
       if (signal && signal.aborted) throw new Error('Stopped');
       // Re-check the tab each round: it may have navigated somewhere off-limits.
       let found = false;
-      try { found = await cizInPage(await cizPageTab(args), 'exists', probe); }
-      catch (e) { if (/Cannot use tab|No tab|selector|Army workers|did not allow|No answer about|Zen keeps add-ons out/.test(e.message)) throw e; }
+      try { found = await cizInPage(await cizPageTab(args, 'wait_for'), 'exists', probe); }
+      catch (e) { if (/Cannot use tab|No tab|selector|Army workers|did not allow|is blocked in your site list|Outside the sites|Workers cannot|No answer about|Zen keeps add-ons out/.test(e.message)) throw e; }
       if (found) return { found: true, waited_ms: Date.now() - t0 };
       if (Date.now() - t0 >= timeout) return { found: false, waited_ms: Date.now() - t0 };
       await cizSleep(250);
@@ -301,7 +379,7 @@ const CIZ_TOOLS = {
 
   async screenshot(args) {
     // Looking is allowed on more pages than acting: about: pages too (see cizViewBlocked).
-    const { tab, gate } = await cizGatedTab(args, true);
+    const { tab, gate } = await cizGatedTab(args, true, 'screenshot');
     if (gate.blocked) throw new Error(`Cannot use tab ${tab.id}: ${gate.reason}.`);
     // captureTab only: bringing the tab to the front to capture it would take the user's tab away from them.
     // scale 1: one image pixel per CSS pixel, so click x/y can be read straight off the picture.
@@ -323,11 +401,11 @@ const CIZ_TOOLS = {
 
   // Debugging: the tab's requests and redirects (metadata only, see lib/netlog.js) and its console messages.
   async network_log(args) {
-    const tab = await cizTabFor(args);
+    const tab = await cizPageTab(args, 'network_log');
     return cizNetLog(tab.id, args);
   },
   async console_log(args) {
-    return cizConsoleLog(await cizPageTab(args), args);
+    return cizConsoleLog(await cizPageTab(args, 'console_log'), args);
   },
 
   // Documents and other text files Claude makes for the user. They live in the add-on (Files in the panel),

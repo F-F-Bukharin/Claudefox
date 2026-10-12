@@ -117,6 +117,7 @@ const answerConfirm = async ok => {
     await fromPanel({ type: 'signIn' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
     await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'f.work@example.com' });
+    await g('cizState').set({ trusted: true });   // fixture: these checks are about the army's tabs; the site gate's own checks are in test/site-wiring.js
     const army = g('cizArmy');
 
     // 1. tools a worker may not use

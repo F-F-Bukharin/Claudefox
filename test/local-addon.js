@@ -94,6 +94,8 @@ const panel = { name: 'panel', onMessage: panelOnMsg, onDisconnect: ev(), postMe
 const fromPanel = async m => { panelOnMsg.fire(m); await tick(); };
 const helperSays = async m => { native.onMessage.fire(m); await tick(); };
 const g = name => vm.runInContext(name, ctx);
+// fixture: the site gate (page safety) lets the hosts these tests use through, for the workers' runs too (their list is this message's)
+g('cizSiteGate').begin('fixture', { tabUrl: 'https://shop.example/', windowId: 1, text: '', newChat: true, allow: ['a.example', 'accounts.google.com', 'example.com', 'shop.example'] });
 const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
 let seq = 0;
 // A worker's tool call (army set) or a native message from the helper; resolves with the add-on's answer.

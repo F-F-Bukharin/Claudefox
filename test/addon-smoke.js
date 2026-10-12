@@ -13,7 +13,7 @@ const ev = () => { const fns = []; return { addListener: f => fns.push(f), fns, 
 
 // ---- mocked browser
 const store = {};
-const local = {};
+const local = { sites: { 'shop.example': 'allow', 'accounts.google.com': 'allow', 'docs.google.com': 'allow' } };   // fixture: the site gate lets the hosts these tests use through
 const tabs = [
   { id: 1, windowId: 1, active: true, title: 'Shop', url: 'https://shop.example/', status: 'complete' },
   { id: 2, windowId: 1, active: false, title: 'Sign in', url: 'https://accounts.google.com/signin/v2', status: 'complete' },

@@ -7,6 +7,15 @@
 
 const chatRuns = new Map();   // chat id -> { startedAt }
 
+// The chat turn that is running (one at a time), or '' between turns: the message id the site gate and the helper share.
+function cizChatId() { return chatRuns.size ? [...chatRuns.keys()][0] : ''; }
+
+// Whenever the chat's site list changes during a turn (a card answered), the helper hears the new list.
+cizSiteGate.onChange = list => {
+  const id = cizChatId();
+  if (id) sendNative({ type: 'scope', id, sites: list, trusted: !!cizState.get().trusted });
+};
+
 const CHAT_ATTACH_MAX = 12;
 const CHAT_ATTACH_BYTES = 80 * 1024 * 1024;
 
@@ -41,16 +50,25 @@ async function startChat(msg) {
   const files = !improve && s.filesEnabled ? s.filesMode : '';
   chatRuns.set(id, { startedAt: Date.now() });
   const model = improve ? 'selfimprove' : s.chatModel === 'quality' ? (s.chatArmy ? 'army' : 'quality') : s.chatPlus ? 'speedplus' : 'speed';
-  let tab = null;
+  let tab = null, windowId = null;
   if (!improve) {
     try {
       const [t] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
-      if (t) tab = { id: t.id, title: t.title || '', url: t.url || '' };
+      if (t) { tab = { id: t.id, title: t.title || '', url: t.url || '' }; windowId = t.windowId; }
     } catch {}
   }
+  // The sites Claude may use in this message: the open page's, the ones the text names, the chat's, and the ones the user marked allow.
+  let sites = [];
+  if (!improve) {
+    let blocks = {};
+    try { blocks = (await browser.storage.local.get('sites')).sites || {}; } catch {}
+    const allow = Object.keys(blocks).filter(k => blocks[k] === 'allow');
+    sites = cizSiteGate.begin(id, { tabUrl: tab && tab.url, windowId, text, newChat: !s.chatSession, allow });
+  }
   const sent = sendNative({ type: 'chat', id, text, model, tab, resume: improve ? '' : (s.chatSession || ''), files, folder: files ? s.filesFolder : '',
-    unsafe: !improve && !!s.unsafe, caveman: !improve && !!s.caveman, attachments, improve });
-  if (!sent) { chatRuns.delete(id); return fail('Could not reach the helper.'); }
+    unsafe: !improve && !!s.unsafe, caveman: !improve && !!s.caveman, attachments, improve,
+    sites, trusted: !improve && !!s.trusted });
+  if (!sent) { chatRuns.delete(id); cizSiteGate.end(id); return fail('Could not reach the helper.'); }
   await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
     : `chat → Claude Code, ${model === 'army' ? 'army (Opus 5.5 at max effort, with Haiku workers)' : model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
 }
@@ -62,13 +80,15 @@ function cancelChat(id) {
 
 // Ends every open turn in the panel (Stop, or the helper went away).
 function failChats(error) {
-  for (const id of chatRuns.keys()) postToPanels({ type: 'chatDone', id, ok: false, error });
+  cizSiteGate.cancel();   // a card that waits for an answer nobody can give now
+  for (const id of chatRuns.keys()) { postToPanels({ type: 'chatDone', id, ok: false, error }); cizSiteGate.end(id); }
   chatRuns.clear();
 }
 
 async function onChatDone(msg) {
   const id = String(msg.id || '');
   chatRuns.delete(id);
+  cizSiteGate.end(id);
   const err = String(msg.error || '');
   if (msg.sessionId) await cizState.set({ chatSession: String(msg.sessionId) });
   if (!msg.ok && /No conversation found/i.test(err)) await cizState.set({ chatSession: '' });
@@ -112,6 +132,7 @@ function connectNative() {
     failChats('The helper stopped, so the answer was cut off.');
     cizArmy.closeAll().catch(() => {});   // its workers are gone, so their tabs go too
     cizLocal.cancelAll().catch(() => {});  // and nobody can answer a folder question now
+    cizSiteGate.cancel();                  // nor a site question
     endConfirms('The helper stopped.');
     if (err && /No such native application/i.test(err.message)) {
       cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
@@ -186,17 +207,23 @@ async function onNativeMessage(msg) {
     case 'confirmed_state': {
       const s = cizState.get();
       const f = msg.files;
-      const patch = { unsafe: msg.unsafe === true };
+      const patch = { unsafe: msg.unsafe === true, trusted: msg.trusted === true };
       if (f && typeof f === 'object' && (f.mode === 'read' || f.mode === 'write') && typeof f.folder === 'string' && f.folder) {
         Object.assign(patch, { filesEnabled: true, filesMode: f.mode, filesFolder: f.folder.slice(0, 1000) });
       } else {
         patch.filesEnabled = false;
       }
       await cizState.set(patch);
+      if (s.trusted && !patch.trusted) {   // the helper forgot it: the turn that runs hears it too
+        const running = cizChatId();
+        if (running) sendNative({ type: 'scope', id: running, sites: cizSiteGate.list(), trusted: false });
+        await cizState.addLog('warn', 'Trusted mode is off: the helper restarted and did not keep it.');
+      }
       if (s.unsafe && !patch.unsafe) await cizState.addLog('warn', 'Unsafe mode is off: the helper restarted and did not keep it. Turn it on again to be asked.');
       if (s.filesEnabled && !patch.filesEnabled) await cizState.addLog('warn', 'File tools are off: the helper restarted and did not keep them. Turn them on again to be asked.');
       return;
     }
+    case 'page_read': return cizSiteGate.markRead();   // the helper's own tools (documents, attachments) showed Claude page content
     case 'claude_status':
       await cizState.set({
         claude: {

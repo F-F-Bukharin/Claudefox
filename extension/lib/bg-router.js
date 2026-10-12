@@ -26,6 +26,10 @@ async function probeDebugPort() {
 
 // The tools themselves are in lib/pageTools.js (CIZ_TOOLS).
 
+// Tools whose answer shows Claude page content (or the tab list): after one succeeds, the message has read a page, and a click
+// that would post a form or leave the site asks first (lib/siteGate.js).
+const CIZ_READING_TOOLS = new Set(['tabs_list', 'read_page', 'get_page_text', 'find', 'analyze_page', 'get_selection', 'network_log', 'console_log']);
+
 // army: { run, worker } for an army worker's call (lib/army.js), else null.
 async function dispatch(tool, args, source, army) {
   const s = cizState.get();
@@ -60,6 +64,7 @@ async function dispatch(tool, args, source, army) {
       if (tool === 'tab_close') cizArmy.unregister(args.tab_id);
       else if (tool !== 'tab_open') cizArmy.touch(args.tab_id);
     }
+    if (CIZ_READING_TOOLS.has(tool)) cizSiteGate.markRead();
     return { ok: true, result };
   } catch (e) {
     return { ok: false, error: e.message || String(e) };
