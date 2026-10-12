@@ -41,9 +41,9 @@ const { createUpdates } = require('./lib/updates');
 // The confirm window (lib/confirm.js): what the user allowed there, for this helper's life (Stop or a Zen restart ends
 // it). The add-on asks before Unsafe mode or file tools go on, and a chat turn gets only what was allowed here.
 const confirm = createConfirm({ killTree });
-const confirmed = { unsafe: false, files: null, watch: false };   // files: { mode, folder }; watch: video watching (lib/watchgate.js)
+const confirmed = { unsafe: false, trusted: false, files: null, watch: false };   // files: { mode, folder }; watch: video watching (lib/watchgate.js)
 // What was allowed, told to the add-on after hello and after every change, so its switches never show more than the helper
-// holds (a restarted helper has forgotten everything). trusted is for Trusted mode, which does not exist yet.
+// holds (a restarted helper has forgotten everything). trusted is Trusted mode, which lib/confirmflow.js turns on.
 function sendConfirmedState() {
   sendAddon({ type: 'confirmed_state', unsafe: confirmed.unsafe === true, trusted: confirmed.trusted === true,
     files: confirmed.files ? { mode: confirmed.files.mode, folder: confirmed.files.folder } : null });
@@ -202,6 +202,7 @@ function onAddon(msg) {
 
     case 'confirm':       return answerConfirm(msg);   // Unsafe mode or file tools are about to go on
     case 'unsafe_off':    confirmed.unsafe = false; return sendConfirmedState();
+    case 'trusted_off':   confirmed.trusted = false; return sendConfirmedState();
     case 'files_off':     confirmed.files = null; return sendConfirmedState();
     case 'watch_load':        watchLoad().catch(e => log.error('watch_load', e.message)); return;   // the panel loaded
     case 'watch_set_on_load': if (msg.value === false) saveWatchOnLoad(false); return sendWatchState();   // on is asked in a window
@@ -397,7 +398,12 @@ function onClient(c, m) {
   if (m.type === 'call' && HELPER_TOOLS[m.tool]) {
     log.info(`call ${m.tool} from "${c.name}" (answered by the helper)`);
     Promise.resolve().then(() => HELPER_TOOLS[m.tool](m.args || {}, c))
-      .then(result => sendLine(c.sock, { type: 'result', id: m.id, ok: true, result }),
+      .then(result => {
+        // A page or file a running turn read: the add-on gets page_read with that turn's chat id.
+        const run = chatTurns.current();
+        if (PAGE_READ_TOOLS.has(m.tool) && run && result && result.ok !== false) sendAddon({ type: 'page_read', id: run.id });
+        sendLine(c.sock, { type: 'result', id: m.id, ok: true, result });
+      },
         e => sendLine(c.sock, { type: 'result', id: m.id, ok: false, error: e.message || String(e) }));
     return;
   }
@@ -472,6 +478,8 @@ function announceClients() {
 // ------------------------------------------------------------------ tools the helper answers itself
 // read_document: the text of a Word, PowerPoint, Excel or OpenDocument file in the file-tools folder or among the
 // files attached to the chat, with the same limits as the file tools (never a protected place).
+// The helper tools that read a page or a file: a read that worked in a running turn sends page_read (see the dispatch below).
+const PAGE_READ_TOOLS = new Set(['read_document', 'local_files', 'local_file_read', 'watch_video', 'army_wait']);
 const HELPER_TOOLS = {
   army_start: (args, client) => army.start(args, client),
   army_wait: (args, client) => army.wait(args, client),

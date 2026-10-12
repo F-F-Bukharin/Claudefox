@@ -221,7 +221,7 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     check('API key not passed to Claude Code', rec.apiKey === null);
     check('runs on the add-on profile', rec.config === path.join(tmp, 'claude-in-zen', 'claude'));
     check('Speed is Haiku 5.5 on high by default', val('--model') === 'claude-haiku-5-5' && val('--effort') === 'high');
-    check('chat prompt has no ask-before rule', /no confirmation step/.test(val('--append-system-prompt')));
+    check('chat prompt has the card rule', /Some actions ask the user first in a card in the chat/.test(val('--append-system-prompt')));
     check('default prompt keeps Google sign-in pages hands-off', /Google sign-in pages are hands-off/.test(val('--append-system-prompt')) && !/Unsafe mode is on/.test(val('--append-system-prompt')));
 
     // File tools: a chat gets them only for what the user allowed in the confirm window.

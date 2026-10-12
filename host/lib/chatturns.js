@@ -185,6 +185,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     const choice = improve ? MODELS.selfimprove : chatModel(msg.model);
     const armyOn = !improve && msg.model === 'army';
     const unsafe = !improve && msg.unsafe === true && confirmed.unsafe;   // only when the user allowed it in the confirm window
+    const trusted = !improve && msg.trusted === true && confirmed.trusted === true;   // Trusted mode: only when the user allowed it too
     const caveman = !improve && msg.caveman === true;
     const resume = !improve && typeof msg.resume === 'string' && /^[0-9a-f-]{36}$/i.test(msg.resume) ? msg.resume : '';
     const key = activeId();
@@ -203,7 +204,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
       let saved = { files: [], errors: [] };
       if (!improve) { try { saved = uploads.save(msg.attachments); } catch (e) { saved.errors.push(`attachments: ${e.message}`); } }
       const tb = improve ? { servers: [], settings: {} } : toolbox.chatOptions(key);
-      const opts = { unsafe, caveman, tb, watch: !improve, cavemanText: caveman ? toolbox.skillText(key, 'caveman', 'caveman') : '' };
+      const opts = { unsafe, trusted, caveman, tb, watch: !improve, cavemanText: caveman ? toolbox.skillText(key, 'caveman', 'caveman') : '' };
       if (armyOn) Object.assign(opts, { army: true, mcpConfig: P.MCP_ARMY_CONFIG });
       let child;
       try {

@@ -6,7 +6,7 @@ const guard = require('./guard');
 
 // deps: { confirm, confirmed, sendAddon, sendConfirmedState, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState }
 function createConfirmFlow({ confirm, confirmed, sendAddon, sendConfirmedState, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState }) {
-  // The add-on asks before Unsafe mode or file tools go on. The user answers in the confirm window; the helper keeps
+  // The add-on asks before Unsafe mode, Trusted mode or file tools go on. The user answers in the confirm window; the helper keeps
   // the answer, and chat turns get only what was allowed.
   async function answerConfirm(msg) {
     const id = String(msg.id || '');
@@ -16,6 +16,13 @@ function createConfirmFlow({ confirm, confirmed, sendAddon, sendConfirmedState, 
         text: 'Claude may then act on Google sign-in and account pages like on any other site, to debug sign-in problems. It still never types passwords, 2FA codes or payment details.\n\nUnsafe mode turns off when you press Stop or restart Zen.',
         yes: 'Turn on', no: 'Cancel' });
       if (r.ok) { confirmed.unsafe = true; sendConfirmedState(); }
+      return reply(r.ok, r.error);
+    }
+    if (msg.kind === 'trusted') {
+      const r = await confirm.ask({ title: 'Claude in Zen: turn on Trusted mode?',
+        text: 'Claude acts on any site without asking. Pages can try to steer it. It stays on until you press Stop.',
+        yes: 'Turn on', no: 'Cancel' });
+      if (r.ok) { confirmed.trusted = true; sendConfirmedState(); }
       return reply(r.ok, r.error);
     }
     if (msg.kind === 'files') {

@@ -324,6 +324,10 @@ const TOOLS = [
   },
 ];
 
+// The calls that work on a page or a run wait up to 150 s; a longer limit they already have stays.
+const WAIT_150 = ['read_page', 'get_page_text', 'analyze_page', 'get_selection', 'find', 'click', 'hover', 'fill', 'type_text', 'press_key', 'scroll', 'media', 'wait_for', 'screenshot', 'console_log', 'network_log', 'navigate', 'tab_open'];
+for (const t of TOOLS) if (WAIT_150.includes(t.name)) t.timeoutMs = Math.max(t.timeoutMs || 0, 150000);
+
 // Tools whose results carry page content, which the tool server labels as untrusted.
 // army_wait carries the workers' reports, which come from web pages.
 // local_files and local_file_read carry file names and file text from this computer; tabs_list carries page titles.

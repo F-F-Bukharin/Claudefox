@@ -80,7 +80,9 @@ function chatPrompt(files, opts) {
     '- Browser profiles, password stores, keys and sign-in files are blocked for every file tool. If a read is refused, say so and move on.',
     "- Do not reproduce song lyrics, book passages or long excerpts of articles or other copyrighted text, even with small changes. Summarize, describe or link to a licensed source instead. Quoting a short passage from a document the user provided is fine.",
     '- Decline sexual content and content that mocks victims of real tragedies.',
-    '- Otherwise there is no confirmation step: act directly on what the user asks.',
+    o.trusted
+      ? '- Trusted mode is on: act directly; there is no confirmation step.'
+      : "- Some actions ask the user first in a card in the chat: using a site outside this chat's sites, submitting a form or leaving a site after reading a page, and uploads. You cannot answer the card. If a tool says the user did not allow something, stop that path and say so in one line.",
     '',
     '# Replies',
     '- Reply in the language the user writes in. The user may mix English and Portuguese: read words by intent (for example "occult content" from Portuguese "conteúdo oculto" means hidden or obscure content). When the user dictates wording or tone, follow it.',
@@ -156,7 +158,7 @@ function workerArgs(mcpConfig, settingsFile, limits) {
 }
 
 
-// The flags of one chat turn. opts: { unsafe, caveman, cavemanText, tb: toolbox.chatOptions(), and for tests:
+// The flags of one chat turn. opts: { unsafe, trusted, caveman, cavemanText, tb: toolbox.chatOptions(), and for tests:
 // settingsFile, mcpConfig }.
 function chatArgs(files, resume, choice, opts) {
   const o = opts || {};
