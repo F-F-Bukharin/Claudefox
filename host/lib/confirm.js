@@ -14,6 +14,9 @@ const log = require('./log');
 const ASK_MS = 120000;
 const SCRIPT = path.join(__dirname, '..', 'confirm.ps1');
 
+// The text the window shows: control characters other than line breaks are removed, so nothing hides or rewrites it.
+function cleanText(s) { return String(s).replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, ''); }
+
 // deps: { killTree(child, sync) }
 function createConfirm(deps) {
   let queue = Promise.resolve();
@@ -21,7 +24,7 @@ function createConfirm(deps) {
 
   function runOne(q) {
     return new Promise(resolve => {
-      const env = { ...process.env, CIZ_Q_TITLE: String(q.title || 'Claude in Zen').slice(0, 120), CIZ_Q_TEXT: String(q.text || '').slice(0, 3000),
+      const env = { ...process.env, CIZ_Q_TITLE: String(q.title || 'Claude in Zen').slice(0, 120), CIZ_Q_TEXT: cleanText(q.text || '').slice(0, 3000),
         CIZ_Q_YES: String(q.yes || 'Yes').slice(0, 40), CIZ_Q_NO: String(q.no || 'No').slice(0, 40) };
       let exe, args;
       if (process.env.CLAUDE_IN_ZEN_CONFIRM) { exe = process.env.CLAUDE_IN_ZEN_CONFIRM; args = []; }
@@ -63,4 +66,4 @@ function createConfirm(deps) {
   return { ask, closeAll };
 }
 
-module.exports = { createConfirm, ASK_MS };
+module.exports = { createConfirm, cleanText, ASK_MS };

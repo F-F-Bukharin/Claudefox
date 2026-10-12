@@ -557,6 +557,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
     }
     let args;
     let local = false;
+    let question;   // the confirm window's question: a program this PC runs (command) or a server it reaches (address)
     if (/^https?:\/\//i.test(target)) {
       let u;
       try { u = new URL(target); } catch { return emitResult('add', false, 'That is not a valid address.'); }
@@ -569,24 +570,30 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
         args.push('--header', header);
       }
       args.push(name, u.href);
+      question = { kind: 'mcp_remote', title: 'Claude in Zen: add a tool server?',
+        text: `Add the tool server ${name} at ${u.href}? When Claude uses it, what it reads from pages can go to that server.`,
+        yes: 'Add tool', no: 'Cancel' };
     } else {
       const parts = splitCommand(target);
       if (!parts.length || target.length > 2000) return emitResult('add', false, 'Give the server\'s address (https://...) or the command that starts it.');
-      if (process.platform === 'win32' && /^(npx|npm|pnpm|yarn|bunx|uvx)(\.cmd)?$/i.test(parts[0])) parts.unshift('cmd', '/c');
+      if (process.platform === 'win32' && /^(npx|npm|pnpm|yarn|bunx|uvx)(\.cmd)?$/i.test(parts[0])) {
+        // cmd /c would run any of these characters as a command of its own, so they are refused before anything is asked.
+        if (parts.some(p => /[&|<>^%\r\n]/.test(p))) return emitResult('add', false, 'That command has characters cmd would run as another command.');
+        parts.unshift('cmd', '/c');
+      }
       args = ['mcp', 'add', '--scope', 'user', name, '--', ...parts];
       local = true;
+      question = { kind: 'mcp_local', title: 'Claude in Zen: add a tool that runs a program?',
+        text: `Add the tool "${name}"? Every chat with it switched on runs this on your PC, one argument per line:\n\n${parts.join('\n')}\n\nOnly add tools you trust.`,
+        yes: 'Add tool', no: 'Cancel' };
     }
     busy = 'adding';
     push(key);
     try {
-      // A tool that runs a program on this PC is the user's call, made in the confirm window, which nothing in the
-      // add-on or the panel (a mod included) can answer for them.
-      if (local) {
-        const ok = confirm ? await confirm({ title: 'Claude in Zen: add a tool that runs a program?',
-          text: `Add the tool "${name}"? Every chat with it switched on runs this on your PC:\n\n${target}\n\nOnly add tools you trust.`,
-          yes: 'Add tool', no: 'Cancel' }) : { ok: false, error: 'There is no confirm window.' };
-        if (!ok.ok) return emitResult('add', false, `Not added: ${ok.error}`);
-      }
+      // A tool server is the user's call, made in the confirm window, which nothing in the add-on or the panel (a mod
+      // included) can answer for them: a command runs on this PC, an address gets what Claude reads from pages.
+      const ok = confirm ? await confirm(question) : { ok: false, error: 'There is no confirm window.' };
+      if (!ok.ok) return emitResult('add', false, `Not added: ${ok.error}`);
       const r = await run(key, args, 90000);
       if (!r.ok) return emitResult('add', false, `Claude Code did not add it: ${firstLine(r.err) || firstLine(r.out) || 'unknown error'}`);
       if (spec.on && !st.on.servers.includes(name)) { st.on.servers.push(name); save(); }

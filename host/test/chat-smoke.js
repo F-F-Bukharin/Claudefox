@@ -416,12 +416,12 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     toHelper({ type: 'tool_add', name: 'my-api', target: 'https://example.com/mcp', on: true });
     const ad = await next(m => m.type === 'tool_result' && m.action === 'add', 15000);
     check('add a tool server by address', ad.ok && fs.readFileSync(record + '.cmds', 'utf8').includes('mcp add --scope user --transport http my-api https://example.com/mcp'), ad.error);
-    check('a tool by address needs no confirm window', !questions().some(q => /my-api/.test(q.text)));
+    check('a tool server by address asks first, in the confirm window', questions().some(q => q.text.startsWith('Add the tool server my-api at https://example.com/mcp? ')));
     fs.writeFileSync(confirmAnswer, 'no');
     toHelper({ type: 'tool_add', name: 'runner', target: 'cmd /c calc.exe' });
     const cmdNo = await next(m => m.type === 'tool_result' && m.action === 'add', 15000);
     const cq = questions().pop();
-    check('a tool that runs a program is added only after a yes in the confirm window', !cmdNo.ok && /^Not added/.test(cmdNo.error) && cq && cq.text.includes('cmd /c calc.exe')
+    check('a tool that runs a program is added only after a yes in the confirm window', !cmdNo.ok && /^Not added/.test(cmdNo.error) && cq && cq.text.includes('cmd\n/c\ncalc.exe')
       && !fs.readFileSync(record + '.cmds', 'utf8').includes('runner'), cmdNo.error);
     toHelper({ type: 'plugin_install', spec: 'hooky@market' });
     const plNo = await next(m => m.type === 'tool_result' && m.action === 'install', 15000);

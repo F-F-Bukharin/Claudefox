@@ -34,12 +34,17 @@ $layout.FlowDirection = 'TopDown'
 $layout.AutoSize = $true
 $layout.WrapContents = $false
 
-$label = New-Object System.Windows.Forms.Label
-$label.Text = ($env:CIZ_Q_TEXT -replace "`r?`n", "`r`n")
-$label.AutoSize = $true
-$label.MaximumSize = New-Object System.Drawing.Size(560, 0)
-$label.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 14)
-$layout.Controls.Add($label)
+$box = New-Object System.Windows.Forms.TextBox
+$box.Multiline = $true
+$box.ReadOnly = $true
+$box.TabStop = $false
+$box.ScrollBars = 'Vertical'
+$box.Font = New-Object System.Drawing.Font('Consolas', 9)
+$box.Width = 560
+$box.Text = ($env:CIZ_Q_TEXT -replace "`r?`n", "`r`n")
+$box.Height = [Math]::Min(260, [System.Windows.Forms.TextRenderer]::MeasureText($box.Text, $box.Font, (New-Object System.Drawing.Size(540, 0)), [System.Windows.Forms.TextFormatFlags]::WordBreak).Height + 12)
+$box.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 14)
+$layout.Controls.Add($box)
 
 $buttons = New-Object System.Windows.Forms.FlowLayoutPanel
 $buttons.FlowDirection = 'RightToLeft'
