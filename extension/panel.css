@@ -703,3 +703,12 @@ html[data-wall="picture"] body {
 .msg.queued .body { opacity: .6; border: 1px dashed var(--line); }
 .msg.queued .qrow { align-self: flex-end; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
 .msg.queued .qx { font-size: 15px; line-height: 1; padding: 0 4px; }
+
+/* Settings → Macros */
+.macrolist { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.macrolist li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.macrolist .macro-text { flex: 1 1 100%; font-size: 12px; color: var(--card-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.macroform { display: flex; flex-direction: column; gap: 6px; }
+.macroform input, .macroform textarea, .macroform select { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--outline); border-radius: 8px; background: var(--card); color: var(--card-ink); font: inherit; }
+.macrosched { display: flex; gap: 6px; }
+.hist-group { font-size: 11.5px; font-weight: 600; color: var(--card-muted); padding: 6px 2px 0; list-style: none; }

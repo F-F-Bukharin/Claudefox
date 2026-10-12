@@ -166,7 +166,10 @@ $('siteAddBtn').addEventListener('click', () => {
 });
 try {
   browser.storage.local.get('sites').then(got => renderSites(got.sites || {}));
-  browser.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.sites) renderSites(changes.sites.newValue || {}); });
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.sites) renderSites(changes.sites.newValue || {});
+    if (area === 'local' && changes.macros) loadMacros();   // Macros (below): another window saved
+  });
 } catch {}
 
 // Tools and plugins (Settings). Switches, sign-in, add and remove go to the helper through the background page.
@@ -557,3 +560,94 @@ function renderMods(s) {
 $('modsCheck').addEventListener('click', () => send('modsRefresh'));
 $('modsReload').addEventListener('click', () => location.reload());
 $('modsOff').addEventListener('click', () => send('modsAllOff'));
+
+// Macros (Settings): saved prompts, kept in storage.local `macros` (see lib/bg-macros.js for the shape and the alarms). The panel checks
+// what the user types; the background cleans again when it reads the list.
+let macrosCache = [];
+let macroEditing = '';
+const MACRO_NAME = /^[\p{L}\p{N}-]{1,30}$/u;
+async function loadMacros() {
+  try { const got = await browser.storage.local.get('macros'); macrosCache = Array.isArray(got.macros) ? got.macros : []; } catch { macrosCache = []; }
+  renderMacros();
+  return macrosCache;
+}
+function macroSiteOf(s) {
+  const h = String(s || '').trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d*$/, '').replace(/^www\./, '').replace(/\.$/, '');
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(h) || h === 'localhost' ? h : '';
+}
+function renderMacros() {
+  const list = $('macroList');
+  list.textContent = '';
+  for (const m of macrosCache) {
+    const li = el('li');
+    li.dataset.name = m.name;
+    const when = !m.schedule ? '' : m.schedule.kind === 'daily' ? ` · daily at ${m.schedule.at}` : ` · every ${m.schedule.hours} h`;
+    li.append(el('span', 'mono', '/' + m.name), el('span', 'muted small', when.slice(3)),
+      actBtn('Edit', 'link macro-edit', () => macroEdit(m.name)), actBtn('Remove', 'link macro-del', () => macroRemove(m.name)),
+      el('span', 'macro-text', m.text.replace(/\s+/g, ' ')));
+    list.appendChild(li);
+  }
+}
+function macroEdit(name) {
+  const m = macrosCache.find(x => x.name === name);
+  if (!m) return;
+  macroEditing = name;
+  $('macroName').value = m.name; $('macroText').value = m.text; $('macroArmy').value = (m.army || []).join('\n'); $('macroSites').value = (m.sites || []).join(', ');
+  $('macroSched').value = m.schedule ? m.schedule.kind : 'none'; $('macroAt').value = m.schedule && m.schedule.at || ''; $('macroEvery').value = m.schedule && m.schedule.hours || '';
+  $('macroCancel').hidden = false;
+  $('macroErr').hidden = true;
+}
+function macroReset() {
+  macroEditing = '';
+  for (const id of ['macroName', 'macroText', 'macroArmy', 'macroSites', 'macroAt', 'macroEvery']) $(id).value = '';
+  $('macroSched').value = 'none';
+  $('macroCancel').hidden = true;
+  $('macroErr').hidden = true;
+}
+async function macroPut(list) {
+  macrosCache = list;
+  renderMacros();
+  await browser.storage.local.set({ macros: list });
+}
+async function macroRemove(name) {
+  await loadMacros();
+  if (macroEditing === name) macroReset();
+  await macroPut(macrosCache.filter(m => m.name !== name));
+}
+async function macroSave() {
+  await loadMacros();
+  const name = $('macroName').value.trim().toLowerCase();
+  const text = $('macroText').value.trim();
+  const kind = $('macroSched').value;
+  const sites = [];
+  let bad = '';
+  for (const s of $('macroSites').value.split(/[\s,;]+/).filter(Boolean)) { const h = macroSiteOf(s); if (!h) bad = bad || `"${s}" is not a site.`; else if (sites.indexOf(h) < 0) sites.push(h); }
+  let schedule = null;
+  let problem = '';
+  if (!MACRO_NAME.test(name)) problem = 'The name takes letters, numbers and dashes only (up to 30).';
+  else if (COMMANDS.some(c => c.cmd === name)) problem = `/${name} is a built-in command. Pick another name.`;
+  else if (name !== macroEditing && macrosCache.some(m => m.name === name)) problem = `A macro called ${name} already exists.`;
+  else if (!text) problem = 'Write what the macro sends.';
+  else if (bad) problem = bad;
+  else if (kind === 'daily') {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test($('macroAt').value)) problem = 'Pick the time of day (HH:MM).';
+    else schedule = { kind: 'daily', at: $('macroAt').value };
+  } else if (kind === 'every') {
+    const n = Number($('macroEvery').value);
+    if (!Number.isInteger(n) || n < 1 || n > 24) problem = 'Every N hours takes a whole number from 1 to 24.';
+    else schedule = { kind: 'every', hours: n };
+  }
+  if (!problem && schedule && !sites.length) problem = 'A scheduled macro must list the sites it reads.';
+  $('macroErr').textContent = problem;
+  $('macroErr').hidden = !problem;
+  if (problem) return;
+  const entry = { name, text, army: $('macroArmy').value.split('\n').map(t => t.trim()).filter(Boolean), sites, schedule };
+  const next = macrosCache.filter(m => m.name !== macroEditing && m.name !== name);
+  const at = macrosCache.findIndex(m => m.name === macroEditing);
+  at >= 0 && macroEditing ? next.splice(Math.min(at, next.length), 0, entry) : next.push(entry);
+  macroReset();
+  await macroPut(next);
+}
+$('macroSave').addEventListener('click', macroSave);
+$('macroCancel').addEventListener('click', macroReset);
+loadMacros();

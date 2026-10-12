@@ -23,6 +23,8 @@
 //        list or an allow entry in blocks -> allowed; denied earlier in this message -> refused text; else a card.
 //   async risky(site, action, opts)  action 'post'|'leave'; same blocks/trusted; army -> the workers text; page not read in this
 //        message -> allowed; else a kind 'risky' card (answers allow/deny). Denials are kept under action+site for the message.
+//   begin(id, { scheduled: [sites] })  a scheduled macro's turn (E8): use() allows exactly those sites and refuses the rest with
+//        "Outside this scheduled macro's sites: <site>.", no card, Trusted or not; risky() allows. The chat's own lists are untouched.
 //   markRead() / isRead()   the message has (not) read page content.
 //   tabView(tab, { trusted, blocks }) -> { id, site, active } for a blocked site or (not trusted) a site outside the list,
 //        else { id, windowId, active, title, url, audible }.
@@ -72,13 +74,14 @@ function cizSitesInText(text) {
 const cizSiteGate = (() => {
   const SHOWN_MS = 5000, ANSWER_MS = 120000;
   let allowed = [], chat = [], msg = [], denied = {}, pageRead = false, winId = null, curId = null;
+  let sched = null;   // a scheduled macro's turn (E8): only these sites, no cards
   let seq = 0, open = null, queue = [];
   const runs = {};
 
   const push = (arr, site) => { if (site && arr.indexOf(site) < 0) arr.push(site); };
   const refusedText = site => `The user did not allow ${site}. Do not try it again in this message.`;
   const dedupe = arr => { const out = []; arr.forEach(s => push(out, s)); return out; };
-  const list = () => dedupe(allowed.concat(chat, msg));
+  const list = () => (sched ? sched.slice() : dedupe(allowed.concat(chat, msg)));
   const entryOf = (blocks, value, site) => !!blocks && Object.keys(blocks).some(k => blocks[k] === value && cizSiteMatch([k], site));
   const isBlocked = (blocks, site) => entryOf(blocks, 'block', site);
   const setState = patch => { try { Promise.resolve(cizState.set(patch)).catch(() => {}); } catch (e) { /* the state is gone with the page */ } };
@@ -90,6 +93,10 @@ const cizSiteGate = (() => {
   function checkUse(site, opts) {
     const o = opts || {};
     if (isBlocked(o.blocks, site)) throw new Error(`${site} is blocked in your site list.`);
+    if (sched) {   // a scheduled macro: its own sites only, never a card, Trusted does not widen it
+      if (cizSiteMatch(sched, site)) return 'ok';
+      throw new Error(`Outside this scheduled macro's sites: ${site}.`);
+    }
     if (o.trusted) return 'ok';
     if (o.army) {
       const run = String(o.army.run);
@@ -104,6 +111,7 @@ const cizSiteGate = (() => {
   function checkRisky(site, action, opts) {
     const o = opts || {};
     if (isBlocked(o.blocks, site)) throw new Error(`${site} is blocked in your site list.`);
+    if (sched) return 'ok';   // the sites were checked by use()
     if (o.trusted) return 'ok';
     if (o.army) throw new Error('Workers cannot submit forms or leave the site; report back to the lead.');
     if (!pageRead) return 'ok';
@@ -166,6 +174,12 @@ const cizSiteGate = (() => {
     begin(id, o) {
       const x = o || {};
       curId = id == null ? null : id;
+      if (Array.isArray(x.scheduled)) {   // scheduled: { scheduled: [sites] } leaves the chat's own list alone
+        sched = dedupe(x.scheduled.map(s => String(s).toLowerCase()));
+        msg = []; denied = {}; pageRead = false; winId = null;
+        return list();
+      }
+      sched = null;
       if (x.newChat) chat = [];
       allowed = dedupe((x.allow || []).map(s => String(s).toLowerCase()));
       msg = []; denied = {}; pageRead = false;
@@ -176,7 +190,7 @@ const cizSiteGate = (() => {
     },
     end(id) {
       if (id != null && curId != null && id !== curId) return;
-      msg = []; denied = {}; pageRead = false; curId = null;
+      msg = []; denied = {}; pageRead = false; curId = null; sched = null;
     },
     list, windowId: () => winId,
     use(site, action, opts) { return run(site, action, 'site', () => checkUse(site, opts)); },

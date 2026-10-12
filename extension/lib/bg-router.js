@@ -31,7 +31,11 @@ async function probeDebugPort() {
 const CIZ_READING_TOOLS = new Set(['tabs_list', 'read_page', 'get_page_text', 'find', 'analyze_page', 'get_selection', 'network_log', 'console_log']);
 
 // army: { run, worker } for an army worker's call (lib/army.js), else null.
-async function dispatch(tool, args, source, army) {
+// What a scheduled macro's turn may call (E8). The rest is refused: no clicks, typing, forms, files, army.
+const CIZ_SCHEDULED_TOOLS = new Set(['tabs_list', 'tab_open', 'navigate', 'get_page_text', 'read_page', 'find', 'analyze_page', 'get_selection', 'screenshot', 'scroll']);
+
+// scheduled: true for a call the helper makes during a scheduled macro's turn.
+async function dispatch(tool, args, source, army, scheduled) {
   const s = cizState.get();
   if (s.agent !== 'active') return { ok: false, error: 'Agent is stopped. Press Start in the Claude in Zen panel.' };
   if (!s.signedIn) return { ok: false, error: 'Not signed in. Press "Sign in with Claude" in the panel.' };
@@ -43,6 +47,7 @@ async function dispatch(tool, args, source, army) {
     args = Object.assign({}, args, { __army: army }, tool === 'tab_open' ? { active: false } : {});
     cizArmy.touch(args.tab_id);
   }
+  if (scheduled && !CIZ_SCHEDULED_TOOLS.has(tool)) return { ok: false, error: 'Scheduled macros only read pages.' };
   const fn = CIZ_TOOLS[tool];
   if (!fn) return { ok: false, error: `Unknown tool: ${tool}` };
 

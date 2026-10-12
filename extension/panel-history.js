@@ -156,7 +156,9 @@ async function histRender() {
   const list = $('histList');
   list.textContent = '';
   const a = (state.accounts || []).find(x => x && x.active);
-  for (const c of items) list.appendChild(histRow(c));
+  const sched = items.filter(c => c.group === 'Scheduled');   // scheduled macros' results (lib/bg-macros.js) sit in their own group
+  for (const c of items.filter(c => c.group !== 'Scheduled')) list.appendChild(histRow(c));
+  if (sched.length) { list.appendChild(el('li', 'hist-group', 'Scheduled')); for (const c of sched) list.appendChild(histRow(c)); }
   $('histEmpty').textContent = q ? 'No chat matches.' : `No saved chats yet${a && a.email ? ' for ' + a.email : ''}.`;
   $('histEmpty').hidden = items.length > 0;
 }

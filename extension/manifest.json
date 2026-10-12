@@ -24,6 +24,8 @@
     "downloads",
     "clipboardWrite",
     "webRequest",
+    "alarms",
+    "notifications",
     "<all_urls>"
   ],
   "background": {
@@ -45,6 +47,7 @@
       "lib/bg-accounts.js",
       "lib/bg-permissions.js",
       "lib/bg-chat.js",
+      "lib/bg-macros.js",
       "lib/bg-router.js",
       "background.js"
     ],

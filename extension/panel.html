@@ -377,6 +377,25 @@
       </div>
     </section>
 
+    <section class="card macros" id="macrosCard">
+      <h3>Macros</h3>
+      <p class="note">A saved prompt you send with <code>/name</code>. Army tasks (one per line) send it in Quality with the army on. A macro with sites can also run on a timer while the browser is open: it only reads those sites, and the result lands in History under Scheduled.</p>
+      <ul class="macrolist" id="macroList"></ul>
+      <div class="macroform">
+        <input id="macroName" type="text" placeholder="Name (letters, numbers, dashes)" maxlength="30" autocomplete="off" aria-label="Macro name">
+        <textarea id="macroText" rows="3" placeholder="What to send" aria-label="Macro text"></textarea>
+        <textarea id="macroArmy" rows="2" placeholder="Army tasks, one per line (optional)" aria-label="Army tasks"></textarea>
+        <input id="macroSites" type="text" placeholder="Sites to read when scheduled, e.g. news.example" autocomplete="off" aria-label="Sites">
+        <div class="macrosched">
+          <select id="macroSched" aria-label="Schedule"><option value="none">No schedule</option><option value="daily">Daily at</option><option value="every">Every N hours</option></select>
+          <input id="macroAt" type="time" aria-label="Time of day">
+          <input id="macroEvery" type="number" min="1" max="24" placeholder="Hours" aria-label="Hours between runs">
+        </div>
+        <p class="note warnnote" id="macroErr" hidden></p>
+        <div class="modsacts"><button type="button" class="link" id="macroSave">Save macro</button><button type="button" class="link" id="macroCancel" hidden>Cancel edit</button></div>
+      </div>
+    </section>
+
     <section class="card mods" id="modsCard">
       <h3>Mods</h3>
       <p class="note">Small add-ons for this panel, kept in <code>extension\mods</code>. A mod that throws is stopped and shown here, and the rest keep running. Switch changes take effect after Reload panel.</p>

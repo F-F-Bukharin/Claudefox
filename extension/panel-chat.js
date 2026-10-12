@@ -296,7 +296,12 @@ function helpText() {
 async function runSlash(text) {
   const cmd = text.slice(1).split(/\s+/)[0].toLowerCase();
   const known = COMMANDS.find(c => c.cmd === cmd);
-  if (!known) return addMsg({ role: 'error', text: `Unknown command /${cmd}. Try /help.` });
+  if (!known) {   // a saved macro (Settings → Macros) sends its text; a built-in name is never shadowed (the settings refuse it)
+    await loadMacros();
+    const macro = macrosCache.find(m => m.name === cmd);
+    if (macro) return sendMacro(macro, text.slice(1 + cmd.length).trim());
+    return addMsg({ role: 'error', text: `Unknown command /${cmd}. Try /help.` });
+  }
   if (known.act) return doAct(known.act);
   if (cmd === 'help') return addMsg({ role: 'assistant', text: helpText() });
   if (cmd === 'clear') { histNewChat(); chat = []; saveChat(); send('newChat'); return renderChat(); }
@@ -307,6 +312,20 @@ async function runSlash(text) {
   addMsg({ role: 'assistant', text: `You have ${out.result.length} tab${out.result.length === 1 ? '' : 's'} open:`, tabs: out.result.slice(0, 50) });
 }
 
+// A macro sends its text like a typed message. With army tasks it sends in Quality with the army on and lists the tasks.
+async function sendMacro(macro, more) {
+  if (state.agent === 'stopped') { addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' }); return; }
+  if (!state.signedIn) { addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' }); return; }
+  const tasks = macro.army || [];
+  const text = macro.text + (more ? '\n\n' + more : '') + (tasks.length ? '\n\nTasks for the army:\n' + tasks.map((t, i) => `${i + 1}. ${t}`).join('\n') : '');
+  const id = `p${Date.now().toString(36)}${chatSeq++}`;
+  const extra = Object.assign(histResumeExtra(), tasks.length ? { army: true } : {});
+  const waits = isBusy();
+  addMsg(Object.assign({ role: 'user', cid: id, text, files: [] }, waits ? { queued: true } : {}));
+  if (!waits) addMsg({ role: 'assistant', id, text: '', steps: [], pending: true, startedAt: Date.now() });
+  send('chat', Object.assign({ id, text }, extra));
+}
+
 // The "/" menu: it opens when the text bar holds "/" and letters, and narrows as you type.
 const slashMenu = $('slashMenu');
 let slashIndex = 0;
@@ -314,7 +333,7 @@ function slashMatches() {
   const v = input.value;
   if (!v.startsWith('/') || /\s/.test(v) || attachments.length) return null;
   const q = v.slice(1).toLowerCase();
-  return COMMANDS.filter(c => c.cmd.startsWith(q));
+  return COMMANDS.concat(macrosCache.map(m => ({ cmd: m.name, text: m.text.replace(/\s+/g, ' ').slice(0, 60) }))).filter(c => c.cmd.startsWith(q));
 }
 function renderSlash() {
   const list = slashMatches();

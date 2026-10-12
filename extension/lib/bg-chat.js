@@ -70,11 +70,15 @@ async function startChat(msg) {
   const text = String(msg.text || '');
   const improve = msg.improve === true;   // Improve Claude in Zen: no tab, no files, no attachments; Opus at max effort
   const attachments = improve ? [] : cleanAttachments(msg.attachments);
-  const fail = error => postToPanels({ type: 'chatDone', id, ok: false, error });
+  const fail = error => {
+    postToPanels({ type: 'chatDone', id, ok: false, error });
+    if (msg.scheduled) cizMacros.skipped(msg.scheduled.macro, error);   // a scheduled run that could not start is a skipped run
+  };
   if (!id || (!text.trim() && !attachments.length && !improve)) return;
   if (chatRuns.size || chatReserved) {
     if (chatQueue.length >= CHAT_QUEUE_MAX) return fail('Too many messages are waiting. Wait for Claude to catch up.');
     chatQueue.push({ id, msg });
+    if (msg.scheduled) cizMacros.waitOrSkip(id, msg.scheduled.macro);   // a scheduled run waits up to 30 minutes
     postToPanels({ type: 'chatQueued', id });
     return chatBusyPush();
   }
@@ -84,19 +88,23 @@ async function startChat(msg) {
 
 async function startChatNow(msg, id, text, improve, attachments, fail) {
   const s = cizState.get();
-  const armyMax = !improve && s.chatModel === 'quality' && s.chatArmy ? await armyMaxOn() : false;
+  // A scheduled macro (E8) only reads: Speed, no tab, no files, no Unsafe, no Trusted, no army, and its own sites. A saved macro with
+  // army tasks (E7) sends in Quality with the army on, whatever the switches say.
+  const sched = msg.scheduled && typeof msg.scheduled === 'object' && msg.scheduled.macro ? { macro: String(msg.scheduled.macro).slice(0, 40), sites: (Array.isArray(msg.scheduled.sites) ? msg.scheduled.sites : []).map(String) } : null;
+  const forceArmy = !improve && !sched && msg.army === true;
+  const armyMax = !improve && !sched && (forceArmy || (s.chatModel === 'quality' && s.chatArmy)) ? await armyMaxOn() : false;
   if (s.agent !== 'active') return fail('Claude is stopped. Press Start first.');
   if (!s.signedIn) return fail('Not signed in. Open the Profile page and sign in first.');
   if (s.native !== 'connected') return fail('The helper is not connected. Run "Set up Claude in Zen.bat", then press retry in Settings.');
   if (s.claude && !s.claude.installed) return fail('Claude Code is not installed on this PC.');
   if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Double-click "Sign in Claude Code.bat" in the tools folder.');
-  const files = !improve && s.filesEnabled ? s.filesMode : '';
-  const model = improve ? 'selfimprove' : s.chatModel === 'quality' ? (s.chatArmy ? (armyMax ? 'armymax' : 'army') : 'quality') : s.chatPlus ? 'speedplus' : 'speed';
+  const files = !improve && !sched && s.filesEnabled ? s.filesMode : '';
+  const model = improve ? 'selfimprove' : sched ? 'speed' : forceArmy ? (armyMax ? 'armymax' : 'army') : s.chatModel === 'quality' ? (s.chatArmy ? (armyMax ? 'armymax' : 'army') : 'quality') : s.chatPlus ? 'speedplus' : 'speed';
   const winId = typeof msg.windowId === 'number' ? msg.windowId : null;
-  chatRuns.set(id, { startedAt: Date.now(), model, windowId: winId });
+  chatRuns.set(id, { startedAt: Date.now(), model, windowId: winId, scheduled: sched, text: '' });
   chatBusyPush();
   let tab = null, windowId = winId;
-  if (!improve) {
+  if (!improve && !sched) {
     try {
       const [t] = await browser.tabs.query(winId != null ? { active: true, windowId: winId } : { active: true, lastFocusedWindow: true });
       if (t) { tab = { id: t.id, title: t.title || '', url: t.url || '' }; windowId = t.windowId; }
@@ -105,20 +113,22 @@ async function startChatNow(msg, id, text, improve, attachments, fail) {
   // The sites Claude may use in this message: the open page's, the ones the text names, the chat's, and the ones the user marked allow.
   // Opening a chat from History sends its Claude session id, so the next message resumes that conversation.
   // A window's own chat resumes that window's session (a message that waited in the queue takes the one its predecessor made).
-  const resume = improve ? '' : typeof msg.resume === 'string' ? msg.resume.slice(0, 100) : winId != null ? (winSessions.get(winId) || '') : (s.chatSession || '');
-  if (!improve && winId != null) winSessions.set(winId, resume);
+  const resume = improve || sched ? '' : typeof msg.resume === 'string' ? msg.resume.slice(0, 100) : winId != null ? (winSessions.get(winId) || '') : (s.chatSession || '');
+  if (!improve && !sched && winId != null) winSessions.set(winId, resume);
   let sites = [];
-  if (!improve) {
+  if (sched) sites = cizSiteGate.begin(id, { scheduled: sched.sites });
+  else if (!improve) {
     let blocks = {};
     try { blocks = (await browser.storage.local.get('sites')).sites || {}; } catch {}
     const allow = Object.keys(blocks).filter(k => blocks[k] === 'allow');
     sites = cizSiteGate.begin(id, { tabUrl: tab && tab.url, windowId, text, newChat: !resume, allow });
   }
   const sent = sendNative({ type: 'chat', id, text, model, tab, resume, files, folder: files ? s.filesFolder : '',
-    unsafe: !improve && !!s.unsafe, caveman: !improve && !!s.caveman, attachments, improve,
-    sites, trusted: !improve && !!s.trusted });
+    unsafe: !improve && !sched && !!s.unsafe, caveman: !improve && !sched && !!s.caveman, attachments, improve,
+    sites, trusted: !improve && !sched && !!s.trusted, scheduled: !!sched });
   if (!sent) { chatRuns.delete(id); chatBusyPush(); cizSiteGate.end(id); return fail('Could not reach the helper.'); }
   await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
+    : sched ? `scheduled macro ${sched.macro} → Claude Code, Speed, reading ${sched.sites.join(', ')}`
     : `chat → Claude Code, ${ARMY_LABEL[model] || model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
 }
 
@@ -130,9 +140,9 @@ function cancelChat(id) {
 // Ends every open turn in the panel (Stop, or the helper went away).
 function failChats(error) {
   cizSiteGate.cancel();   // a card that waits for an answer nobody can give now
-  for (const id of chatRuns.keys()) { postToPanels({ type: 'chatDone', id, ok: false, error }); cizSiteGate.end(id); }
+  for (const [id, run] of chatRuns) { postToPanels({ type: 'chatDone', id, ok: false, error }); cizSiteGate.end(id); if (run.scheduled) cizMacros.finished(run, { ok: false, error }); }
   chatRuns.clear();
-  for (const q of chatQueue.splice(0)) postToPanels({ type: 'chatDone', id: q.id, ok: false, error });   // Stop clears every waiting message
+  for (const q of chatQueue.splice(0)) { postToPanels({ type: 'chatDone', id: q.id, ok: false, error }); if (q.msg.scheduled) cizMacros.skipped(q.msg.scheduled.macro, error); }   // Stop clears every waiting message
   chatBusyPush();
 }
 
@@ -142,14 +152,17 @@ async function onChatDone(msg) {
   chatRuns.delete(id);
   cizSiteGate.end(id);
   const err = String(msg.error || '');
+  if (msg.limit) await browser.storage.local.set({ limitHitAt: Date.now() });   // scheduled macros stay away for 2 hours (lib/bg-macros.js)
   if (run && run.windowId != null) {
     if (msg.sessionId) winSessions.set(run.windowId, String(msg.sessionId));
     if (!msg.ok && /No conversation found/i.test(err)) winSessions.set(run.windowId, '');
   }
-  if (msg.sessionId) await cizState.set({ chatSession: String(msg.sessionId) });
-  if (!msg.ok && /No conversation found/i.test(err)) await cizState.set({ chatSession: '' });
+  const own = !(run && run.scheduled);   // a scheduled run never touches the chat's own session
+  if (own && msg.sessionId) await cizState.set({ chatSession: String(msg.sessionId) });
+  if (own && !msg.ok && /No conversation found/i.test(err)) await cizState.set({ chatSession: '' });
   if (!msg.ok) await cizState.addLog(msg.limit ? 'warn' : 'error', `Chat: ${err.split('\n')[0].slice(0, 200)}`);
   postToPanels({ type: 'chatDone', id, ok: !!msg.ok, error: err, limit: !!msg.limit, sessionId: String(msg.sessionId || '') });
+  if (run && run.scheduled) await cizMacros.finished(run, msg);
   chatBusyPush();
   drainChatQueue();
 }
@@ -326,7 +339,8 @@ async function onNativeMessage(msg) {
         return;
       }
       const army = a != null ? { run: a.run.slice(0, 40), worker: a.worker.slice(0, 40) } : null;
-      const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'), army);
+      const turn = chatRuns.get(cizChatId());
+      const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'), army, !army && !!(turn && turn.scheduled));
       sendNative({ type: 'result', id: msg.id, ...out });
       return;
     }
@@ -385,6 +399,7 @@ async function onNativeMessage(msg) {
       if (!chatRuns.has(id)) return;
       let event = msg.event || {};
       const model = chatRuns.get(id).model;   // the entry is there: checked above
+      if (event.kind === 'text' && chatRuns.get(id).scheduled) chatRuns.get(id).text += String(event.text || '');   // a scheduled run's answer goes to History
       if (event.kind === 'stats' && (model === 'army' || model === 'armymax')) await countArmyTokens((Number(event.tokensIn) || 0) + (Number(event.tokensOut) || 0));
       if (event.kind === 'army' && event.started) event = Object.assign({}, event, { today: await countArmyRun() });
       postToPanels({ type: 'chatEvent', id, event });
