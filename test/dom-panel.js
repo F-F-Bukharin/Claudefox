@@ -5,16 +5,18 @@ try { ({ JSDOM } = require('jsdom')); } catch { console.log('SKIP  jsdom not ins
 const EXT = require('path').join(__dirname, '..', 'extension') + '/';
 const fs=require('fs');
 const dir=EXT;
-const html=fs.readFileSync(dir+'panel.html','utf8').replace(/<script src="panel.js"><\/script>/,'');
+const { panelPage, evalPanel } = require('./lib/panel-scripts');
+const { html, files: panelFiles } = panelPage(dir);
 const dom=new JSDOM(html,{runScripts:'outside-only',pretendToBeVisual:true});
 const w=dom.window; const sent=[]; let onMsg;
 w.browser={runtime:{connect:()=>({postMessage:m=>sent.push(m),onMessage:{addListener:f=>onMsg=f}}),getManifest:()=>({version:'0.4.0'})},
  storage:{session:{get:async()=>({}),set:async()=>{}}},
  tabs:{query:async()=>[{title:'T',url:'https://x'}],onActivated:{addListener(){}},onUpdated:{addListener(){}}}};
-w.eval(fs.readFileSync(dir+'lib/markdown.js','utf8')+'\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir+'lib/wall.js','utf8')); w.eval(fs.readFileSync(dir+'panel.js','utf8'));
+w.eval(fs.readFileSync(dir+'lib/markdown.js','utf8')+'\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir+'lib/wall.js','utf8')); evalPanel(dom, dir, panelFiles);
 const $=id=>w.document.getElementById(id);
 let pass=0,fail=0;const ok=(n,c,x)=>{c?pass++:fail++;console.log((c?'PASS ':'FAIL ')+n+(x?'  '+x:''))};
 const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort:'off',pending:0,chatModel:'speed',filesMode:'read',filesFolder:''};
+ok('the panel scripts: panel.js first, the background link (panel-link.js) last, and every panel file is in panel.html', panelFiles[0] === 'panel.js' && panelFiles[panelFiles.length - 1] === 'panel-link.js' && JSON.stringify([...panelFiles].sort()) === JSON.stringify(fs.readdirSync(dir).filter(f => /^panel(-[a-z]+)?\.js$/.test(f)).sort()));
 (async()=>{
  await new Promise(r=>setTimeout(r,50));
  onMsg({type:'state',state:base,log:[]});

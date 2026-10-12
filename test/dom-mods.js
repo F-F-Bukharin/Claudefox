@@ -6,7 +6,8 @@ try { ({ JSDOM } = require('jsdom')); } catch { console.log('SKIP  jsdom not ins
 const fs = require('fs');
 const path = require('path');
 const EXT = path.join(__dirname, '..', 'extension') + '/';
-const html = fs.readFileSync(EXT + 'panel.html', 'utf8').replace(/<script src="panel.js"><\/script>/, '');
+const { panelPage, evalPanel } = require('./lib/panel-scripts');
+const { html, files: panelFiles } = panelPage(EXT);
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
@@ -33,7 +34,7 @@ function panel(store = new Map()) {
     removeItem: k => { store.delete(k); },
   } });
   w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
-  w.eval(fs.readFileSync(EXT + 'panel.js', 'utf8'));
+  evalPanel(dom, EXT, panelFiles);
   const base = { agent: 'active', signedIn: false, native: 'connected', claude: null, debugPort: 'off', pending: 0, chatModel: 'speed', filesMode: 'read', filesFolder: '', modsKnown: false, mods: [] };
   return {
     w, store, sent,

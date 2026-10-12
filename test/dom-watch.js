@@ -6,7 +6,8 @@ try { ({ JSDOM } = require('jsdom')); } catch { console.log('SKIP  jsdom not ins
 const fs = require('fs');
 const path = require('path');
 const dir = path.join(__dirname, '..', 'extension') + '/';
-const html = fs.readFileSync(dir + 'panel.html', 'utf8').replace(/<script src="panel.js"><\/script>/, '');
+const { panelPage, evalPanel } = require('./lib/panel-scripts');
+const { html, files: panelFiles } = panelPage(dir);
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true });
 const w = dom.window;
 const sent = [];
@@ -18,7 +19,7 @@ w.browser = {
 };
 w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
 w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8'));
-w.eval(fs.readFileSync(dir + 'panel.js', 'utf8'));
+evalPanel(dom, dir, panelFiles);
 
 const $ = id => w.document.getElementById(id);
 let pass = 0, fail = 0;
