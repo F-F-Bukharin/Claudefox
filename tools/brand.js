@@ -9,6 +9,8 @@ const fs = require('fs');
 const path = require('path');
 
 const NAME = 'Claudefox';
+const LANG_EN = 'extension/_locales/en/messages.json';
+const LANG_PT = 'extension/_locales/pt_BR/messages.json';
 // file: the one file a rule is for (relative, forward slashes); without it, every text file. The friends' own setup
 // file and START HERE come from friends\ and already say Claudefox; these rules cover the add-on and the helper.
 const RULES = [
@@ -22,11 +24,27 @@ const RULES = [
   { file: 'extension/panel.html', from: 'The panel docks on the right. ', to: 'The panel opens in the sidebar. ' },
   { file: 'extension/panel.html', from: "Zen's title bar above the panel is hidden, so the panel has no header menu. ", to: '' },
   { file: 'extension/background.js', from: "'Zen opened: the agent is on.'", to: "'Firefox opened: the agent is on.'" },
-  // The panel sets the empty chat's title and some notes itself.
-  { file: 'extension/panel.js', from: "'What should I do in Zen?'", to: "'What should Claude do in Firefox?'" },
-  { file: 'extension/panel.js', from: 'then press Sign in. Zen remembers it after that.', to: 'then press Sign in. Firefox remembers it after that.' },
-  { file: 'extension/panel.js', from: 'until you press Stop or restart Zen.', to: 'until you press Stop or restart Firefox.' },
-  { file: 'extension/panel.js', from: 'the claude.ai account signed in to Zen.', to: 'the claude.ai account signed in to Firefox.' },
+  // The panel's other Zen texts: the empty chat's title and some notes. They sit in the English language file (and were
+  // in panel.js before E11), so these rules are for every text file, with no quotes around the text.
+  { from: 'What should I do in Zen?', to: 'What should Claude do in Firefox?' },
+  { from: 'then press Sign in. Zen remembers it after that.', to: 'then press Sign in. Firefox remembers it after that.' },
+  { from: 'until you press Stop or restart Zen.', to: 'until you press Stop or restart Firefox.' },
+  { from: 'the claude.ai account signed in to Zen.', to: 'the claude.ai account signed in to Firefox.' },
+  // The same texts in the two language files (extension/_locales). The Portuguese ones have accents, so brand() matches
+  // every rule on the latin1 view of its UTF-8 bytes (see bytes()).
+  { file: LANG_EN, from: 'already open in Zen.', to: 'already open in Firefox.' },
+  { file: LANG_EN, from: 'Zen remembers it after that', to: 'Firefox remembers it after that' },
+  { file: LANG_EN, from: '"Using Zen now"', to: '"Using Firefox now"' },
+  { file: LANG_EN, from: 'The panel docks on the right. ', to: 'The panel opens in the sidebar. ' },
+  { file: LANG_EN, from: "Zen's title bar above the panel is hidden, so the panel has no header menu. ", to: '' },
+  { file: LANG_PT, from: 'O que devo fazer no Zen?', to: 'O que o Claude deve fazer no Firefox?' },
+  { file: LANG_PT, from: 'já aberta no Zen.', to: 'já aberta no Firefox.' },
+  { file: LANG_PT, from: 'O Zen se lembra disso depois', to: 'O Firefox se lembra disso depois' },
+  { file: LANG_PT, from: '"Usando o Zen agora"', to: '"Usando o Firefox agora"' },
+  { file: LANG_PT, from: 'O painel fica à direita. ', to: 'O painel abre na barra lateral. ' },
+  { file: LANG_PT, from: 'A barra de título do Zen acima do painel fica oculta, então o painel não tem menu no cabeçalho. ', to: '' },
+  { file: LANG_PT, from: 'ou reiniciar o Zen.', to: 'ou reiniciar o Firefox.' },
+  { file: LANG_PT, from: 'conectada no Zen.', to: 'conectada no Firefox.' },
   // What Claude is told and the errors it reads: it works in Firefox there.
   { from: 'real Zen browser', to: 'real Firefox browser' },
   { from: 'ask the user to type it in Zen.', to: 'ask the user to type it in Firefox.' },
@@ -40,6 +58,10 @@ const RULES = [
   { from: 'Claude in Zen', to: NAME },
 ];
 const TEXT = /\.(js|json|html|css|svg|txt|md|bat|cmd|ps1)$/i;
+
+// Files are read as latin1 (below), so a rule with non-ASCII text (the Portuguese ones) only matches when it is written
+// the same way: the latin1 view of the UTF-8 bytes. For plain ASCII this changes nothing.
+const bytes = s => Buffer.from(s, 'utf8').toString('latin1');
 
 function files(dir, base = dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -56,14 +78,14 @@ function brand(stage) {
   const hits = RULES.map(() => 0);
   for (const rel of files(stage).filter(f => TEXT.test(f))) {
     const file = path.join(stage, rel);
-    // latin1 keeps every byte as it was: the rules are plain ASCII, so only their own text changes.
+    // latin1 keeps every byte as it was, so only the text of a rule changes.
     const before = fs.readFileSync(file, 'latin1');
     let text = before;
     RULES.forEach((r, i) => {
       if (r.file && r.file !== rel) return;
-      const parts = text.split(r.from);
+      const parts = text.split(bytes(r.from));
       hits[i] += parts.length - 1;
-      text = parts.join(r.to);
+      text = parts.join(bytes(r.to));
     });
     if (text !== before) fs.writeFileSync(file, text, 'latin1');
     if (text.includes('Claude in Zen')) problems.push(`"Claude in Zen" is still in ${rel}`);

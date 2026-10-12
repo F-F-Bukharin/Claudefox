@@ -321,6 +321,8 @@ textarea:focus-visible { outline: none; }
 .dot.warn { background: var(--warn); }
 .dot.bad { background: var(--stop); }
 .val.warn { color: var(--warn); font-weight: 600; }
+/* the Language choice in Settings */
+.val select { padding: 4px 8px; border: 1px solid var(--outline); border-radius: 8px; background: var(--card); color: var(--card-ink); font: inherit; }
 
 /* connections: a bold name, its status, an optional detail line, and its buttons */
 .conns { gap: 0; }

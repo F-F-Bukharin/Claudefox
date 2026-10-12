@@ -15,8 +15,17 @@ function panelPage(dir) {
 
 // Each file runs as a classic script in the window's global scope, as the page loads it, so a name one file declares is seen by
 // the next. (w.eval would scope a 'use strict' file's declarations to that one eval.)
-function evalPanel(dom, dir, files) {
+// Before the panel's files, the window gets the language texts and lib/i18n.js, as the page has them (it loads i18n.js before
+// panel.js): opts.locales is { en, pt_BR } (default: the repo's two files), opts.lang picks the language in use ('en' by
+// default, so every panel DOM test sees the English texts). A test that wants Portuguese passes
+// { lang: 'pt_BR', locales: require('./locales').pseudo() } and looks for «…».
+function evalPanel(dom, dir, files, opts = {}) {
   const ctx = dom.getInternalVMContext();
+  const { load } = require('./locales');
+  dom.window.CIZ_LOCALES = opts.locales || load();
+  new vm.Script(fs.readFileSync(path.join(dir, 'lib', 'i18n.js'), 'utf8'), { filename: 'lib/i18n.js' }).runInContext(ctx);
+  dom.window.cizI18n.use(opts.lang || 'en');
+  dom.window.cizI18n.apply(dom.window.document);
   for (const f of files) new vm.Script(fs.readFileSync(path.join(dir, f), 'utf8'), { filename: f }).runInContext(ctx);
 }
 

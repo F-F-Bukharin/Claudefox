@@ -73,9 +73,24 @@ try {
   check('panel texts friends read say Firefox', /already open in Firefox\./.test(panel) && /Firefox remembers it after that/.test(panel) && />Using Firefox now</.test(panel)
     && /The panel opens in the sidebar\./.test(panel) && !/title bar above the panel/.test(panel)
     && fs.readFileSync(path.join(s, 'extension', 'background.js'), 'utf8').includes("'Firefox opened: the agent is on.'"));
-  const pj = fs.readFileSync(path.join(s, 'extension', 'panel.js'), 'utf8');
-  check('the panel itself titles the empty chat "What should Claude do in Firefox?"', pj.includes("'What should Claude do in Firefox?'") && !pj.includes('What should I do in Zen?')
-    && pj.includes('Firefox remembers it after that.') && pj.includes('restart Firefox.'));
+  // The panel's own texts live in the two language files now (E11); the friends' copies carry the Firefox wording.
+  const frLang = {};
+  for (const l of ['en', 'pt_BR']) {
+    try { frLang[l] = JSON.parse(fs.readFileSync(path.join(s, 'extension', '_locales', l, 'messages.json'), 'utf8')); } catch (e) { frLang[l] = null; }
+  }
+  const msg = (l, k) => (frLang[l] && frLang[l][k] && frLang[l][k].message) || '';
+  check('both branded language files still parse as JSON', !!frLang.en && !!frLang.pt_BR);
+  check('the panel itself titles the empty chat "What should Claude do in Firefox?"', msg('en', 'ui_emptyTitle') === 'What should Claude do in Firefox?'
+    && msg('en', 'main_signInHint').includes('then press Sign in. Firefox remembers it after that.')
+    && msg('en', 'main_unsafeOn').includes('until you press Stop or restart Firefox.')
+    && msg('en', 'main_acctDiffers').includes('the claude.ai account signed in to Firefox.')
+    && !Object.values(frLang.en || {}).some(v => v.message.includes('What should I do in Zen?')));
+  check('the Portuguese file says Firefox too: no C5 "Zen" text is left, and the empty chat asks "O que o Claude deve fazer no Firefox?"', msg('pt_BR', 'ui_emptyTitle') === 'O que o Claude deve fazer no Firefox?'
+    && msg('pt_BR', 'ui_signedOutText').includes('já aberta no Firefox.') && msg('pt_BR', 'ui_signedOutText').includes('O Firefox se lembra disso depois')
+    && msg('pt_BR', 'ui_usingZenNow') === 'Usando o Firefox agora' && msg('pt_BR', 'ui_panelPlace').startsWith('O painel abre na barra lateral. ')
+    && !/Zen/.test(msg('pt_BR', 'ui_panelPlaceEnd')) && msg('pt_BR', 'main_unsafeOn').includes('ou reiniciar o Firefox.')
+    && msg('pt_BR', 'main_acctDiffers').includes('conectada no Firefox.') && msg('pt_BR', 'main_signInHint').includes('O Firefox se lembra disso depois.')
+    && !/\bZen\b/.test(['ui_emptyTitle', 'ui_signedOutText', 'ui_usingZenNow', 'ui_panelPlace', 'ui_panelPlaceEnd', 'main_signInHint', 'main_unsafeOn', 'main_acctDiffers'].map(k => msg('pt_BR', k)).join(' ')));
   const mcp = fs.readFileSync(path.join(s, 'host', 'zen-mcp.js'), 'utf8'), args = fs.readFileSync(path.join(s, 'host', 'lib', 'chatargs.js'), 'utf8');
   check('Claude is told it works in Firefox, and its errors say Firefox', mcp.includes("real Firefox browser") && !mcp.includes('real Zen browser') && args.includes('which field to fill in Firefox.')
     && fs.readFileSync(path.join(s, 'host', 'lib', 'toolSchemas.js'), 'utf8').includes('in a new tab, in front') && !/Zen did not answer|No answer from Zen|No Zen tab/.test(walk(s).filter(f => /\.js$/.test(f)).map(f => fs.readFileSync(f, 'utf8')).join('\n')));
