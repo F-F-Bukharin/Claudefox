@@ -95,7 +95,13 @@ check('every Read deny of a protected place has Edit and Write denies for the sa
   && guard.protectedPlaces().every(p => reads.some(r => r.includes(guard.posix(p))))
   && reads.every(r => custom.includes('Edit' + r.slice(4)) && custom.includes('Write' + r.slice(4))));
 const STARTUP = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-check('the data folder, the Startup folder and the PowerShell profiles are denied Edit and Write', W(P.BASE).every(r => custom.includes(r))
+fs.mkdirSync(P.WORKSPACE, { recursive: true }); fs.mkdirSync(path.join(P.BASE, 'accounts'), { recursive: true });
+const dataRules = guard.denyRules(() => path.join('%USERPROFILE%', 'Docs Custom'));
+const wsPosix = guard.posix(P.WORKSPACE);
+check('the data folder is denied Edit and Write, except the workspace a file-tools folder may sit in', W(path.join(P.BASE, 'accounts')).every(r => dataRules.includes(r))
+  && [`Edit(/${guard.posix(P.BASE)}/*)`, `Write(/${guard.posix(P.BASE)}/*)`].every(r => dataRules.includes(r))
+  && !dataRules.some(r => /^(Edit|Write)\(/.test(r) && (r.includes(wsPosix) || r === `Edit(/${guard.posix(P.BASE)}/**)` || r === `Write(/${guard.posix(P.BASE)}/**)`)));
+check('the Startup folder and the PowerShell profiles are denied Edit and Write', true
   && W(STARTUP).every(r => custom.includes(r)) && ['WindowsPowerShell', 'PowerShell'].every(n => W(path.join(home, 'Docs Custom', n)).every(r => custom.includes(r))));
 check('without a registry value the profiles are under %USERPROFILE%\\Documents', ['WindowsPowerShell', 'PowerShell'].every(n => W(path.join(docs, n)).every(r => fallback.includes(r))));
 

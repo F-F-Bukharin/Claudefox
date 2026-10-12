@@ -115,10 +115,16 @@ function denyRules(readPersonal = registryPersonal) {
   for (const f of SECRET_FILES) rules.add(`Read(//**/${escapeRule(f)})`);
   for (const v of new Set([OWN, real(OWN)])) rules.add(`Edit(/${escapeRule(posix(v))}/**)`);   // Edit rules cover Write too
   const docs = documentsFolder(readPersonal);
-  const noWrite = [P.BASE, path.join(appDir(), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), path.join(docs, 'WindowsPowerShell'), path.join(docs, 'PowerShell')];
+  const noWrite = [path.join(appDir(), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), path.join(docs, 'WindowsPowerShell'), path.join(docs, 'PowerShell')];
+  // The data folder: everything in it except the workspace, where a file-tools folder may sit. Its direct files go by
+  // the one-level pattern, its folders (listed each turn) by the recursive one.
+  let inBase = [];
+  try { inBase = fs.readdirSync(P.BASE, { withFileTypes: true }).filter(e => e.isDirectory() && !same(e.name, path.basename(P.WORKSPACE))); } catch {}
+  noWrite.push(...inBase.map(e => path.join(P.BASE, e.name)));
   for (const v of noWrite) for (const d of new Set([path.resolve(v), real(v)])) {
     for (const tool of ['Edit', 'Write']) rules.add(`${tool}(/${escapeRule(posix(d))}/**)`);
   }
+  for (const d of new Set([path.resolve(P.BASE), real(P.BASE)])) for (const tool of ['Edit', 'Write']) rules.add(`${tool}(/${escapeRule(posix(d))}/*)`);
   return [...rules];
 }
 
