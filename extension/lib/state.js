@@ -16,6 +16,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   watch: false,               // Watch videos (the watch_video tool): on for this session only (load() clears it)
   watchOnLoad: null,          // from the helper: true (watching starts on), false, or null (never asked)
   watchAsk: null,             // { id, source } while the helper's card waits for an answer in the panel
+  downloadAsk: null,          // { id, host, name, folder } while the helper's picture card waits for an answer in the panel
   siteAsk: null,              // { id, site, action, kind } while the panel's site card waits for an answer
   trusted: false,             // Trusted: Claude acts on any site without asking. Session only (load() clears it)
   accounts: [],               // chat accounts from the helper: { id, email, plan, loggedIn, active }
@@ -57,7 +58,7 @@ const cizState = {
 
   async load() {
     const got = await browser.storage.session.get(['state', 'log']);
-    this._cache = Object.assign({}, CIZ_DEFAULT_STATE, got.state || {}, { unsafe: false, watch: false, watchAsk: null, siteAsk: null, trusted: false });   // never survive a restart
+    this._cache = Object.assign({}, CIZ_DEFAULT_STATE, got.state || {}, { unsafe: false, watch: false, watchAsk: null, downloadAsk: null, siteAsk: null, trusted: false });   // never survive a restart
     this._log = Array.isArray(got.log) ? got.log : [];
     return this._cache;
   },

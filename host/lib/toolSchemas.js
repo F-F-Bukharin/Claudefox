@@ -258,6 +258,18 @@ const TOOLS = [
     timeoutMs: 900000,   // the permission card, its window, then a run of at most 10 minutes
     watchOnly: true,
   },
+  // Pictures (lib/downloadgate.js): the user allows each save in a card in the panel.
+  {
+    name: 'download_image',
+    title: 'Save picture',
+    description: 'Save a picture or GIF (PNG, JPEG, GIF or WebP) from a public web address to a folder on this computer. Every call asks the user in a card first. Pictures behind a sign-in cannot be saved.',
+    inputSchema: obj({
+      url: { type: 'string', description: 'The https or http address of the picture.' },
+      folder: { type: 'string', description: 'Optional: a folder the user allowed, by its full path. Without it the picture goes to the pictures folder.' },
+    }, ['url']),
+    timeoutMs: 180000,
+    panelOnly: true,
+  },
   {
     name: 'network_log',
     title: 'Network log',

@@ -172,6 +172,18 @@ function render(s, log) {
       : 'Off. Claude asks in the chat before it watches.';
   $('watchNote').classList.toggle('warnnote', waiting === 'watch');
   $('watchOnLoadToggle').checked = s.watchOnLoad === true;
+  // The picture card (download_image): the helper's question about one picture. Its id rides on the card (dataset.id).
+  const dc = $('downloadCard');
+  const prevId = dc.dataset.id || '';
+  const dlId = s.downloadAsk ? String(s.downloadAsk.id) : '';
+  dc.dataset.id = dlId;
+  dc.hidden = !dlId;
+  if (dlId) {
+    $('downloadCardHost').textContent = String(s.downloadAsk.host || '').slice(0, 253);
+    $('downloadCardName').textContent = String(s.downloadAsk.name || '').slice(0, 200);
+    $('downloadCardFolder').textContent = String(s.downloadAsk.folder || '').slice(0, 500);
+    if (prevId !== dlId) send('downloadShown', { id: dlId });   // once per card
+  }
   $('watchCard').hidden = !s.watchAsk;
   if (s.watchAsk) {
     $('watchCardSource').textContent = String(s.watchAsk.source || '').slice(0, 200);

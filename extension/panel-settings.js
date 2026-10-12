@@ -224,6 +224,10 @@ $('watchOnLoadToggle').addEventListener('change', e => {
 // switch is really turned on.
 $('watchAllow').addEventListener('click', () => answerWatch(true));
 $('watchDeny').addEventListener('click', () => answerWatch(false));
+// The picture card: Allow or Deny answers the card on screen, by the id the panel rendered (panel.js).
+function answerDownloadCard(allow) { const id = $('downloadCard').dataset.id; if (id) send('downloadAnswer', { id, allow }); }
+$('downloadAllow').addEventListener('click', () => answerDownloadCard(true));
+$('downloadDeny').addEventListener('click', () => answerDownloadCard(false));
 function answerWatch(allow) { if (state.watchAsk) send('watchAnswer', { id: state.watchAsk.id, allow }); }
 $('siteMsg').addEventListener('click', () => answerSite('message'));
 $('siteChat').addEventListener('click', () => answerSite('chat'));

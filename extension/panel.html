@@ -61,6 +61,13 @@
         <p class="muted small">Watching runs Python, yt-dlp and ffmpeg on this PC.</p>
         <div class="row"><button id="watchAllow" type="button">Allow</button> <button id="watchDeny" type="button">Deny</button></div>
       </div>
+      <!-- Claude asks to save a picture: only Allow and Deny answer it. Allow saves it in the pictures folder or a folder you allowed. -->
+      <div id="downloadCard" class="card" hidden>
+        <p>Claude wants to save a picture from <strong id="downloadCardHost"></strong></p>
+        <p id="downloadCardName" class="mono small"></p>
+        <p id="downloadCardFolder" class="mono small"></p>
+        <div class="row"><button id="downloadAllow" type="button">Allow</button> <button id="downloadDeny" type="button">Deny</button></div>
+      </div>
       <!-- Claude asks before it uses a page on a site. Allow and Deny are the only answers to a risky step. -->
       <div id="siteCard" class="card" hidden>
         <p>Claude wants to use <span id="siteCardSite" class="mono"></span></p>

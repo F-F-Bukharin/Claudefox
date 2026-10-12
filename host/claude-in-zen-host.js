@@ -35,6 +35,8 @@ const { createClaudeCode, writeMcpConfig } = require('./lib/claudecode');
 const { createChatTurns } = require('./lib/chatturns');
 const { createSignIn } = require('./lib/signin');
 const { createWatchWiring } = require('./lib/watchwiring');
+const { createDownloadGate, pictureFolder } = require('./lib/downloadgate');
+const { createDownloader } = require('./lib/download');
 const { createConfirmFlow } = require('./lib/confirmflow');
 const { createUpdates } = require('./lib/updates');
 
@@ -95,6 +97,13 @@ const chatTurns = createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv,
 const { army, startChat, cancelChat, selfApply, selfDiscard } = chatTurns;
 const watchWiring = createWatchWiring({ confirm, confirmed, sendAddon, grants });
 const { watchWindow, saveWatchOnLoad, sendWatchState, watchLoad, gate, watchRuns, watchDeps } = watchWiring;
+// download_image (lib/downloadgate.js): the picture card, and the download in progress (download_off stops it).
+const downloadGate = createDownloadGate({
+  showCard: (id, info) => sendAddon({ type: 'download_ask', id, host: info.host, name: info.name, folder: info.folder }),
+  hideCard: () => sendAddon({ type: 'download_ask', id: null }),
+});
+const downloader = createDownloader({});
+let downloadAbort = null;   // the AbortController of the download in progress, if any
 const { answerConfirm } = createConfirmFlow({ confirm, confirmed, sendAddon, sendConfirmedState, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState });
 const { sourceInfo, updateAddon } = createUpdates({ ROOT, sendAddon });
 const { sendAccounts, useAccount, addAccount, signInAccount, removeAccount, cancelSignIn, forgetLogin } = createSignIn({
@@ -209,6 +218,9 @@ function onAddon(msg) {
     case 'watch_off':         confirmed.watch = false; gate.cancel(); watchRuns.stopAll(false); return;   // Stop
     case 'watch_answer':      gate.answer(msg.id, !!msg.allow); return;
     case 'watch_shown':       gate.shown(msg.id); return;
+    case 'download_shown':    downloadGate.shown(msg.id); return;
+    case 'download_answer':   downloadGate.answer(msg.id, !!msg.allow); return;
+    case 'download_off':      downloadGate.cancel(); if (downloadAbort) downloadAbort.abort(); return;   // Stop
     case 'local_ask':     // a file: tab outside the allowed folders: the user answers in the confirm window
       local.allowFolder(String(msg.folder || ''), String(msg.reading || '').slice(0, 253))
         .then(folder => sendAddon({ type: 'local_ask_result', id: msg.id, ok: true, folder }),
@@ -480,6 +492,28 @@ function announceClients() {
 // files attached to the chat, with the same limits as the file tools (never a protected place).
 // The helper tools that read a page or a file: a read that worked in a running turn sends page_read (see the dispatch below).
 const PAGE_READ_TOOLS = new Set(['read_document', 'local_files', 'local_file_read', 'watch_video', 'army_wait']);
+// download_image (lib/downloadgate.js): a picture from a public address, saved only after the user allows it in a card.
+// The folder is the pictures folder, or a folder the user allowed: a local-page folder, or the file-tools folder in write mode.
+async function downloadImage(args) {
+  let u = null;
+  try { u = new URL(String((args && args.url) || '').trim()); } catch { u = null; }
+  if (!u || (u.protocol !== 'https:' && u.protocol !== 'http:')) throw new Error('Give the address of the picture, starting with https://.');
+  const allowed = grants.list().map(f => path.resolve(f));
+  if (confirmed.files && confirmed.files.mode === 'write') allowed.push(path.resolve(confirmed.files.folder));
+  const picked = pictureFolder(args || {}, { outputDir: OUTPUT_DIR, allowed, folderProblem: (f, mode) => guard.folderProblem(f, mode) });
+  if (picked.error) throw new Error(picked.error);
+  const name = u.pathname.split('/').filter(Boolean).pop() || u.hostname;
+  const ask = await downloadGate.ask({ host: u.hostname, name, folder: picked.folder });
+  if (!ask.ok) throw new Error(ask.message);
+  fs.mkdirSync(picked.folder, { recursive: true });
+  const ac = new AbortController();
+  downloadAbort = ac;
+  let r;
+  try { r = await downloader.download({ url: u.href, folder: picked.folder, signal: ac.signal }); }
+  finally { if (downloadAbort === ac) downloadAbort = null; }
+  if (!r.ok) throw new Error(r.error);
+  return `Saved ${path.basename(r.path)} (${Math.max(1, Math.round(r.bytes / 1024))} KB) in ${picked.folder}.`;
+}
 const HELPER_TOOLS = {
   army_start: (args, client) => army.start(args, client),
   army_wait: (args, client) => army.wait(args, client),
@@ -488,6 +522,7 @@ const HELPER_TOOLS = {
   local_files: args => local.list(args),
   local_file_read: args => local.read(args),
   watch_video: args => watchvideo.watchVideo(args, watchDeps()),
+  download_image: args => downloadImage(args),
   read_document(args) {
     const run = chatTurns.current();
     const raw = String((args && args.path) || '').trim();
@@ -521,6 +556,8 @@ function shutdown(reason) {
   cancelChat('*', 'Stopped.');
   confirm.closeAll(true);   // an open confirm window answers no
   gate.cancel();
+  downloadGate.cancel();
+  if (downloadAbort) downloadAbort.abort();
   watchRuns.stopAll(true);   // a watch run in progress is cut
   forgetLogin();   // the window itself stays: finishing it still works later
   for (const c of clients.values()) { try { c.sock.destroy(); } catch {} }

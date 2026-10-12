@@ -10,12 +10,13 @@ async function stopAll(source) {
   // Everything is cut in this first step, before any await: a tool call, a worker's call or a folder question that
   // arrives while the tabs close below already finds the agent stopped and the helper gone. (set() changes the state
   // at once; only saving it waits.)
-  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, trusted: false, siteAsk: null, pending: 0 });
+  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, downloadAsk: null, trusted: false, siteAsk: null, pending: 0 });
   for (const [id, a] of pendingActions) {
     try { a.controller.abort(new Error('Stopped')); } catch {}
     pendingActions.delete(id);
   }
   sendNative({ type: 'watch_off' });   // before the helper goes: watching off, and a waiting card is cancelled
+  sendNative({ type: 'download_off' });   // a picture card waiting is cancelled, and a download in progress stops
   sendNative({ type: 'trusted_off' });   // Trusted goes off with the other switches
   disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
   endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)

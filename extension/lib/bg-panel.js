@@ -104,6 +104,8 @@ async function handlePanel(msg, port) {
     case 'setWatchOnLoad': return setWatchOnLoad(!!msg.value);
     case 'watchShown':     return sendNative({ type: 'watch_shown', id: String(msg.id || '').slice(0, 40) });
     case 'watchAnswer':    return sendNative({ type: 'watch_answer', id: String(msg.id || '').slice(0, 40), allow: !!msg.allow });
+    case 'downloadShown':  return sendNative({ type: 'download_shown', id: String(msg.id || '').slice(0, 40) });
+    case 'downloadAnswer': return sendNative({ type: 'download_answer', id: String(msg.id || '').slice(0, 40), allow: !!msg.allow });
     case 'siteShown':      if (typeof cizSiteGate !== 'undefined') cizSiteGate.shown(String(msg.id || '').slice(0, 40)); return;
     case 'siteAnswer':
       if (typeof cizSiteGate !== 'undefined' && ['message', 'chat', 'deny', 'allow'].includes(msg.choice)) cizSiteGate.answer(String(msg.id || '').slice(0, 40), msg.choice);

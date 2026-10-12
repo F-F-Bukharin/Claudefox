@@ -174,6 +174,20 @@ function sendNative(msg) {
   }
 }
 
+// The picture card (download_image). A site the user blocked (Sites: block, for the site or a parent domain) is refused at
+// once, with no card. Anything else sets the card the panel shows; the helper's hideCard sends no id, which clears it.
+async function pictureSiteBlocked(host) {
+  let blocks = {};
+  try { blocks = (await browser.storage.local.get('sites')).sites || {}; } catch {}
+  const parts = String(host).toLowerCase().split('.');
+  return parts.some((_, i) => blocks[parts.slice(i).join('.')] === 'block');
+}
+async function downloadAskFromHelper(msg) {
+  const id = msg.id ? String(msg.id).slice(0, 40) : '';
+  const host = String(msg.host || '').slice(0, 253);
+  if (id && await pictureSiteBlocked(host)) return sendNative({ type: 'download_answer', id, allow: false });
+  return cizState.set({ downloadAsk: id ? { id, host, name: String(msg.name || '').slice(0, 200), folder: String(msg.folder || '').slice(0, 500) } : null });
+}
 async function onNativeMessage(msg) {
   if (!msg || typeof msg !== 'object') return;
   switch (msg.type) {
@@ -274,6 +288,7 @@ async function onNativeMessage(msg) {
     case 'watch_state':   // the helper's switch and saved option: after a panel load, a confirm answer or a card's Yes
       return cizState.set({ watch: msg.watch === true, watchOnLoad: msg.watchOnLoad === true ? true : msg.watchOnLoad === false ? false : null });
     case 'watch_ask':     return cizState.set({ watchAsk: { id: String(msg.id || '').slice(0, 40), source: String(msg.source || '').slice(0, 500) } });
+    case 'download_ask':  return downloadAskFromHelper(msg);   // the helper's picture card (download_image)
     case 'watch_ask_done': {
       const cur = cizState.get().watchAsk;
       return cur && cur.id === String(msg.id || '').slice(0, 40) ? cizState.set({ watchAsk: null }) : undefined;
