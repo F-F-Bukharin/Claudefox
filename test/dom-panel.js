@@ -29,7 +29,7 @@ ok('the panel scripts: panel.js first, the background link (panel-link.js) last,
  onMsg({type:'state',state:ready,log:[]});
  ok('guide hidden when ready', $('setup').hidden && $('emptyTitle').textContent==='What should I do in Zen?');
  ok('empty chat uses the centred layout', $('page-chat').classList.contains('is-empty'));
- ok('starter chips above the text bar: summarize, tabs, help', [...w.document.querySelectorAll('.starters .chip')].map(b=>b.dataset.fill).join('|') === 'Summarize this page|/tabs|/help' && $('composer').parentElement.firstElementChild.classList.contains('starters'));
+ ok('starter chips above the text bar: summarize, key points, translate, tabs, help', [...w.document.querySelectorAll('.starters .chip')].map(b=>b.dataset.fill).join('|') === 'Summarize this page|Give me the key points of this page|Translate this page to Portuguese (Brazil)|/tabs|/help' && $('composer').parentElement.firstElementChild.classList.contains('starters'));
  // the "/" menu: typing / lists the commands, narrows as you type, Enter runs the highlighted one, Escape closes it
  const slashTyped=v=>{ $('input').value=v; $('input').dispatchEvent(new w.Event('input')); };
  const slashKey=k=>$('input').dispatchEvent(new w.KeyboardEvent('keydown',{key:k,bubbles:true}));

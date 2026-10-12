@@ -109,6 +109,7 @@ const SITE_ACTIONS = { read: 'Read the page', act: 'Act on the page', open: 'Ope
 let siteShownId = '';   // the site card id last shown to the helper: siteShown goes once per id
 let fillShownId = '', fillCardId = '';   // the fill card id last shown to the helper: fillShown goes once per id
 function render(s, log) {
+  if (typeof takeDraft === 'function') takeDraft(s.draft);
   const pill = $('agentPill');
   pill.className = 'pill ' + (s.agent === 'stopped' ? 'stopped' : s.signedIn ? 'active' : '');
   pill.textContent = s.agent === 'stopped' ? 'Stopped' : s.signedIn ? 'Active' : 'Signed out';

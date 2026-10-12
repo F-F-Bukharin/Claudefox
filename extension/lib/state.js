@@ -35,6 +35,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   tools: null,                // Settings > Tools and plugins, as the helper last reported it
   toolLogin: null,            // { name, label } while a tool's sign-in window is open
   chatSession: '',            // Claude Code session id, so follow-ups keep the conversation
+  draft: null,                // { text, windowId } from a right-click item, for that window's text bar (the panel takes it)
   native: 'unknown',          // 'unknown' | 'connected' | 'missing' | 'error'
   nativeDetail: '',
   hostVersion: '',
@@ -59,7 +60,7 @@ const cizState = {
 
   async load() {
     const got = await browser.storage.session.get(['state', 'log']);
-    this._cache = Object.assign({}, CIZ_DEFAULT_STATE, got.state || {}, { unsafe: false, watch: false, watchAsk: null, downloadAsk: null, siteAsk: null, fillAsk: null, trusted: false });   // never survive a restart
+    this._cache = Object.assign({}, CIZ_DEFAULT_STATE, got.state || {}, { unsafe: false, watch: false, watchAsk: null, downloadAsk: null, siteAsk: null, fillAsk: null, trusted: false, draft: null });   // never survive a restart
     this._log = Array.isArray(got.log) ? got.log : [];
     return this._cache;
   },

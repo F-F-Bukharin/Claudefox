@@ -101,6 +101,7 @@ async function handlePanel(msg, port) {
     case 'selfDiscard': return sendNative({ type: 'self_discard', id: String(msg.id || '') });
     case 'newChat':    if (typeof msg.windowId === 'number') winSessions.delete(msg.windowId); return cizState.set({ chatSession: '' });
     case 'histLog':    return cizState.addLog('info', String(msg.text || '').slice(0, 200));
+    case 'draftTaken': return cizState.set({ draft: null });
     case 'setModel':   return setModel(msg.value === 'quality' ? 'quality' : 'speed');
     case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
     case 'setArmy':    return setArmy(!!msg.value);

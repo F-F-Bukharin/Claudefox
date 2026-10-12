@@ -75,6 +75,7 @@ const cizSiteGate = (() => {
   const SHOWN_MS = 5000, ANSWER_MS = 120000;
   let allowed = [], chat = [], msg = [], denied = {}, pageRead = false, winId = null, curId = null;
   let sched = null;   // a scheduled macro's turn (E8): only these sites, no cards
+  let pending = [];   // sites that menu items named (addNext), taken by the next begin()
   let seq = 0, open = null, queue = [];
   const runs = {};
 
@@ -171,6 +172,7 @@ const cizSiteGate = (() => {
 
   const gate = {
     SHOWN_MS, ANSWER_MS, onChange: null,
+    addNext(site) { push(pending, String(site || '').toLowerCase()); },
     begin(id, o) {
       const x = o || {};
       curId = id == null ? null : id;
@@ -181,6 +183,7 @@ const cizSiteGate = (() => {
       }
       sched = null;
       if (x.newChat) chat = [];
+      pending.forEach(s => push(chat, s)); pending = [];
       allowed = dedupe((x.allow || []).map(s => String(s).toLowerCase()));
       msg = []; denied = {}; pageRead = false;
       winId = typeof x.windowId === 'number' ? x.windowId : null;

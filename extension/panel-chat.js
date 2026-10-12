@@ -44,6 +44,7 @@ async function refreshContext() {
     const [t] = await browser.tabs.query({ active: true, currentWindow: true });
     $('ctxTab').textContent = t ? (t.title || t.url || 'Untitled') : '—';
     $('ctxTab').title = t ? t.url || '' : '';
+    showStarters(!!t && /^https?:\/\//i.test(t.url || ''));
   } catch { $('ctxTab').textContent = '—'; }
 }
 browser.tabs.onActivated.addListener(refreshContext);
@@ -144,6 +145,30 @@ const menu = $('moreMenu');
 // the numbers from the composer's custom properties (.composer.menu-open). Closed, or with no chips shown, nothing is set.
 const menuBar = menu.parentElement;
 const starters = document.querySelector('.starters');
+// The starter chips: five reading chips on a web page, the three commands otherwise. The chips are reused in place, so
+// showStarters changes only their text and fill, and does nothing when the set shown is the one wanted already.
+const WEB_STARTERS = [
+  ['Summarize this page', 'Summarize this page'],
+  ['Key points', 'Give me the key points of this page'],
+  ['Translate to Portuguese (Brazil)', 'Translate this page to Portuguese (Brazil)'],
+  ['/tabs', '/tabs'],
+  ['/help', '/help'],
+];
+const PLAIN_STARTERS = [['Summarize this page', 'Summarize this page'], ['/tabs', '/tabs'], ['/help', '/help']];
+let shownStarters = null;
+function showStarters(web) {
+  const pairs = web ? WEB_STARTERS : PLAIN_STARTERS;
+  if (pairs === shownStarters) return;
+  shownStarters = pairs;
+  const chips = [...starters.querySelectorAll('.chip')];
+  pairs.forEach(([label, fill], i) => {
+    let chip = chips[i];
+    if (!chip) { chip = document.createElement('button'); chip.className = 'chip'; starters.appendChild(chip); }
+    chip.textContent = label;
+    chip.dataset.fill = fill;
+  });
+  chips.slice(pairs.length).forEach(chip => chip.remove());
+}
 function placeMenuBar() {
   menuBar.classList.remove('menu-open', 'chips-hidden');
   menuBar.style.removeProperty('--chips-ml');
@@ -199,13 +224,34 @@ input.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); }
 });
 $('composer').addEventListener('submit', e => { e.preventDefault(); submit(); });
-for (const c of document.querySelectorAll('.chip')) {
-  c.addEventListener('click', () => { input.value = c.dataset.fill; autoGrow(); submit(); });
-}
+starters.addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  input.value = chip.dataset.fill; autoGrow(); submit();
+});
 
 function autoGrow() {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 180) + 'px';
+}
+
+// A draft from a right-click item fills this window's text bar, unsent, and takes the focus. A draft is taken once: a state
+// that carries the same draft again is skipped, and a state with no draft forgets it, so the same item can draft again.
+// A draft for another window is left to that window's panel.
+let takenDraft = '';
+function takeDraft(draft) {
+  if (!draft) { takenDraft = ''; return; }
+  const key = draft.windowId + '\n' + draft.text;
+  if (key === takenDraft) return;
+  takenDraft = key;
+  browser.windows.getCurrent().then(w => {
+    if (w.id !== draft.windowId) { takenDraft = ''; return; }
+    input.value = draft.text;
+    autoGrow();
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    send('draftTaken');
+  });
 }
 
 // The typed letters sit level with the + and send buttons: the middle of the 34 px text bar is where the lowercase
