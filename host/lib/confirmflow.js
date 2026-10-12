@@ -4,8 +4,8 @@
 const path = require('path');
 const guard = require('./guard');
 
-// deps: { confirm, confirmed, sendAddon, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState }
-function createConfirmFlow({ confirm, confirmed, sendAddon, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState }) {
+// deps: { confirm, confirmed, sendAddon, sendConfirmedState, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState }
+function createConfirmFlow({ confirm, confirmed, sendAddon, sendConfirmedState, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState }) {
   // The add-on asks before Unsafe mode or file tools go on. The user answers in the confirm window; the helper keeps
   // the answer, and chat turns get only what was allowed.
   async function answerConfirm(msg) {
@@ -15,7 +15,7 @@ function createConfirmFlow({ confirm, confirmed, sendAddon, isDir, sameDir, watc
       const r = await confirm.ask({ title: 'Claude in Zen: turn on Unsafe mode?',
         text: 'Claude may then act on Google sign-in and account pages like on any other site, to debug sign-in problems. It still never types passwords, 2FA codes or payment details.\n\nUnsafe mode turns off when you press Stop or restart Zen.',
         yes: 'Turn on', no: 'Cancel' });
-      if (r.ok) confirmed.unsafe = true;
+      if (r.ok) { confirmed.unsafe = true; sendConfirmedState(); }
       return reply(r.ok, r.error);
     }
     if (msg.kind === 'files') {
@@ -32,7 +32,7 @@ function createConfirmFlow({ confirm, confirmed, sendAddon, isDir, sameDir, watc
           ? `Let Claude read, create, change and delete files in this folder and its subfolders?\n\n${folder}\n\nThere is no undo. Claude never gets a shell.`
           : `Let Claude read and search the files in this folder and its subfolders?\n\n${folder}\n\nNo changes, no shell.`,
         yes: mode === 'write' ? 'Allow read and write' : 'Allow reading', no: 'Cancel' });
-      if (r.ok) confirmed.files = { mode, folder };
+      if (r.ok) { confirmed.files = { mode, folder }; sendConfirmedState(); }
       return reply(r.ok, r.error);
     }
     if (msg.kind === 'watch') {   // the Settings switch: watching on for this session

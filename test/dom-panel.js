@@ -65,7 +65,7 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  outBtn('store').click();
  ok('saving files: a click asks the add-on to store, and leaves file access alone', sent.some(m=>m.type==='setOutput'&&m.value==='store') && sent.filter(m=>m.type==='setFiles').length===filesBefore);
  onMsg({type:'state',state:{...ready,outputMode:'store'},log:[]});
- ok('saving files: store is checked and explained', outBtn('store').getAttribute('aria-checked')==='true' && outBtn('download').getAttribute('aria-checked')==='false' && /beside the mods folder/.test($('outputNote').textContent));
+ ok('saving files: store is checked and explained', outBtn('store').getAttribute('aria-checked')==='true' && outBtn('download').getAttribute('aria-checked')==='false' && /Claude in Zen's data folder \(…\\claude-in-zen\\output\)/.test($('outputNote').textContent));
  onMsg({type:'outputSaved',name:'chart.png',path:'C:\\Zen\\extension\\output\\chart.png'});
  ok('saving files: the chat names the stored file', /Stored chart\.png in the output folder/.test($('messages').textContent));
  onMsg({type:'state',state:ready,log:[]});

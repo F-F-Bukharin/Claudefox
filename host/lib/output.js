@@ -1,6 +1,6 @@
 'use strict';
 // The output folder: the files Claude makes that the add-on stores here instead of downloading (Settings, Files).
-// It sits beside the mods folder. Each file is written in one step under its own name; a name that is taken gets
+// It sits in Claude in Zen's data folder (paths.js OUTPUT_DIR), where an update of the project cannot touch it. Each file is written in one step under its own name; a name that is taken gets
 // " (2)", " (3)" and so on, so nothing is overwritten.
 const fs = require('fs');
 const path = require('path');
@@ -51,4 +51,35 @@ function save(dir, name, base64) {
   return target;
 }
 
-module.exports = { MAX_BYTES, safeName, freeName, save };
+// The output folder used to sit inside the project (extension/output). On start, everything in it except README.txt moves
+// to the data folder's output, with a number on a name that is taken. Once it is empty there is nothing left to move, so
+// running it again changes nothing. A file that cannot be moved stays where it is (never deleted) and is listed in failed.
+// Returns { moved: [{ from, to }], failed: [{ name, error }] }.
+function moveOld(oldDir, newDir) {
+  const out = { moved: [], failed: [] };
+  if (path.resolve(oldDir) === path.resolve(newDir)) return out;
+  let names;
+  try { names = fs.readdirSync(oldDir).filter(n => n.toLowerCase() !== 'readme.txt'); } catch { return out; }   // no old folder: nothing to move
+  if (!names.length) return out;
+  try { fs.mkdirSync(newDir, { recursive: true }); } catch (e) { out.failed.push({ name: path.basename(newDir), error: e.message }); return out; }
+  for (const name of names) {
+    const from = path.join(oldDir, name);
+    try {
+      const to = path.join(newDir, freeName(newDir, name));
+      try {
+        fs.renameSync(from, to);
+      } catch (e) {
+        // Another drive cannot be renamed across: copy a file, and only then remove the original. A folder is left.
+        if (e.code !== 'EXDEV' || !fs.statSync(from).isFile()) throw e;
+        fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
+        fs.unlinkSync(from);
+      }
+      out.moved.push({ from, to });
+    } catch (e) {
+      out.failed.push({ name, error: e.message });
+    }
+  }
+  return out;
+}
+
+module.exports = { MAX_BYTES, safeName, freeName, save, moveOld };

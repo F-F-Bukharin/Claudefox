@@ -174,8 +174,28 @@ async function onNativeMessage(msg) {
       await cizState.set({ folderPicking: false });
       if (!msg.ok) return cizState.addLog('error', msg.error || 'The folder window did not finish. Type the path instead.');
       if (msg.cancelled || !msg.path) return;
-      await setFiles(!!cizState.get().filesEnabled, cizState.get().filesMode, msg.path);
+      // With file tools on, the new folder is asked in the helper's confirm window; a no keeps the old folder (setFiles logs it).
+      const r = await setFiles(!!cizState.get().filesEnabled, cizState.get().filesMode, msg.path, { keepOldOnNo: true });
+      if (r && r.kept) return;
       return cizState.addLog('info', `Folder chosen: ${msg.path}`);
+    }
+
+    // What the helper holds as allowed (sent after hello and after every change). The switches follow it: a helper that
+    // restarted has forgotten what was allowed, and the add-on must not keep showing it on. Off keeps the remembered mode and
+    // folder: they are the user's choice, only the permission is gone.
+    case 'confirmed_state': {
+      const s = cizState.get();
+      const f = msg.files;
+      const patch = { unsafe: msg.unsafe === true };
+      if (f && typeof f === 'object' && (f.mode === 'read' || f.mode === 'write') && typeof f.folder === 'string' && f.folder) {
+        Object.assign(patch, { filesEnabled: true, filesMode: f.mode, filesFolder: f.folder.slice(0, 1000) });
+      } else {
+        patch.filesEnabled = false;
+      }
+      await cizState.set(patch);
+      if (s.unsafe && !patch.unsafe) await cizState.addLog('warn', 'Unsafe mode is off: the helper restarted and did not keep it. Turn it on again to be asked.');
+      if (s.filesEnabled && !patch.filesEnabled) await cizState.addLog('warn', 'File tools are off: the helper restarted and did not keep them. Turn them on again to be asked.');
+      return;
     }
     case 'claude_status':
       await cizState.set({
@@ -284,6 +304,7 @@ async function onNativeMessage(msg) {
       return onChatDone(msg);
 
     case 'host_error':
+    case 'error':   // a reply that was too large to send, or another problem the helper reports
       await cizState.addLog('error', `Helper: ${msg.error}`);
       return;
   }

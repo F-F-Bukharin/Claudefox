@@ -15,6 +15,8 @@ const fake = path.join(tmp, 'claude');
 const record = path.join(tmp, 'argv.json');
 const folder = path.join(tmp, 'notes');
 fs.mkdirSync(folder);
+const pickedDir = path.join(tmp, 'picked');   // what the folder window "picks" (the PICK stub)
+fs.mkdirSync(pickedDir);
 
 fs.writeFileSync(fake, `#!${process.execPath}
 'use strict';
@@ -110,7 +112,7 @@ const confirmLog = path.join(tmp, 'confirm.log'), confirmAnswer = path.join(tmp,
 const fakeConfirm = path.join(tmp, 'confirm');
 fs.writeFileSync(fakeConfirm, `#!${process.execPath}\nconst fs = require('fs');\nfs.appendFileSync(${JSON.stringify(confirmLog)}, JSON.stringify({ title: process.env.CIZ_Q_TITLE, text: process.env.CIZ_Q_TEXT, yes: process.env.CIZ_Q_YES, no: process.env.CIZ_Q_NO }) + '\\n');\nlet a = 'yes'; try { a = fs.readFileSync(${JSON.stringify(confirmAnswer)}, 'utf8').trim(); } catch {}\nprocess.stdout.write(a);\n`, { mode: 0o755 });
 const questions = () => { try { return fs.readFileSync(confirmLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
-const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fake, ANTHROPIC_API_KEY: 'sk-should-not-leak', CLAUDE_IN_ZEN_PICK: 'C:\\Users\\Test\\Notes', CLAUDE_IN_ZEN_CONFIRM: fakeConfirm };
+const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fake, ANTHROPIC_API_KEY: 'sk-should-not-leak', CLAUDE_IN_ZEN_PICK: pickedDir, CLAUDE_IN_ZEN_CONFIRM: fakeConfirm };
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -184,6 +186,8 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
   try {
     toHelper({ type: 'hello', version: 'test' });
     await next(m => m.type === 'hello');
+    const st0 = await next(m => m.type === 'confirmed_state');
+    check('after hello the helper says what it allowed: nothing', st0.unsafe === false && st0.trusted === false && st0.files === null, JSON.stringify(st0));
     const cfg = JSON.parse(fs.readFileSync(path.join(tmp, 'claude-in-zen', 'mcp.json'), 'utf8'));
     check('mcp.json points at the tool server', /zen-mcp\.js$/.test(cfg.mcpServers['claude-in-zen'].args[0]));
 
@@ -233,6 +237,8 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     const yes1 = await next(m => m.type === 'confirm_result' && m.id === 'k1');
     const q1 = questions().pop();
     check('the confirm window asks about the folder in plain words, with its own buttons', yes1.ok === true && q1 && q1.text.includes(folder) && q1.yes === 'Allow reading' && q1.no === 'Cancel', JSON.stringify(q1));
+    const stRead = await next(m => m.type === 'confirmed_state');
+    check('a yes for file tools is sent back as what the helper allowed', stRead.files && stRead.files.mode === 'read' && stRead.files.folder === folder && stRead.unsafe === false, JSON.stringify(stRead));
     toHelper({ type: 'confirm', id: 'k1b', kind: 'files', mode: 'read', folder });
     const allowedAgain = await next(m => m.type === 'confirm_result' && m.id === 'k1b');
     check('asking again for what is already allowed answers at once, without a window', allowedAgain.ok === true && questions().length === 2);
@@ -248,6 +254,8 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     toHelper({ type: 'confirm', id: 'k2', kind: 'files', mode: 'write', folder });
     const yes2 = await next(m => m.type === 'confirm_result' && m.id === 'k2');
     check('read and write is asked with its own warning', yes2.ok && /no undo/.test(questions().pop().text));
+    const stWrite = await next(m => m.type === 'confirmed_state');
+    check('read and write is sent back as write', stWrite.files && stWrite.files.mode === 'write' && stWrite.files.folder === folder, JSON.stringify(stWrite));
     toHelper({ type: 'chat', id: 'c3', text: 'edit', files: 'write', folder, model: 'quality' });
     await next(m => m.type === 'chat_done' && m.id === 'c3', 15000);
     const c = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
@@ -267,6 +275,8 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     toHelper({ type: 'confirm', id: 'k3', kind: 'unsafe' });
     const yes3 = await next(m => m.type === 'confirm_result' && m.id === 'k3');
     check('Unsafe mode is asked in the confirm window', yes3.ok && /Unsafe mode/.test(questions().pop().title));
+    const stUnsafe = await next(m => m.type === 'confirmed_state');
+    check('a yes for Unsafe mode is sent back, with the file tools kept', stUnsafe.unsafe === true && stUnsafe.trusted === false && stUnsafe.files && stUnsafe.files.folder === folder, JSON.stringify(stUnsafe));
     toHelper({ type: 'chat', id: 'c3u', text: 'unsafe', unsafe: true });
     await next(m => m.type === 'chat_done' && m.id === 'c3u', 15000);
     const ua = JSON.parse(fs.readFileSync(record, 'utf8')).argv;
@@ -462,9 +472,60 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
 
     // Accounts: one Claude Code profile per account, Google-style.
     const mainDir = path.join(tmp, 'claude-in-zen', 'claude');
+    const asked = questions().length;
     toHelper({ type: 'pick_folder' });
     const picked = await next(m => m.type === 'pick_folder_result', 5000);
-    check('Choose folder: the helper answers with the folder the window picked', picked.ok === true && picked.path === 'C:\\Users\\Test\\Notes' && picked.cancelled === false, JSON.stringify(picked));
+    check('Choose folder: the helper answers with the folder the window picked', picked.ok === true && picked.path === pickedDir && picked.cancelled === false, JSON.stringify(picked));
+    toHelper({ type: 'confirm', id: 'kp0', kind: 'files', mode: 'write', folder });
+    const heldA = await next(m => m.type === 'confirm_result' && m.id === 'kp0');
+    check('a folder picked in the window does not replace the folder allowed before: the old one is answered at once, with no window', heldA.ok === true && questions().length === asked, JSON.stringify({ heldA, asked, now: questions().length }));
+    fs.writeFileSync(confirmAnswer, 'no');
+    toHelper({ type: 'confirm', id: 'kp1', kind: 'files', mode: 'write', folder: pickedDir });
+    const pickNo = await next(m => m.type === 'confirm_result' && m.id === 'kp1');
+    check('the picked folder asks the confirm window, and a no is a no', pickNo.ok === false && questions().length === asked + 1 && questions().pop().text.includes(pickedDir), JSON.stringify(pickNo));
+    toHelper({ type: 'confirm', id: 'kp2', kind: 'files', mode: 'write', folder });
+    const stillA = await next(m => m.type === 'confirm_result' && m.id === 'kp2');
+    check('after that no the old folder is still the one allowed', stillA.ok === true && questions().length === asked + 1, JSON.stringify(stillA));
+    fs.writeFileSync(confirmAnswer, 'yes');
+    toHelper({ type: 'confirm', id: 'kp3', kind: 'files', mode: 'read', folder: pickedDir });
+    await next(m => m.type === 'confirm_result' && m.id === 'kp3');
+    const stPicked = await next(m => m.type === 'confirmed_state');
+    check('a yes for the picked folder moves the allowed folder to it', stPicked.files && stPicked.files.folder === pickedDir && stPicked.files.mode === 'read', JSON.stringify(stPicked));
+    toHelper({ type: 'files_off' });
+    const stFilesOff = await next(m => m.type === 'confirmed_state');
+    check('files_off is sent back as no file tools, Unsafe mode kept', stFilesOff.files === null && stFilesOff.unsafe === true, JSON.stringify(stFilesOff));
+    toHelper({ type: 'unsafe_off' });
+    const stUnsafeOff = await next(m => m.type === 'confirmed_state');
+    check('unsafe_off is sent back as Unsafe mode off', stUnsafeOff.unsafe === false && stUnsafeOff.files === null && stUnsafeOff.trusted === false, JSON.stringify(stUnsafeOff));
+
+    // Saved files go to the data folder's output, not into the project folder.
+    toHelper({ type: 'save_output', req: 1, name: 'made.txt', data: Buffer.from('hello').toString('base64') });
+    const savedOut = await next(m => m.type === 'output_saved' && m.req === 1);
+    const dataOut = path.join(tmp, 'claude-in-zen', 'output');
+    check('a saved file lands in <data>/output', savedOut.ok === true && savedOut.path === path.join(dataOut, 'made.txt') && fs.readFileSync(savedOut.path, 'utf8') === 'hello', JSON.stringify(savedOut));
+    check('and not in the project folder', !fs.existsSync(path.join(__dirname, '..', '..', 'extension', 'output', 'made.txt')));
+
+    // The test hooks count only with CLAUDE_IN_ZEN_TEST=1: a second helper without it ignores the PICK stub.
+    const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-pick-'));
+    const env2 = { ...process.env, LOCALAPPDATA: tmp2, CLAUDE_IN_ZEN_PICK: pickedDir };
+    for (const k of ['CLAUDE_IN_ZEN_TEST', 'CLAUDE_IN_ZEN_PIPE', 'CLAUDE_IN_ZEN_CONFIRM', 'CLAUDE_IN_ZEN_CLAUDE', 'CLAUDE_IN_ZEN_SCRIPT']) delete env2[k];
+    const helper2 = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env: env2, stdio: ['pipe', 'pipe', 'inherit'] });
+    const got2 = []; let buf2 = Buffer.alloc(0);
+    helper2.stdout.on('data', chunk => {
+      buf2 = Buffer.concat([buf2, chunk]);
+      while (buf2.length >= 4 && buf2.length >= 4 + buf2.readUInt32LE(0)) {
+        const len = buf2.readUInt32LE(0);
+        got2.push(JSON.parse(buf2.subarray(4, 4 + len).toString()));
+        buf2 = buf2.subarray(4 + len);
+      }
+    });
+    const send2 = msg => { const body = Buffer.from(JSON.stringify(msg)); const head = Buffer.alloc(4); head.writeUInt32LE(body.length, 0); helper2.stdin.write(Buffer.concat([head, body])); };
+    send2({ type: 'hello', version: 'test' });
+    send2({ type: 'pick_folder' });
+    for (let i = 0; i < 100 && !got2.some(m => m.type === 'pick_folder_result'); i++) await sleep(50);
+    const pick2 = got2.find(m => m.type === 'pick_folder_result');
+    helper2.stdin.end();
+    check('the PICK stub is ignored without CLAUDE_IN_ZEN_TEST=1', !!pick2 && pick2.ok === false && pick2.path === undefined && /Windows/.test(pick2.error || ''), JSON.stringify(pick2));
     toHelper({ type: 'accounts' });
     let list = await next(m => m.type === 'accounts', 8000);
     check('accounts: main profile listed, signed out, active', list.accounts.length === 1 && list.accounts[0].id === 'main' && !list.accounts[0].loggedIn && list.accounts[0].active);

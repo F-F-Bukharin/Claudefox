@@ -62,7 +62,9 @@ function askConfirm(payload) {
 // Stop, or the helper went away: open questions count as no.
 function endConfirms(why) { for (const done of [...confirmWaiters.values()]) done({ ok: false, error: why }); }
 
-async function setFiles(value, mode, folder) {
+// keepOldOnNo (a folder picked while file tools are on): a no in the confirm window leaves file tools on for the folder
+// they had, because the helper still has that one allowed. Returns { kept: true } then.
+async function setFiles(value, mode, folder, { keepOldOnNo = false } = {}) {
   const m = mode === 'write' ? 'write' : 'read';
   const f = String(folder == null ? cizState.get().filesFolder : folder).trim().slice(0, 1000);
   if (!value) {
@@ -78,6 +80,10 @@ async function setFiles(value, mode, folder) {
     return cizState.addLog('error', 'File tools need a full folder path, like C:\\Users\\you\\Documents\\notes. Left off.');
   }
   const r = await askConfirm({ kind: 'files', mode: m, folder: f });
+  if (!r.ok && keepOldOnNo && cizState.get().filesEnabled) {
+    await cizState.addLog('info', `Kept ${cizState.get().filesFolder}: ${f} was not allowed (${r.error || 'not allowed in the confirm window.'})`);
+    return { kept: true };
+  }
   if (!r.ok) {
     await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
     return cizState.addLog('error', `File tools stay off: ${r.error || 'not allowed in the confirm window.'}`);

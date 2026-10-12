@@ -275,6 +275,31 @@ const answerConfirm = async ok => {
     const withFiles = native.sent.find(m => m.type === 'chat' && m.id === 'p4');
     check('chat carries the file mode, folder and Quality', withFiles.files === 'write' && withFiles.folder === 'C:\\Users\\F\\notes' && withFiles.model === 'quality');
 
+    // A folder picked while file tools are on goes through the confirm window before it replaces the old one; a no keeps the old folder.
+    await fromPanel({ type: 'pickFolder' });
+    await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\F\\Other', cancelled: false });
+    const pickAsk = await answerConfirm(false);
+    check('a picked folder asks the confirm window while file tools are on', !!pickAsk && pickAsk.kind === 'files' && pickAsk.folder === 'C:\\Users\\F\\Other' && pickAsk.mode === 'write', JSON.stringify(pickAsk));
+    check('a no for the picked folder keeps file tools on, for the old folder', g('cizState').get().filesEnabled === true && g('cizState').get().filesFolder === 'C:\\Users\\F\\notes' && g('cizState').get().filesMode === 'write'
+      && g('cizState').get().confirmPending === null, JSON.stringify([g('cizState').get().filesEnabled, g('cizState').get().filesFolder]));
+    check('the log says the old folder was kept', g('cizState').log().some(e => /Kept C:\\Users\\F\\notes/.test(e.text) && /C:\\Users\\F\\Other/.test(e.text)), g('cizState').log().slice(-3).map(e => e.text).join(' | '));
+    await fromPanel({ type: 'pickFolder' });
+    await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\F\\Other', cancelled: false });
+    await answerConfirm(true);
+    check('a yes for the picked folder moves file tools to it', g('cizState').get().filesEnabled === true && g('cizState').get().filesFolder === 'C:\\Users\\F\\Other');
+
+    // The helper says what it allowed, and the switches follow it (a restarted helper has forgotten them).
+    await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: { mode: 'read', folder: 'C:\\Users\\F\\Mirror' } });
+    check('confirmed_state with files turns file tools on for that mode and folder', g('cizState').get().filesEnabled === true && g('cizState').get().filesMode === 'read' && g('cizState').get().filesFolder === 'C:\\Users\\F\\Mirror');
+    await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: null });
+    check('confirmed_state with no files turns file tools off and keeps the remembered mode and folder', g('cizState').get().filesEnabled === false && g('cizState').get().filesMode === 'read' && g('cizState').get().filesFolder === 'C:\\Users\\F\\Mirror');
+    check('the log says the helper did not keep the file tools', g('cizState').log().some(e => /File tools are off: the helper restarted and did not keep them/.test(e.text)));
+    const logLen = g('cizState').log().length;
+    await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: null });
+    check('a state that changes nothing logs nothing', g('cizState').log().length === logLen);
+    await helperSays({ type: 'error', error: 'A reply was too large to send.' });
+    check('an error from the helper is logged', g('cizState').log().some(e => e.kind === 'error' && e.text === 'Helper: A reply was too large to send.'));
+
     // Unsafe mode: Claude may read the Google sign-in tab only while it is on
     await fromPanel({ type: 'setUnsafe', value: true });
     await answerConfirm(false);
@@ -286,6 +311,12 @@ const answerConfirm = async ok => {
     check('Unsafe mode lets Claude read the Google sign-in tab', r.ok && injected.includes(2));
     r = await call('get_page_text', { tab_id: 3 });
     check('Unsafe mode still refuses about: pages', !r.ok && /browser page.*screenshot shows it/.test(r.error));
+    await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: null });
+    check('confirmed_state with Unsafe mode off turns it off, and says why', g('cizState').get().unsafe === false && g('cizState').log().some(e => /Unsafe mode is off: the helper restarted and did not keep it/.test(e.text)));
+    await fromPanel({ type: 'setUnsafe', value: true });
+    await answerConfirm(true);
+    await helperSays({ type: 'confirmed_state', unsafe: true, trusted: false, files: null });
+    check('confirmed_state with Unsafe mode on keeps it on', g('cizState').get().unsafe === true);
 
     // ---- watch switch (Task 9): the switch, the saved option and the card messages (the helper decides; see lib/watchgate.js)
     await fromPanel({ type: 'setWatch', value: true });
@@ -397,7 +428,7 @@ const answerConfirm = async ok => {
     const saveMsg = native.sent.slice(sentAt).find(m => m.type === 'save_output');
     check('a stored file goes to the helper with its bytes', !!saveMsg && saveMsg.name === 'notes.txt' && Buffer.from(saveMsg.data, 'base64').toString('utf8') === 'Olá, mundo', saveMsg ? saveMsg.name : 'no save_output sent');
     check('nothing is downloaded while the helper stores it', downloads.length === 0);
-    await helperSays({ type: 'output_saved', req: saveMsg.req, ok: true, name: 'notes.txt', path: 'C:\\Zen\\extension\\output\\notes.txt' });
+    await helperSays({ type: 'output_saved', req: saveMsg.req, ok: true, name: 'notes.txt', path: 'C:\\Users\\H\\AppData\\Local\\claude-in-zen\\output\\notes.txt' });
     check('the stored path reaches the panel', panelIn.some(m => m.type === 'outputSaved' && m.name === 'notes.txt' && /output\\notes\.txt$/.test(m.path)));
     check('a stored file is logged, and not downloaded', g('cizState').log().some(e => /Stored notes\.txt in the output folder/.test(e.text)) && downloads.length === 0);
     sentAt = native.sent.length;

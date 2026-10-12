@@ -462,10 +462,10 @@ function loadMod(m) {
   });
 }
 
-// Settings > Saving files: a made file is downloaded now (the default), or kept in the output folder beside the mods folder.
+// Settings > Saving files: a made file is downloaded now (the default), or kept in the output folder in Claude in Zen's data folder.
 const OUTPUT_NOTES = {
   download: 'Downloads go to Downloads\\Claude in Zen, as before.',
-  store: 'Made files are kept in the output folder, beside the mods folder. A name that is already taken gets (2), (3) and so on, so nothing is overwritten. If the helper is not running, the file is downloaded instead.',
+  store: 'Made files are kept in Claude in Zen\'s data folder (…\\claude-in-zen\\output). A name that is already taken gets (2), (3) and so on, so nothing is overwritten. If the helper is not running, the file is downloaded instead.',
 };
 function renderOutput(s) {
   const mode = s.outputMode === 'store' ? 'store' : 'download';

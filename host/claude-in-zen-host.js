@@ -42,6 +42,12 @@ const { createUpdates } = require('./lib/updates');
 // it). The add-on asks before Unsafe mode or file tools go on, and a chat turn gets only what was allowed here.
 const confirm = createConfirm({ killTree });
 const confirmed = { unsafe: false, files: null, watch: false };   // files: { mode, folder }; watch: video watching (lib/watchgate.js)
+// What was allowed, told to the add-on after hello and after every change, so its switches never show more than the helper
+// holds (a restarted helper has forgotten everything). trusted is for Trusted mode, which does not exist yet.
+function sendConfirmedState() {
+  sendAddon({ type: 'confirmed_state', unsafe: confirmed.unsafe === true, trusted: confirmed.trusted === true,
+    files: confirmed.files ? { mode: confirmed.files.mode, folder: confirmed.files.folder } : null });
+}
 const sameDir = (a, b) => guard.within(a, b) && guard.within(b, a);
 function isDir(p) { try { return fs.statSync(p).isDirectory(); } catch { return false; } }
 // The project folder this helper runs from (host\..).
@@ -89,7 +95,7 @@ const chatTurns = createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv,
 const { army, startChat, cancelChat, selfApply, selfDiscard } = chatTurns;
 const watchWiring = createWatchWiring({ confirm, confirmed, sendAddon, grants });
 const { watchWindow, saveWatchOnLoad, sendWatchState, watchLoad, gate, watchRuns, watchDeps } = watchWiring;
-const { answerConfirm } = createConfirmFlow({ confirm, confirmed, sendAddon, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState });
+const { answerConfirm } = createConfirmFlow({ confirm, confirmed, sendAddon, sendConfirmedState, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState });
 const { sourceInfo, updateAddon } = createUpdates({ ROOT, sendAddon });
 const { sendAccounts, useAccount, addAccount, signInAccount, removeAccount, cancelSignIn, forgetLogin } = createSignIn({
   ...accounts, findClaude, claudeEnv, statusOf, sendStatus, sendAddon, chatBusy: () => chatTurns.busy() });
@@ -106,9 +112,16 @@ nm.on('end', () => shutdown('add-on disconnected'));
 // Mods (extension/mods/<id>/): listed here, switched here, loaded by the panel. See host/lib/mods.js.
 const MODS = require('./lib/mods');
 const MODS_DIR = path.join(__dirname, '..', 'extension', 'mods');
-const OUTPUT_DIR = path.join(__dirname, '..', 'extension', 'output');   // Settings > Saving files: beside the mods folder
+const OUTPUT_DIR = P.OUTPUT_DIR;   // Settings > Saving files: in the data folder, not in the project
+const OLD_OUTPUT_DIR = path.join(ROOT, 'extension', 'output');   // where it used to be
 const MODS_STATE = path.join(P.BASE, 'mods.json');
 function sendMods() { sendAddon({ type: 'mods', mods: MODS.scanMods(MODS_DIR, MODS_STATE) }); }
+// First start after the output folder moved: its files come over from the project folder (README.txt stays).
+{
+  const r = OUTPUT.moveOld(OLD_OUTPUT_DIR, OUTPUT_DIR);
+  if (r.moved.length) log.info(`output folder: ${r.moved.length} saved file${r.moved.length === 1 ? '' : 's'} moved to ${OUTPUT_DIR}`);
+  for (const f of r.failed) log.warn(`output folder: ${f.name} could not be moved and was left where it is (${f.error})`);
+}
 // Settings > Saving files: the add-on sends a made file (base64) and the helper writes it into the output folder.
 function saveOutput(msg) {
   try {
@@ -131,11 +144,16 @@ function sendAddon(msg) {
 }
 
 // "Choose folder…": a Windows folder window (pick-folder.ps1, run in an STA thread, which the dialog needs).
-// CLAUDE_IN_ZEN_PICK is a test stub: the path to return, or "cancel".
+// CLAUDE_IN_ZEN_PICK is a test stub (read only with CLAUDE_IN_ZEN_TEST=1): the path to return, or "cancel". The stub and the
+// real window end in the same finishPick. Picking a folder only tells the add-on which one; it never changes what was
+// allowed. The add-on asks the confirm window for the new folder (answerConfirm) before file tools move to it.
 let folderWindowOpen = false;
+function finishPick(picked) {
+  sendAddon({ type: 'pick_folder_result', ok: true, path: picked, cancelled: !picked });
+}
 function pickFolder() {
-  const stub = process.env.CLAUDE_IN_ZEN_PICK;
-  if (stub !== undefined) return sendAddon({ type: 'pick_folder_result', ok: true, path: stub === 'cancel' ? '' : stub, cancelled: stub === 'cancel' });
+  const stub = P.testHook('CLAUDE_IN_ZEN_PICK');
+  if (stub !== undefined) return finishPick(stub === 'cancel' ? '' : stub);
   if (folderWindowOpen) return sendAddon({ type: 'pick_folder_result', ok: false, error: 'A folder window is already open.' });
   if (process.platform !== 'win32') return sendAddon({ type: 'pick_folder_result', ok: false, error: 'The folder window works on Windows. Type the path instead.' });
   folderWindowOpen = true;
@@ -143,10 +161,7 @@ function pickFolder() {
     { windowsHide: true, timeout: 10 * 60 * 1000 }, (err, stdout) => {
       folderWindowOpen = false;
       if (err) return sendAddon({ type: 'pick_folder_result', ok: false, error: 'The folder window did not finish. Type the path instead.' });
-      const picked = String(stdout || '').replace(/^\uFEFF/, '').trim();
-      // A folder picked in the Windows folder window is the user's own choice: file tools that were allowed move to it.
-      if (picked && confirmed.files && path.isAbsolute(picked)) confirmed.files.folder = path.resolve(picked);
-      sendAddon({ type: 'pick_folder_result', ok: true, path: picked, cancelled: !picked });
+      finishPick(String(stdout || '').replace(/^\uFEFF/, '').trim());
     });
 }
 
@@ -157,6 +172,7 @@ function onAddon(msg) {
       addonVersion = String(msg.version || '?');
       log.info(`add-on ${addonVersion} connected`);
       sendAddon({ type: 'hello', version: VERSION, server: `host ${VERSION}`, clients: clientNames(), ...sourceInfo() });
+      sendConfirmedState();
       sendMods();
       sendGrants();
       toolbox.push(activeId());
@@ -184,15 +200,15 @@ function onAddon(msg) {
     }
 
     case 'confirm':       return answerConfirm(msg);   // Unsafe mode or file tools are about to go on
-    case 'unsafe_off':    confirmed.unsafe = false; return;
-    case 'files_off':     confirmed.files = null; return;
+    case 'unsafe_off':    confirmed.unsafe = false; return sendConfirmedState();
+    case 'files_off':     confirmed.files = null; return sendConfirmedState();
     case 'watch_load':        watchLoad().catch(e => log.error('watch_load', e.message)); return;   // the panel loaded
     case 'watch_set_on_load': if (msg.value === false) saveWatchOnLoad(false); return sendWatchState();   // on is asked in a window
     case 'watch_off':         confirmed.watch = false; gate.cancel(); watchRuns.stopAll(false); return;   // Stop
     case 'watch_answer':      gate.answer(msg.id, !!msg.allow); return;
     case 'watch_shown':       gate.shown(msg.id); return;
     case 'local_ask':     // a file: tab outside the allowed folders: the user answers in the confirm window
-      local.allowFolder(String(msg.folder || ''))
+      local.allowFolder(String(msg.folder || ''), String(msg.reading || '').slice(0, 253))
         .then(folder => sendAddon({ type: 'local_ask_result', id: msg.id, ok: true, folder }),
           e => sendAddon({ type: 'local_ask_result', id: msg.id, ok: false, error: e.message || String(e) }));
       return;

@@ -172,7 +172,7 @@ async function downloadFile(id, saveAs, format) {
   try { out = cizExport(f, want); } catch (e) {
     return cizState.addLog('error', `Could not make ${f.name}${want !== ext ? ` as .${want}` : ''}: ${e.message}`);
   }
-  // Settings > Saving files: "Store in output folder" keeps a made file beside the mods folder; Save as always asks.
+  // Settings > Saving files: "Store in output folder" keeps a made file in Claude in Zen's data folder (…\claude-in-zen\output); Save as always asks.
   if (!saveAs && cizState.get().outputMode === 'store') {
     const r = await storeOutput(out);
     if (r.ok) {
@@ -192,7 +192,7 @@ async function downloadFile(id, saveAs, format) {
   } finally { setTimeout(() => URL.revokeObjectURL(url), 60000); }
 }
 
-// Settings > Saving files: the helper writes the file into the output folder beside the mods folder. Resolves
+// Settings > Saving files: the helper writes the file into the output folder in Claude in Zen's data folder (…\claude-in-zen\output). Resolves
 // { ok: true, name, path } or { ok: false, error }; a helper that is missing, stops or is slow means a download instead.
 function storeOutput(out) {
   if (!nativePort) connectNative();
