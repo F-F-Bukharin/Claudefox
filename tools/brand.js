@@ -36,7 +36,6 @@ const RULES = [
   { from: 'No answer from Zen within', to: 'No answer from Firefox within' },
   { from: 'The link to Zen closed: the agent was stopped or Zen quit.', to: 'The link to Firefox closed: the agent was stopped or Firefox quit.' },
   { from: 'No Zen tab showed', to: 'No Firefox tab showed' },
-  { from: 'message too large for Zen', to: 'message too large for Firefox' },
   { from: 'or Zen or the helper restarted', to: 'or Firefox or the helper restarted' },
   { from: 'Claude in Zen', to: NAME },
 ];
