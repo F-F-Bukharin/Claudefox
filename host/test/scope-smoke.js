@@ -254,9 +254,15 @@ process.stdin.on('end', () => {
   } catch (e) {
     check('scope-smoke ran to the end', false, e.stack || e.message);
   } finally {
-    if (helper) helper.kill();
+    // The helper still writes its log and data folder for a moment after the kill, so the temp folder goes only once it
+    // has exited (5 s at most), and rmSync retries a folder that something wrote into while it was being emptied.
+    if (helper && helper.exitCode === null && helper.signalCode === null) {
+      const exited = new Promise(r => helper.once('exit', r));
+      helper.kill();
+      await Promise.race([exited, sleep(5000)]);
+    }
     if (fake) fake.close();
-    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
   if (failed.length) {
     for (const f of failed) console.log(`FAIL  ${f}`);
