@@ -16,6 +16,7 @@ const P = require('./paths');
 const guard = require('./guard');
 const MODS = require('./mods');
 const { killTree } = require('./army');
+const children = require('./children');
 const vm = require('vm');
 
 const SELF_DIR = path.join(P.BASE, 'self');
@@ -407,6 +408,7 @@ function runTests(dir, ms = TEST_MS) {
       resolve({ ok: false, summary: `Could not run the tests: ${e.message}`, tail: '' });
       return;
     }
+    children.track(child, 'improve-test');   // listed in children.json, so a helper that stops without cleaning up leaves no test run behind
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', take);

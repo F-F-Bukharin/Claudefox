@@ -14,6 +14,7 @@ const guard = require('./guard');
 const { LIMITS, hostOf } = require('./armyguard');
 const { workerArgs } = require('./chatargs');
 const { splitLines } = require('./jsonlines');
+const children = require('./children');
 
 const MAX_TASKS = 5;
 const MAX_RUNS_PER_TURN = 2;
@@ -153,6 +154,8 @@ function createArmy(deps) {
       return endWorker(w, 'failed', `Could not start Claude Code: ${e.message}`);
     }
     w.child = child;
+    // Listed in children.json, so a helper that stops without cleaning up leaves no worker running (lib/children.js).
+    children.track(child, 'army');
     w.state = 'working';
     w.hardTimer = setTimeout(() => endWorker(w, 'failed', 'timed out'), LIMITS.hardMs);
     child.stdin.on('error', () => {});

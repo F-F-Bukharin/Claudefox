@@ -21,6 +21,10 @@ const MODELS = {
 };
 // The army's workers. Kept out of MODELS so a chat message can never pick it.
 const WORKER_MODEL = { model: 'claude-haiku-5-5', effort: 'high' };
+// The models a chat message may name. Anything else gets Speed, including names that only look like ours: "selfimprove"
+// is Improve's own Opus at max effort, and "toString" or "__proto__" must never come back as a model.
+const CHAT_MODELS = ['speed', 'speedplus', 'quality', 'army'];
+function chatModel(name) { return CHAT_MODELS.includes(name) ? MODELS[name] : MODELS.speed; }
 const FILE_TOOLS = { read: 'Read,Glob,Grep', write: 'Read,Glob,Grep,Edit,Write' };
 const WEB_TOOLS = 'WebSearch,WebFetch';   // always on: Claude can search and read the web without touching tabs
 const SETTINGS_FILE = path.join(P.BASE, 'chat-settings.json');   // rewritten for every turn
@@ -187,4 +191,4 @@ function chatArgs(files, resume, choice, opts) {
   return args;
 }
 
-module.exports = { MODELS, WORKER_MODEL, FILE_TOOLS, WEB_TOOLS, chatPrompt, chatArgs, workerPrompt, workerArgs, CAVEMAN_FALLBACK };
+module.exports = { MODELS, WORKER_MODEL, FILE_TOOLS, WEB_TOOLS, chatPrompt, chatArgs, workerPrompt, workerArgs, CAVEMAN_FALLBACK, chatModel };

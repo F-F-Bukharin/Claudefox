@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const children = require('./children');
 
 function createWatchRuns({ killTree }) {
   const live = new Set();   // { child, stopped, timedOut } for every run that has not settled
@@ -26,6 +27,7 @@ function createWatchRuns({ killTree }) {
         return settle(-1);
       }
       entry.child = child;
+      children.track(child, 'watch');   // listed in children.json, so a helper that stops without cleaning up leaves no run behind
       live.add(entry);
       child.stdout.setEncoding('utf8');
       child.stderr.setEncoding('utf8');

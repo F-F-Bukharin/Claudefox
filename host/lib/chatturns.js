@@ -11,7 +11,8 @@ const guard = require('./guard');
 const uploads = require('./uploads');
 const { killTree } = require('./army');
 const { splitLines } = require('./jsonlines');
-const { MODELS, chatArgs } = require('./chatargs');
+const { MODELS, chatArgs, chatModel } = require('./chatargs');
+const children = require('./children');
 const selfimprove = require('./selfimprove');
 
 const CHAT_TIMEOUT_MS = 60 * 60 * 1000;   // long jobs (a whole course's homework) take a while; Cancel is always there
@@ -38,6 +39,9 @@ function tabLine(tab) {
 // deps: { sendAddon, callAddon, findClaude, claudeEnv, accountDir, activeId, toolbox, confirmed, sameDir, isDir, ROOT,
 // shuttingDown() }. Returns the turn functions the add-on messages call, the army, and busy()/current() for the rest.
 function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountDir, activeId, toolbox, confirmed, sameDir, isDir, ROOT, shuttingDown }) {
+  // The helper builds its chat turns once, at start, before any child exists: so this is where the leftovers of an
+  // earlier helper are stopped (lib/children.js).
+  children.reapAtStart();
   let chat = null;   // the running turn: { id, child, sessionId, finished, stderr, resultError, timer, files, key, army, armyRuns }
   // Army mode (lib/army.js): the workers of the running turn.
   const army = require('./army').createArmy({
@@ -176,7 +180,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
       files.mode = msg.files;
       files.folder = path.resolve(folder);
     }
-    const choice = improve ? MODELS.selfimprove : (MODELS[msg.model] || MODELS.speed);
+    const choice = improve ? MODELS.selfimprove : chatModel(msg.model);
     const armyOn = !improve && msg.model === 'army';
     const unsafe = !improve && msg.unsafe === true && confirmed.unsafe;   // only when the user allowed it in the confirm window
     const caveman = !improve && msg.caveman === true;
@@ -206,12 +210,16 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
           // An improve run has no other servers at all, and works in its copy.
           cwd: improve ? run.sandbox.work : P.WORKSPACE,
           env: { ...claudeEnv(accountDir(key)), ENABLE_TOOL_SEARCH: !improve && tb.servers.length ? 'auto' : 'false' },
+          // On Linux and macOS the turn leads its own process group, so killTree (lib/army.js) takes Claude Code and the
+          // tool servers it started in one go. Its pipes work the same way. Windows stops the tree by pid instead.
+          detached: process.platform !== 'win32',
           windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (e) {
         return finishChat(run, false, `Could not start Claude Code: ${e.message}`);
       }
       run.child = child;
+      children.track(child, 'chat');   // listed in children.json, so a helper that stops without cleaning up leaves no turn running
       log.info(`chat ${id} started (${choice.model}${armyOn ? ', army' : ''}${improve ? ', improve' : `, files: ${files.mode || 'off'}`}, ${resume ? 'resumed' : 'new'}${unsafe ? ', unsafe mode' : ''}`
         + `${tb.servers.length ? `, tools: ${tb.servers.join(', ')}` : ''}${saved.files.length ? `, ${saved.files.length} attachment(s)` : ''}${caveman ? ', caveman' : ''})`);
 
