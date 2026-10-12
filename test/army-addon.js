@@ -260,6 +260,7 @@ const answerConfirm = async ok => {
     check('a tab that started opening before Stop is closed when it arrives', removed.includes(777) && !army.owner(777));
     await fromPanel({ type: 'start' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
+    await g('cizState').set({ trusted: true });   // fixture: Stop turns Trusted off (page safety, A5); these checks are about the army's tabs
     const s3 = (await armyCall('tab_open', { url: 'https://s3.example/' }, 'w1', 'r3')).result.tab_id;
     rm = removed.length;
     native.onDisconnect.fire({ error: null });
@@ -277,6 +278,7 @@ const answerConfirm = async ok => {
     check('a worker call that arrives while Stop runs opens no tab', created.length === c0, JSON.stringify(created.slice(c0)));
     await fromPanel({ type: 'start' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
+    await g('cizState').set({ trusted: true });   // fixture: Stop turns Trusted off (page safety, A5)
 
     // 17. only the helper's army field makes a worker call
     native.onMessage.fire({ type: 'call', id: 'bad1', tool: 'tab_open', args: { url: 'https://bad.example/' }, source: 'x', army: 'w1' });
