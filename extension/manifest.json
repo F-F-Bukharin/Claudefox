@@ -12,7 +12,8 @@
           "websiteContent",
           "browsingActivity"
         ]
-      }
+      },
+      "update_url": "https://github.com/F-F-Bukharin/Claudefox/releases/latest/download/updates.json"
     }
   },
   "permissions": [
@@ -66,5 +67,6 @@
       },
       "description": "Toggle the Claudefox panel"
     }
-  }
+  },
+  "homepage_url": "https://github.com/F-F-Bukharin/Claudefox"
 }
