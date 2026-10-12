@@ -28,9 +28,11 @@ if (!py.error) check('the vendored modules import under python3 -I', py.status =
 
 // section wiring (Task 7): the host hooks the permission card, the saved option and the handler
 const HOST = fs.readFileSync(path.join(ROOT, 'host', 'claude-in-zen-host.js'), 'utf8');
+// The helper's main file is split by concern (host/lib): the add-on message cases stay in main; the wiring pieces may be in any lib module.
+const HOST_ALL = [HOST, ...fs.readdirSync(path.join(ROOT, 'host', 'lib')).filter(f => f.endsWith('.js')).map(f => fs.readFileSync(path.join(ROOT, 'host', 'lib', f), 'utf8'))].join('\n');
 for (const token of ['createWatchGate', "case 'watch_load'", "case 'watch_set_on_load'", "case 'watch_off'", "case 'watch_answer'", "case 'watch_shown'",
   'WATCH_ON_LOAD', "'watch_on_load'", "CLAUDE_IN_ZEN_WATCH: '1'", 'watch: !improve']) {
-  check(`host wires ${token}`, HOST.includes(token));
+  check(`host wires ${token}`, (token.startsWith('case ') || token.startsWith('"case ') ? HOST : HOST_ALL).includes(token));
 }
 check('paths.js defines WATCH_ON_LOAD', fs.readFileSync(path.join(ROOT, 'host', 'lib', 'paths.js'), 'utf8').includes('WATCH_ON_LOAD'));
 
