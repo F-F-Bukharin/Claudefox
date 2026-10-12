@@ -1,6 +1,6 @@
 'use strict';
 // Session state. Lives in storage.session, so quitting Zen wipes it. Sign-in comes back on its own at
-// startup from a remembered marker in storage.local (see background.js, "Remembered sign-in").
+// startup from a remembered marker in storage.local (see lib/bg-accounts.js, "Remembered sign-in").
 
 const CIZ_DEFAULT_STATE = Object.freeze({
   mods: [],                   // from the helper: { id, name, description, panel, style, enabled, broken }

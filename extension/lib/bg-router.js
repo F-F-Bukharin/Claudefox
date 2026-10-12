@@ -24,7 +24,7 @@ async function probeDebugPort() {
 // ---------------------------------------------------------------- router
 // Every tool call, from any channel (panel, console, helper), goes through here.
 
-// The tools themselves are in lib/tools.js (CIZ_TOOLS).
+// The tools themselves are in lib/pageTools.js (CIZ_TOOLS).
 
 // army: { run, worker } for an army worker's call (lib/army.js), else null.
 async function dispatch(tool, args, source, army) {
@@ -56,7 +56,7 @@ async function dispatch(tool, args, source, army) {
       const what = result.clicked || `${result.filled || result.typed} into the field`;
       await cizState.addLog('action', `${tool}: ${String(what).slice(0, 140)}${result.navigated ? ` → ${String(result.url || '').slice(0, 80)}` : ''}`);
     }
-    if (army) {   // tab_open registered its tab itself (lib/tools.js), before the page loaded
+    if (army) {   // tab_open registered its tab itself (lib/pageTools.js), before the page loaded
       if (tool === 'tab_close') cizArmy.unregister(args.tab_id);
       else if (tool !== 'tab_open') cizArmy.touch(args.tab_id);
     }

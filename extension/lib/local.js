@@ -2,8 +2,8 @@
 // Local pages and files: Claude may look at a page or file on this computer only inside a folder the user allowed.
 // The helper keeps the allowed folders and asks about a new one in its own confirm window ("Allow this folder" or
 // "Deny"), outside Zen, which nothing in the add-on or the panel can answer for the user, a mod included. This file
-// keeps the helper's list for the page tools' file: gate (lib/tools.js), asks the helper when a file: tab is outside
-// it, and tells the panel while the window is open. Army workers never get here: lib/tools.js refuses them on every
+// keeps the helper's list for the page tools' file: gate (lib/pageTools.js), asks the helper when a file: tab is outside
+// it, and tells the panel while the window is open. Army workers never get here: lib/pageTools.js refuses them on every
 // non-web page first.
 
 const CIZ_FILE_ACCESS_OFF = "Zen keeps add-ons out of files on this computer. Turn on 'Access local files on your computer' for Claude in Zen: about:addons -> Claude in Zen -> Permissions and data.";

@@ -199,7 +199,7 @@ button.link { border: 0; padding: 0 2px; color: var(--accent-text); font-size: 1
   box-shadow: 0 1px 3px rgb(0 0 0 / .06);
 }
 .inputbox:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
-/* The text bar is 34 px tall, like the + and send buttons. One line of typing is 20 px; panel.js (centreTyping)
+/* The text bar is 34 px tall, like the + and send buttons. One line of typing is 20 px; panel-chat.js (centreTyping)
    sets the padding so the typed letters sit on the middle of the bar. This is the fallback until it runs. */
 textarea {
   flex: 1; min-width: 0; width: 100%; resize: none; border: 0; outline: none; background: transparent; color: var(--ink);
@@ -399,7 +399,7 @@ textarea:focus-visible { outline: none; }
 .actlist li.bad { color: var(--stop); }
 @keyframes sweep { to { transform: translateX(100%); } }
 @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-/* A message fades in once, when it first appears (panel.js adds .enter). Rebuilding it does not replay that. */
+/* A message fades in once, when it first appears (panel-stream.js adds .enter). Rebuilding it does not replay that. */
 .msg.enter { animation: rise .22s ease-out; }
 @media (prefers-reduced-motion: reduce) { .msg.enter { animation: none; } .pfill::after { animation: none; } .pfill { transition: none; } }
 
@@ -490,7 +490,7 @@ textarea:focus-visible { outline: none; }
 .menu [aria-checked="true"] .mcheck::after { left: 14px; }
 .menu .sep { height: 1px; background: var(--line); margin: 4px 6px; }
 /* the + menu open in an empty chat: the starter chips move to its right and the menu comes down to their bottom line.
-   panel.js (placeMenuBar) measures the numbers; chips-hidden hides the chips when no chip fits beside the menu (the menu still comes down) */
+   panel-chat.js (placeMenuBar) measures the numbers; chips-hidden hides the chips when no chip fits beside the menu (the menu still comes down) */
 .chat.is-empty .composer.menu-open #moreMenu { bottom: calc(100% - var(--menu-bottom)); }
 .chat.is-empty .composer.menu-open .starters { margin-left: var(--chips-ml, 0px); padding: 0; justify-content: flex-end; }
 .chat.is-empty .composer.chips-hidden .starters { visibility: hidden; }

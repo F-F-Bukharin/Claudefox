@@ -106,19 +106,30 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `extension/lib/policy.js` | Fixed rules: blocked pages, sensitive fields. |
 | `extension/lib/state.js` | Session state and action log in `storage.session` (cleared when Zen quits; the sign-in marker lives in `storage.local`). |
 | `extension/lib/pageTools.js` | The tools Claude uses on Zen; page code runs in the add-on's isolated content-script world. Google Docs export. |
-| `extension/lib/pageOp.js`, `pageOpRead.js`, `pageOpAct.js` | The page-side code the tools run inside a tab: shared helpers, then the read and act operations. pageTools.js joins it and injects it. |
+| `extension/lib/pageOp.js`, `pageOpRead.js`, `pageOpAct.js` | The page-side code the tools run inside a tab: shared helpers, then the read and act operations. pageOp.js joins them into one script and pageTools.js injects it. |
 | `extension/lib/netlog.js` | `network_log` and `console_log` (metadata only). |
 | `extension/lib/docx.js` | Builds real Word and Excel files (and web pages) from what Claude wrote. |
 | `extension/lib/files.js`, `extension/viewer.*` | Files Claude made, kept in the add-on; the viewer with Save as. |
-| `extension/background.js` | Sign-in, Stop/Start, helper link, chat relay, account switch, tools relay, downloads, tool router. |
-| `extension/panel.*` | Sidebar UI. |
+| `extension/background.js` | The entry: startup, the state the concerns share, the Zen-opened rule and the toolbar button. Loads after the `extension/lib/bg-*.js` files. |
+| `extension/lib/bg-panel.js` | The panel's messages and ports, and a chat reply's links and files: open a page or tab, download or store a file, screenshot a tab. |
+| `extension/lib/bg-accounts.js` | Accounts: sign-in with the claude.ai session Zen has open (no cookies read), the remembered sign-in, and the helper's account switch. |
+| `extension/lib/bg-permissions.js` | Stop and Start, the helper's confirm window, and the permission switches: file tools, unsafe mode, watch and the army. |
+| `extension/lib/bg-chat.js` | Chat runs and native messaging: one Claude Code turn at a time, run by the helper, and the switch for the helper's messages. |
+| `extension/lib/bg-router.js` | The tool router every call goes through (panel, console and helper), the debug-port warning, the toolbar badge and the console hook. |
+| `extension/panel.html`, `extension/panel.css` | The sidebar's page and its styles. |
+| `extension/panel.js` | Switches the sidebar's three pages (chat, profile, settings), its buttons and the rendering of the agent state. Loads first of the panel scripts. |
+| `extension/panel-chat.js` | The chat composer: Speed or Quality and the army, the current tab, the text bar, attachments, the + menu, slash commands, sending, and Improve Claude in Zen. |
+| `extension/panel-stream.js` | The chat stream: answers as they arrive, progress and army trail, file cards, and how each message is drawn. |
+| `extension/panel-settings.js` | The Settings and Profile pages: dark mode and wallpaper, permissions, tools and plugins, accounts, mods and saving files. |
+| `extension/panel-link.js` | Connects the panel to the background page, takes its messages and restores the saved chat. Loads last of the panel scripts. |
 | `host/claude-in-zen-host.js` | The helper: native messaging, pipe server, Claude Code chat turns, accounts, `read_document`. |
 | `host/lib/chatargs.js` | The chat's system prompt and Claude Code flags. |
 | `host/lib/selfimprove.js` | Improve Claude in Zen: the copy, the diff, the checks, the tests on the copy, Apply and Discard. |
-| `host/lib/toolbox.js` | Tools and plugins: lists them, keeps the switches, sign-in windows, add and remove. |
+| `host/lib/plugins.js` | Tools and plugins: lists them, keeps the switches, sign-in windows, add and remove. |
 | `host/lib/guard.js` | The file guard's deny rules and folder checks. |
 | `host/lib/uploads.js`, `host/lib/doctext.js` | Attached files; text out of Word, PowerPoint, Excel and OpenDocument files. |
-| `host/zen-mcp.js`, `host/lib/tools.js` | The Zen tool server (MCP over stdio) and its tool catalog. |
+| `host/zen-mcp.js` | The Zen tool server (MCP over stdio). It serves the catalog in `host/lib/toolSchemas.js`. |
+| `host/lib/toolSchemas.js` | The Zen tool catalog: each tool's name, description and input schema. The add-on implements each one. |
 | `host/install.ps1` | Registers the helper with Zen for this Windows user (no admin). |
 | `zen-profile/` | `user.js` and `userChrome.css` (sidebar on the right, Claude panel about 660 px wide) and `apply.ps1`, which merges them into the Zen profile. |
 | `test/`, `host/test/` | Tests; `tools\Run tests.bat` or `node test/run-all.js` runs them all. `node test/injection-live.js` is the live prompt-injection test (uses your plan, run it by hand). |

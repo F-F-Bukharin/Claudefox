@@ -1,5 +1,5 @@
 'use strict';
-// The Zen tools Claude sees. The add-on implements each one (extension/lib/tools.js); "progress" is
+// The Zen tools Claude sees. The add-on implements each one (extension/lib/pageTools.js); "progress" is
 // answered by the tool server itself. This file holds the names, descriptions and input schemas.
 
 const { FILE_PAGES_NOT_TABS } = require('./rules');

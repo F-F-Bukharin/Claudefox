@@ -74,7 +74,7 @@ async function handlePanel(msg, port) {
       try { await browser.storage.local.set({ caveman: !!msg.value }); } catch {}
       await cizState.set({ caveman: !!msg.value });
       return cizState.addLog('info', msg.value ? 'Caveman mode on: short replies' : 'Caveman mode off');
-    // Settings > Tools and plugins: the helper does the work (host/lib/toolbox.js)
+    // Settings > Tools and plugins: the helper does the work (host/lib/plugins.js)
     case 'tools':       return sendNative({ type: 'tools' });
     case 'toolsCheck':  return toolsSend({ type: 'tools_check' }, 'Checking every tool server…');
     case 'toolSet':     return toolsSend({ type: 'tool_set', kind: msg.kind === 'plugin' ? 'plugin' : 'server', id: String(msg.id || ''), value: !!msg.value },
@@ -232,7 +232,7 @@ function toolsSend(msg, note) {
   if (note) return cizState.addLog('info', note);
 }
 
-// create_file (lib/tools.js) asks which chat turn a new file belongs to, then tells the panels about it.
+// create_file (lib/pageTools.js) asks which chat turn a new file belongs to, then tells the panels about it.
 function cizFileContext() { const [id] = chatRuns.keys(); return { msg: id || '' }; }
 function cizOnFileCreated(file) {
   cizState.addLog('action', `Claude made ${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`);

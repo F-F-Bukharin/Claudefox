@@ -1,5 +1,5 @@
 'use strict';
-// Claude in Zen: the tools Claude can use on Zen (names and schemas live in host/lib/tools.js).
+// Claude in Zen: the tools Claude can use on Zen (names and schemas live in host/lib/toolSchemas.js).
 // Page work runs through tabs.executeScript, which puts the code in the add-on's isolated
 // content-script world: the page's own scripts cannot see or change it.
 //

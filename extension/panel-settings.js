@@ -200,7 +200,7 @@ let watchShownId = '';   // the card id last shown to the helper: watchShown goe
 
 // ------------------------------------------------------------ accounts (Profile)
 // Every Claude account the chat can use: one card each. Use switches the chat to it; Add account opens a sign-in
-// window; Remove asks inside that account's own card first. background.js relays these to the helper (accounts).
+// window; Remove asks inside that account's own card first. bg-accounts.js relays these to the helper (accounts).
 $('accountAdd').addEventListener('click', () => send('accountAdd'));
 $('acctLoginCancel').addEventListener('click', () => send('accountCancel'));
 function actBtn(text, cls, fn, disabled) {
