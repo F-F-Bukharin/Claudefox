@@ -236,14 +236,14 @@ async function snapTab(port, req, windowId) {
   const reply = m => { try { port.postMessage(Object.assign({ type: 'snap', req }, m)); } catch {} };
   try {
     const [tab] = await browser.tabs.query(typeof windowId === 'number' ? { active: true, windowId } : { active: true, lastFocusedWindow: true });
-    if (!tab) return reply({ error: 'No tab to capture.' });
+    if (!tab) return reply({ error: t('bg_snapNoTab') });
     const gate = cizUrlBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
-    if (gate.blocked) return reply({ error: `This tab can't be captured: ${gate.reason}.` });
+    if (gate.blocked) return reply({ error: t('bg_snapBlocked', gate.reason) });
     const data = await browser.tabs.captureTab(tab.id, { format: 'png' });
     let host = 'tab';
     try { host = new URL(tab.url).hostname.replace(/^www\./, '') || 'tab'; } catch {}
     reply({ data: String(data).replace(/^data:image\/png;base64,/, ''), name: `screenshot ${host}.png`, mime: 'image/png' });
-  } catch (e) { reply({ error: `Screenshot failed: ${e.message}` }); }
+  } catch (e) { reply({ error: t('bg_snapFailed', e.message) }); }
 }
 
 function toolsSend(msg, note) {

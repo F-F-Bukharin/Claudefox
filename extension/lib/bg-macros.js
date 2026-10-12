@@ -56,7 +56,7 @@ const cizMacros = (() => {
   async function skipped(name, why) {
     const reason = String(why || '').split('\n')[0].slice(0, 160);
     await cizState.addLog('warn', `Scheduled macro ${name} skipped: ${reason}`);
-    note(`Claudefox: ${name} skipped: ${reason}`);
+    note(t('bg_macroSkipped', name, reason));
   }
 
   // The alarm: run the macro, or skip it.
@@ -64,10 +64,10 @@ const cizMacros = (() => {
     if (typeof booted !== 'undefined') await booted;
     const m = (await load()).find(x => x.name === name);
     if (!m || !m.schedule) { try { browser.alarms.clear('macro:' + name); } catch {} return; }
-    if (cizState.get().agent !== 'active') return skipped(name, 'Claude is stopped.');
+    if (cizState.get().agent !== 'active') return skipped(name, t('bg_macroStopped'));
     let hit = 0;
     try { hit = Number((await browser.storage.local.get('limitHitAt')).limitHitAt) || 0; } catch {}
-    if (Date.now() - hit < LIMIT_PAUSE_MS) return skipped(name, 'the usage limit was hit in the last 2 hours.');
+    if (Date.now() - hit < LIMIT_PAUSE_MS) return skipped(name, t('bg_macroLimit'));
     return startChat({ id: 's' + Date.now().toString(36) + (++seq), text: m.text, scheduled: { macro: m.name, sites: m.sites } });
   }
 
@@ -78,7 +78,7 @@ const cizMacros = (() => {
       if (i < 0) return;
       chatQueue.splice(i, 1);
       chatBusyPush();
-      skipped(name, 'another answer was still running after 30 minutes.');
+      skipped(name, t('bg_macroWaited'));
     }, WAIT_MS);
   }
 
@@ -86,9 +86,9 @@ const cizMacros = (() => {
   async function finished(runInfo, done) {
     const name = runInfo.scheduled.macro;
     if (!done.ok) {
-      const why = String(done.error || 'it failed').split('\n')[0].slice(0, 160);
+      const why = String(done.error || t('bg_macroItFailed')).split('\n')[0].slice(0, 160);
       await cizState.addLog('warn', `Scheduled macro ${name} failed: ${why}`);
-      return note(`Claudefox: ${name} failed: ${why}`);
+      return note(t('bg_macroFailed', name, why));
     }
     try {
       const st = cizState.get();
@@ -103,10 +103,10 @@ const cizMacros = (() => {
       const gone = [];
       while (list.length > HIST_MAX) { let o = 0; for (let i = 1; i < list.length; i++) if (list[i].updated < list[o].updated) o = i; gone.push(list.splice(o, 1)[0]); }
       await browser.storage.local.set({ [lk]: list, ['chat:' + id]: [
-        { role: 'user', text: m ? m.text : name }, { role: 'assistant', text: runInfo.text || '(No answer.)', steps: [] } ] });
+        { role: 'user', text: m ? m.text : name }, { role: 'assistant', text: runInfo.text || t('bg_noAnswer'), steps: [] } ] });
       if (gone.length) await browser.storage.local.remove(gone.map(c => 'chat:' + c.id));
     } catch (e) { await cizState.addLog('error', `Scheduled macro ${name}: could not save the result: ${e.message || e}`); }
-    note(`Claudefox: ${name} finished`);
+    note(t('bg_macroFinished', name));
   }
 
   try {

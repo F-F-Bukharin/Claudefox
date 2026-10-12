@@ -53,7 +53,7 @@ const browser = {
   windows: { update: async () => {}, onCreated: ev(), onRemoved: winRemoved, getAll: async () => [{ id: 1, type: 'normal' }, { id: 2, type: 'normal' }] },
 };
 const fetch = async () => ({ status: 200, ok: true, json: async () => ({ account: { email_address: 'f.work@example.com', full_name: 'F', uuid: 'u-1' } }) });
-const ctx = vm.createContext({ browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, Blob: require('buffer').Blob, btoa: s => Buffer.from(s, 'binary').toString('base64'), setTimeout: (fn, ms, ...a) => ms === 30 * 60 * 1000 ? longTimers.push(fn) : setTimeout(fn, ms, ...a), clearTimeout, setInterval: () => 0, Promise });
+const ctx = vm.createContext({ CIZ_LOCALES: require('./lib/locales').load(), browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, Blob: require('buffer').Blob, btoa: s => Buffer.from(s, 'binary').toString('base64'), setTimeout: (fn, ms, ...a) => ms === 30 * 60 * 1000 ? longTimers.push(fn) : setTimeout(fn, ms, ...a), clearTimeout, setInterval: () => 0, Promise });
 ctx.window = ctx;
 for (const f of JSON.parse(fs.readFileSync(EXT + 'manifest.json', 'utf8')).background.scripts) vm.runInContext(fs.readFileSync(EXT + f, 'utf8'), ctx, { filename: f });
 const g = name => vm.runInContext(name, ctx);

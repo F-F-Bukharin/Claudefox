@@ -23,6 +23,7 @@ const menuItems = [];
 const counts = { opened: 0 };
 let menuClick = null;
 const bg = vm.createContext({
+  CIZ_LOCALES: require('./lib/locales').load(),   // lib/i18n.js reads the texts from here
   console, setTimeout, clearTimeout,
   browser: {
     menus: {
@@ -41,7 +42,7 @@ const bg = vm.createContext({
     runtime: { onConnect: { addListener() {} }, onMessage: { addListener() {} } },
   },
 });
-for (const f of ['lib/policy.js', 'lib/state.js', 'lib/siteGate.js', 'lib/bg-panel.js', 'lib/bg-menus.js']) {
+for (const f of ['lib/i18n.js', 'lib/policy.js', 'lib/state.js', 'lib/siteGate.js', 'lib/bg-panel.js', 'lib/bg-menus.js']) {
   try { vm.runInContext(read(f), bg, { filename: f }); } catch (e) { ok(`loads ${f}`, false, e.message); }
 }
 const g = expr => vm.runInContext(expr, bg);

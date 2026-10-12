@@ -11,20 +11,16 @@ const { killTree } = require('./army');
 const { createWatchGate } = require('./watchgate');
 const { createWatchRuns } = require('./watchrun');
 const watchvideo = require('./watchvideo');
+const T = require('./confirmtexts');
 
-// The two questions: the Settings switches and the card's Allow. Each resolves true only on Yes.
-const WATCH_TEXT = 'It runs Python, yt-dlp and ffmpeg on this PC.';
-const WATCH_QUESTIONS = {
-  watch: { title: 'Claude in Zen: let Claude watch videos for this session?', yes: 'Turn on', no: 'Cancel' },
-  watch_on_load: { title: 'Claude in Zen: let Claude watch videos every time the panel opens?', yes: 'Turn on', no: 'Keep off' },
-};
+// The two questions: the Settings switches and the card's Allow (texts in confirmtexts.js). Each resolves true only on Yes.
+const WATCH_QUESTIONS = { watch: 'watch', watch_on_load: 'watchOnLoad' };
 
 // deps: { confirm, confirmed, sendAddon, grants }. Returns { watchWindow, saveWatchOnLoad, sendWatchState, watchLoad,
 // gate, watchRuns, watchDeps }.
 function createWatchWiring({ confirm, confirmed, sendAddon, grants }) {
   function watchWindow(kind) {
-    const q = WATCH_QUESTIONS[kind];
-    return confirm.ask({ title: q.title, text: WATCH_TEXT, yes: q.yes, no: q.no }).then(r => r.ok === true);
+    return confirm.ask(T.q(WATCH_QUESTIONS[kind])).then(r => r.ok === true);
   }
 
   // The saved answer to "every time the panel opens" (P.WATCH_ON_LOAD): true or false, or null when never asked.

@@ -28,6 +28,7 @@ const { extractText, kindOf: docKind } = require('./lib/doctext');
 const armyguard = require('./lib/armyguard');
 const { killTree } = require('./lib/army');
 const { createConfirm } = require('./lib/confirm');
+const confirmTexts = require('./lib/confirmtexts');
 const { createLocalPages, createGrants } = require('./lib/localpages');
 const watchvideo = require('./lib/watchvideo');
 const { createAccounts } = require('./lib/accounts');
@@ -180,6 +181,7 @@ function onAddon(msg) {
   switch (msg.type) {
     case 'hello':
       addonVersion = String(msg.version || '?');
+      confirmTexts.setLang(msg.lang);   // the language of the confirm windows (an older add-on sends none: English)
       log.info(`add-on ${addonVersion} connected`);
       sendAddon({ type: 'hello', version: VERSION, server: `host ${VERSION}`, clients: clientNames(), ...sourceInfo() });
       sendConfirmedState();
@@ -187,6 +189,10 @@ function onAddon(msg) {
       sendGrants();
       toolbox.push(activeId());
       toolbox.ensureFresh(activeId()).then(() => toolbox.push(activeId())).catch(e => log.warn('tools scan', e.message));
+      return;
+
+    case 'lang':   // Settings > Language changed
+      confirmTexts.setLang(msg.lang);
       return;
 
     case 'result': {

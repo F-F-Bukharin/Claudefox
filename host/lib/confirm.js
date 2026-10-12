@@ -11,6 +11,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const log = require('./log');
 const { testHook } = require('./paths');
+const T = require('./confirmtexts');
 
 const ASK_MS = 120000;
 const SCRIPT = path.join(__dirname, '..', 'confirm.ps1');
@@ -25,8 +26,9 @@ function createConfirm(deps) {
 
   function runOne(q) {
     return new Promise(resolve => {
-      const env = { ...process.env, CIZ_Q_TITLE: String(q.title || 'Claude in Zen').slice(0, 120), CIZ_Q_TEXT: cleanText(q.text || '').slice(0, 3000),
-        CIZ_Q_YES: String(q.yes || 'Yes').slice(0, 40), CIZ_Q_NO: String(q.no || 'No').slice(0, 40) };
+      const lang = T.getLang();   // a text may be a string or { en, pt_BR }: the language at the moment the window opens
+      const env = { ...process.env, CIZ_Q_TITLE: String(T.pick(q.title, lang) || 'Claude in Zen').slice(0, 120), CIZ_Q_TEXT: cleanText(T.pick(q.text, lang) || '').slice(0, 3000),
+        CIZ_Q_YES: String(T.pick(q.yes, lang) || 'Yes').slice(0, 40), CIZ_Q_NO: String(T.pick(q.no, lang) || 'No').slice(0, 40) };
       const testExe = testHook('CLAUDE_IN_ZEN_CONFIRM');
       let exe, args;
       if (testExe) { exe = testExe; args = []; }
@@ -55,7 +57,7 @@ function createConfirm(deps) {
     });
   }
 
-  // { title, text, yes, no } -> Promise<{ ok, error }>. Questions wait their turn.
+  // { title, text, yes, no } (each a string or { en, pt_BR }, see confirmtexts.js) -> Promise<{ ok, error }>. Questions wait their turn.
   function ask(q) {
     const p = queue.then(() => runOne(q));
     queue = p.catch(() => {});

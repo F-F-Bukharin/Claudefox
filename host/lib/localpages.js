@@ -16,6 +16,7 @@ const { spawn, execFile } = require('child_process');
 const { pathToFileURL, fileURLToPath } = require('url');
 const guard = require('./guard');
 const log = require('./log');
+const T = require('./confirmtexts');
 const { extractText, kindOf } = require('./doctext');
 
 const TAB_MS = 20000;                     // the add-on looks for the new tab for up to 10 s
@@ -135,11 +136,7 @@ function createLocalPages(deps) {
     if (deps.asking) deps.asking(folder);
     let r;
     try {
-      r = await deps.confirm({
-        title: 'Claude in Zen: allow a folder?',
-        text: `Claude asks to look in this folder and its subfolders:\n\n${folder}\n\nClaude was reading: ${siteOf(reading) || 'no page'}\n\nIt may then open, list and read the files there, until you remove the folder in Claude in Zen's Profile, Permissions. Army workers never look there.`,
-        yes: 'Allow this folder', no: 'Deny',
-      });
+      r = await deps.confirm(T.now('folder', folder, siteOf(reading) || T.both('folder.noPage')));
     } finally { if (deps.asking) deps.asking(''); }
     if (!r || !r.ok) throw new Error(`The user did not allow Claude to look in ${folder}. ${(r && r.error) || ''}`.trim());
     deps.grants.add(folder);

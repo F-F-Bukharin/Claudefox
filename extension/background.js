@@ -12,6 +12,9 @@ let nextActionId = 1;
 
 // ---------------------------------------------------------------- startup
 
+// The language (lib/i18n.js): the helper's confirm windows follow it, so it hears when Settings > Language changes it.
+cizI18n.onChange(lang => { sendNative({ type: 'lang', lang }); });
+
 const booted = (async function init() {
   await cizState.load();
   cizState.onChange(pushToPanels);

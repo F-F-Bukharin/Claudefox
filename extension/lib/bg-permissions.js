@@ -19,11 +19,11 @@ async function stopAll(source) {
   sendNative({ type: 'watch_off' });   // before the helper goes: watching off, and a waiting card is cancelled
   sendNative({ type: 'download_off' });   // a picture card waiting is cancelled, and a download in progress stops
   sendNative({ type: 'trusted_off' });   // Trusted goes off with the other switches
-  disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
+  disconnectNative(t('bg_nativeUserStopped'));   // the helper exits, which kills any running Claude Code turn and its tool server
   endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)
   if (typeof cizSiteGate !== 'undefined') cizSiteGate.cancel();   // an open site card counts as no
   if (typeof cizUploadGate !== 'undefined') cizUploadGate.cancel();   // an open upload card counts as no
-  failChats('Stopped.');
+  failChats(t('bg_stoppedShort'));
   cizNetReset();                 // forget recorded requests, stop watching consoles, the network log's listeners go
   await stopped;
   await cizLocal.cancelAll();    // an open folder question counts as no

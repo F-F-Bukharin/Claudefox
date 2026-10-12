@@ -15,6 +15,7 @@ const path = require('path');
 const { execFile, spawn } = require('child_process');
 const P = require('./paths');
 const log = require('./log');
+const T = require('./confirmtexts');
 
 const SAFE_NAME = /^[\w .:@()+'-]{1,120}$/;            // server and plugin names as Claude Code shows them
 const NEW_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/;    // names for servers the user adds
@@ -463,9 +464,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
       if (kind === 'plugin' ? shellPlugin(item, c) : shellServer(item)) return refuse(`${label}: ${SHELL_WHY}`);
       const runs = kind === 'plugin' ? runsOf(item, c) : item.kind === 'added' && item.local ? [item.target || item.name] : [];
       if (runs.length && !list.includes(id)) {
-        const ok = confirm ? await confirm({ title: 'Claude in Zen: switch on something that runs programs?',
-          text: `Switch on ${label}? Every chat with it on runs this on your PC, with your permissions:\n\n${runs.join('\n')}\n\nA web page could try to trick Claude into using it. Only switch on what you trust.`,
-          yes: 'Switch on', no: 'Cancel' }) : { ok: false, error: 'There is no confirm window.' };
+        const ok = confirm ? await confirm(T.now('runs', label, runs.join('\n'))) : { ok: false, error: 'There is no confirm window.' };
         if (!ok.ok) return refuse(`${label} stays off: ${ok.error}`);
       }
     }
@@ -575,9 +574,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
         args.push('--header', header);
       }
       args.push(name, u.href);
-      question = { kind: 'mcp_remote', title: 'Claude in Zen: add a tool server?',
-        text: `Add the tool server ${name} at ${u.href}? When Claude uses it, what it reads from pages can go to that server.`,
-        yes: 'Add tool', no: 'Cancel' };
+      question = { kind: 'mcp_remote', ...T.now('mcpRemote', name, u.href) };
     } else {
       const parts = splitCommand(target);
       if (!parts.length || target.length > 2000) return emitResult('add', false, 'Give the server\'s address (https://...) or the command that starts it.');
@@ -588,9 +585,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
       }
       args = ['mcp', 'add', '--scope', 'user', name, '--', ...parts];
       local = true;
-      question = { kind: 'mcp_local', title: 'Claude in Zen: add a tool that runs a program?',
-        text: `Add the tool "${name}"? Every chat with it switched on runs this on your PC, one argument per line:\n\n${parts.join('\n')}\n\nOnly add tools you trust.`,
-        yes: 'Add tool', no: 'Cancel' };
+      question = { kind: 'mcp_local', ...T.now('mcpLocal', name, parts.join('\n')) };
     }
     busy = 'adding';
     push(key);
@@ -643,9 +638,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
     push(key);
     try {
       // Plugins can run programs on this PC (hooks and tool servers): the user says yes in the confirm window.
-      const ok = confirm ? await confirm({ title: 'Claude in Zen: install a plugin?',
-        text: `Install the plugin "${s}"${src ? ` from ${src}` : ''}?\n\nPlugins can run programs on your PC (hooks and tool servers). Only install plugins you trust.`,
-        yes: 'Install', no: 'Cancel' }) : { ok: false, error: 'There is no confirm window.' };
+      const ok = confirm ? await confirm(src ? T.now('installFrom', s, src) : T.now('install', s)) : { ok: false, error: 'There is no confirm window.' };
       if (!ok.ok) return emitResult('install', false, `Not installed: ${ok.error}`);
       const r = await run(key, args, 180000);
       let res = null;

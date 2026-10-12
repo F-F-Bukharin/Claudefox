@@ -126,8 +126,9 @@ const TRUSTED_NOTE = 'Claude acts on any site without asking. Pages can try to s
         cancel: () => siteCalls.push(['cancel']),
       },
     };
+    sb.CIZ_LOCALES = require('./lib/locales').load();   // lib/i18n.js reads the texts from here
     const bgCtx = vm.createContext(sb);
-    for (const f of ['lib/policy.js', 'lib/state.js', 'lib/bg-permissions.js', 'lib/bg-panel.js']) vm.runInContext(fs.readFileSync(dir + f, 'utf8'), bgCtx, { filename: f });
+    for (const f of ['lib/i18n.js', 'lib/policy.js', 'lib/state.js', 'lib/bg-permissions.js', 'lib/bg-panel.js']) vm.runInContext(fs.readFileSync(dir + f, 'utf8'), bgCtx, { filename: f });
     vm.runInContext('askConfirm = async p => { askCalls.push(p); return confirmAnswer; };', bgCtx);   // the confirm window: records the question
     const bg = code => vm.runInContext(code, bgCtx);
     const panelBg = msg => bg(`handlePanel(${JSON.stringify(msg)}, { postMessage() {} })`);

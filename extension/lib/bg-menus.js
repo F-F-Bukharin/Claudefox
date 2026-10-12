@@ -5,9 +5,15 @@
 if (browser.menus) {
   const quoteLines = text => text.slice(0, 2000).split('\n').map(line => '> ' + line).join('\n');
   const about = (what, title, url) => 'About this ' + what + ': ' + (title ? title + ' (' + url + ')' : url) + '\n\n';
-  browser.menus.create({ id: 'ask-selection', title: 'Ask Claude about this selection', contexts: ['selection'] });
-  browser.menus.create({ id: 'ask-page', title: 'Ask Claude about this page', contexts: ['page'] });
-  browser.menus.create({ id: 'ask-link', title: 'Ask Claude about this link', contexts: ['link'] });
+  const TITLES = { 'ask-selection': 'bg_menuSelection', 'ask-page': 'bg_menuPage', 'ask-link': 'bg_menuLink' };
+  browser.menus.create({ id: 'ask-selection', title: t(TITLES['ask-selection']), contexts: ['selection'] });
+  browser.menus.create({ id: 'ask-page', title: t(TITLES['ask-page']), contexts: ['page'] });
+  browser.menus.create({ id: 'ask-link', title: t(TITLES['ask-link']), contexts: ['link'] });
+  // The menu is built once, so a language change renames its items.
+  cizI18n.onChange(() => {
+    if (!browser.menus.update) return;
+    for (const id of Object.keys(TITLES)) { try { Promise.resolve(browser.menus.update(id, { title: t(TITLES[id]) })).catch(() => {}); } catch {} }
+  });
   browser.menus.onClicked.addListener((info, tab) => {
     const pageUrl = String(tab.url || '');
     let text;

@@ -184,12 +184,12 @@ async function accountNote(ok, text) {
 async function accountAction(type, id, retry) {
   if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first.');
   if (chatRuns.size && type !== 'account_signin') {
-    if (type === 'account_use') await accountNote(false, 'Claude is still answering. Switch accounts after it finishes.');
+    if (type === 'account_use') await accountNote(false, t('bg_acctBusy'));
     return cizState.addLog('error', 'Claude is still answering. Try again after it finishes.');
   }
   const accountId = String(id || '');
   if (!sendNative({ type, id: accountId })) {
-    if (type === 'account_use') await accountNote(false, 'The helper is not connected, so the chat did not switch.');
+    if (type === 'account_use') await accountNote(false, t('bg_acctNoHelper'));
     return cizState.addLog('error', 'Accounts: the helper is not connected.');
   }
   if (type === 'account_use') await cizState.set({ accountBusy: accountId, accountNote: null });
@@ -209,13 +209,13 @@ async function onAccountResult(msg) {
       await cizState.set({ accountBusy: '' });
       if (!msg.ok) {
         pendingRetry = null;
-        await accountNote(false, msg.error || 'The chat did not switch.');
+        await accountNote(false, msg.error || t('bg_acctNoSwitch'));
         return cizState.addLog('error', `Switch failed: ${msg.error}`);
       }
       await cizState.set({ chatSession: '' });   // conversations belong to the account that had them
       await followClaudeAccount();   // if claude.ai is already on the chosen account, the add-on follows it now
       const who = msg.email || accountLabel(id);
-      await accountNote(true, `The chat now uses ${who}. Your next message runs on it.`);
+      await accountNote(true, t('bg_acctNow', who));
       await cizState.addLog('info', `Chat now uses ${who}`);
       if (pendingRetry && pendingRetry.id === id) postToPanels({ type: 'retry', text: pendingRetry.text });
       pendingRetry = null;

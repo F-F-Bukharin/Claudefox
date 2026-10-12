@@ -76,7 +76,7 @@ async function startChat(msg) {
   };
   if (!id || (!text.trim() && !attachments.length && !improve)) return;
   if (chatRuns.size || chatReserved) {
-    if (chatQueue.length >= CHAT_QUEUE_MAX) return fail('Too many messages are waiting. Wait for Claude to catch up.');
+    if (chatQueue.length >= CHAT_QUEUE_MAX) return fail(t('bg_queueFull'));
     chatQueue.push({ id, msg });
     if (msg.scheduled) cizMacros.waitOrSkip(id, msg.scheduled.macro);   // a scheduled run waits up to 30 minutes
     postToPanels({ type: 'chatQueued', id });
@@ -93,11 +93,11 @@ async function startChatNow(msg, id, text, improve, attachments, fail) {
   const sched = msg.scheduled && typeof msg.scheduled === 'object' && msg.scheduled.macro ? { macro: String(msg.scheduled.macro).slice(0, 40), sites: (Array.isArray(msg.scheduled.sites) ? msg.scheduled.sites : []).map(String) } : null;
   const forceArmy = !improve && !sched && msg.army === true;
   const armyMax = !improve && !sched && (forceArmy || (s.chatModel === 'quality' && s.chatArmy)) ? await armyMaxOn() : false;
-  if (s.agent !== 'active') return fail('Claude is stopped. Press Start first.');
-  if (!s.signedIn) return fail('Not signed in. Open the Profile page and sign in first.');
-  if (s.native !== 'connected') return fail('The helper is not connected. Run "Set up Claude in Zen.bat", then press retry in Settings.');
-  if (s.claude && !s.claude.installed) return fail('Claude Code is not installed on this PC.');
-  if (s.claude && !s.claude.loggedIn) return fail('Claude Code is not signed in. Double-click "Sign in Claude Code.bat" in the tools folder.');
+  if (s.agent !== 'active') return fail(t('bg_stopped'));
+  if (!s.signedIn) return fail(t('bg_notSignedIn'));
+  if (s.native !== 'connected') return fail(t('bg_helperNotConnected'));
+  if (s.claude && !s.claude.installed) return fail(t('bg_claudeNotInstalled'));
+  if (s.claude && !s.claude.loggedIn) return fail(t('bg_claudeNotSignedIn'));
   const files = !improve && !sched && s.filesEnabled ? s.filesMode : '';
   const model = improve ? 'selfimprove' : sched ? 'speed' : forceArmy ? (armyMax ? 'armymax' : 'army') : s.chatModel === 'quality' ? (s.chatArmy ? (armyMax ? 'armymax' : 'army') : 'quality') : s.chatPlus ? 'speedplus' : 'speed';
   const winId = typeof msg.windowId === 'number' ? msg.windowId : null;
@@ -127,7 +127,7 @@ async function startChatNow(msg, id, text, improve, attachments, fail) {
   const sent = sendNative({ type: 'chat', id, text, model, tab, resume, files, folder: files ? s.filesFolder : '',
     unsafe: !improve && !sched && !!s.unsafe, caveman: !improve && !sched && !!s.caveman, attachments, improve,
     sites, trusted: !improve && !sched && !!s.trusted, scheduled: !!sched });
-  if (!sent) { chatRuns.delete(id); chatBusyPush(); cizSiteGate.end(id); return fail('Could not reach the helper.'); }
+  if (!sent) { chatRuns.delete(id); chatBusyPush(); cizSiteGate.end(id); return fail(t('bg_helperUnreachable')); }
   await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
     : sched ? `scheduled macro ${sched.macro} → Claude Code, Speed, reading ${sched.sites.join(', ')}`
     : `chat → Claude Code, ${ARMY_LABEL[model] || model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
@@ -189,7 +189,7 @@ function connectNative() {
     return;
   }
   nativePort = port;
-  cizState.set({ native: 'unknown', nativeDetail: 'connecting…' });
+  cizState.set({ native: 'unknown', nativeDetail: t('bg_nativeConnecting') });
 
   port.onMessage.addListener(msg => {
     onNativeMessage(msg).catch(e => cizState.addLog('error', `Helper message failed: ${e.message}`));
@@ -201,23 +201,23 @@ function connectNative() {
     if (cizState.get().accountBusy) cizState.set({ accountBusy: '' });
     if (cizState.get().folderPicking) cizState.set({ folderPicking: false });
     for (const done of [...outputWaiters.values()]) done({ ok: false, error: 'the helper stopped' });
-    failChats('The helper stopped, so the answer was cut off.');
+    failChats(t('bg_helperCutOff'));
     cizArmy.closeAll().catch(() => {});   // its workers are gone, so their tabs go too
     cizLocal.cancelAll().catch(() => {});  // and nobody can answer a folder question now
     cizSiteGate.cancel();                  // nor a site question
     endConfirms('The helper stopped.');
     if (err && /No such native application/i.test(err.message)) {
-      cizState.set({ native: 'missing', nativeDetail: 'helper not installed', clients: [] });
+      cizState.set({ native: 'missing', nativeDetail: t('bg_nativeMissing'), clients: [] });
       return;
     }
-    cizState.set({ native: 'error', nativeDetail: err ? err.message : 'helper stopped', clients: [] });
+    cizState.set({ native: 'error', nativeDetail: err ? err.message : t('bg_nativeStopped'), clients: [] });
     // The helper dropped on its own (not via Stop): try again a few times.
     if (cizState.get().agent === 'active' && nativeRetries < 3) {
       nativeRetries++;
       nativeRetryTimer = setTimeout(connectNative, 1500 * nativeRetries);
     }
   });
-  sendNative({ type: 'hello', version: browser.runtime.getManifest().version });
+  sendNative({ type: 'hello', version: browser.runtime.getManifest().version, lang: cizI18n.lang() });   // the helper's confirm windows speak it
   if (watchLoadWanted) { watchLoadWanted = false; sendNative({ type: 'watch_load' }); }   // a panel opened before the helper was connected
 }
 
@@ -227,7 +227,7 @@ function disconnectNative(reason) {
     try { nativePort.disconnect(); } catch {}
     nativePort = null;
   }
-  cizState.set({ native: 'unknown', nativeDetail: reason || 'disconnected', clients: [] });
+  cizState.set({ native: 'unknown', nativeDetail: reason || t('bg_nativeDisconnected'), clients: [] });
 }
 
 function sendNative(msg) {
