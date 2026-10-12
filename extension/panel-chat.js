@@ -32,19 +32,19 @@ $('armyMax').addEventListener('change', e => { try { browser.storage.local.set({
 document.addEventListener('click', e => { if (!$('armyCard').hidden && !e.target.closest('#armyCard, #armyBtn')) closeArmy(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('armyCard').hidden) { e.preventDefault(); closeArmy(true); } });
 function armyRunsText(n, tokens) {
-  const t = tokens > 0 ? ` · ${tokenCount(tokens)} tokens` : '';
-  return n > ARMY_RECOMMENDED ? `Runs today: ${n}${t}. That's past the recommended ${ARMY_RECOMMENDED}, so usage is high.`
-    : `Runs today: ${n} of ${ARMY_RECOMMENDED} recommended${t || '.'}`;
+  const tok = tokens > 0 ? ` · ${tokenCount(tokens)} ${t('chat_tokens')}` : '';
+  return n > ARMY_RECOMMENDED ? t('chat_armyRunsHigh', n, tok, ARMY_RECOMMENDED)
+    : t('chat_armyRunsOf', n, ARMY_RECOMMENDED, tok || '.');
 }
 
 // ------------------------------------------------------------ current tab chip
 
 async function refreshContext() {
   try {
-    const [t] = await browser.tabs.query({ active: true, currentWindow: true });
-    $('ctxTab').textContent = t ? (t.title || t.url || 'Untitled') : '—';
-    $('ctxTab').title = t ? t.url || '' : '';
-    showStarters(!!t && /^https?:\/\//i.test(t.url || ''));
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    $('ctxTab').textContent = tab ? (tab.title || tab.url || t('chat_untitled')) : '—';
+    $('ctxTab').title = tab ? tab.url || '' : '';
+    showStarters(!!tab && /^https?:\/\//i.test(tab.url || ''));
   } catch { $('ctxTab').textContent = '—'; }
 }
 browser.tabs.onActivated.addListener(refreshContext);
@@ -69,9 +69,9 @@ function addFiles(list) {
   let total = attachments.reduce((n, a) => n + a.size, 0);
   const problems = [];
   for (const f of Array.from(list || [])) {
-    if (attachments.length >= ATTACH_MAX) { problems.push(`Up to ${ATTACH_MAX} files per message.`); break; }
-    if (f.size > ATTACH_FILE) { problems.push(`${f.name} is over 32 MB.`); continue; }
-    if (total + f.size > ATTACH_TOTAL) { problems.push('Up to 80 MB per message.'); break; }
+    if (attachments.length >= ATTACH_MAX) { problems.push(t('chat_attachMax', ATTACH_MAX)); break; }
+    if (f.size > ATTACH_FILE) { problems.push(t('chat_fileTooBig', f.name)); continue; }
+    if (total + f.size > ATTACH_TOTAL) { problems.push(t('chat_totalTooBig')); break; }
     total += f.size;
     const a = { id: ++attachSeq, name: f.name || 'pasted file', size: f.size, type: f.type || '', file: f };
     if (/^image\//.test(a.type) && f.size < 8 * 1024 * 1024) { try { a.url = URL.createObjectURL(f); } catch {} }
@@ -90,11 +90,11 @@ function renderAttachments() {
     const chip = el('span', 'attchip');
     chip.title = `${a.name} · ${sizeText(a.size)}`;
     if (a.url) { const img = el('img'); img.src = a.url; img.alt = ''; chip.appendChild(img); }
-    else chip.appendChild(el('span', 'ext', ((/\.([a-z0-9]{1,5})$/i.exec(a.name) || [])[1] || 'file').toUpperCase()));
+    else chip.appendChild(el('span', 'ext', ((/\.([a-z0-9]{1,5})$/i.exec(a.name) || [])[1] || t('chat_fileBadge')).toUpperCase()));
     chip.appendChild(el('span', 'an', a.name));
     chip.appendChild(el('span', 'as', sizeText(a.size)));
     const x = el('button', 'ax', '×');
-    x.type = 'button'; x.setAttribute('aria-label', `Remove ${a.name}`);
+    x.type = 'button'; x.setAttribute('aria-label', t('chat_removeFile', a.name));
     x.addEventListener('click', () => { if (a.url) URL.revokeObjectURL(a.url); attachments = attachments.filter(b => b !== a); renderAttachments(); });
     chip.appendChild(x);
     box.appendChild(chip);
@@ -106,7 +106,7 @@ function readAttachment(a) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve({ name: a.name, type: a.type, data: String(r.result).replace(/^data:[^,]*,/, '') });
-    r.onerror = () => reject(new Error(`Could not read ${a.name}.`));
+    r.onerror = () => reject(new Error(t('chat_cantRead', a.name)));
     r.readAsDataURL(a.file);
   });
 }
@@ -148,13 +148,13 @@ const starters = document.querySelector('.starters');
 // The starter chips: five reading chips on a web page, the three commands otherwise. The chips are reused in place, so
 // showStarters changes only their text and fill, and does nothing when the set shown is the one wanted already.
 const WEB_STARTERS = [
-  ['Summarize this page', 'Summarize this page'],
-  ['Key points', 'Give me the key points of this page'],
-  ['Translate to Portuguese (Brazil)', 'Translate this page to Portuguese (Brazil)'],
+  [t('chat_starterSummarize'), 'Summarize this page'],
+  [t('chat_starterKeyPoints'), 'Give me the key points of this page'],
+  [t('chat_starterTranslate'), 'Translate this page to Portuguese (Brazil)'],
   ['/tabs', '/tabs'],
   ['/help', '/help'],
 ];
-const PLAIN_STARTERS = [['Summarize this page', 'Summarize this page'], ['/tabs', '/tabs'], ['/help', '/help']];
+const PLAIN_STARTERS = [[t('chat_starterSummarize'), 'Summarize this page'], ['/tabs', '/tabs'], ['/help', '/help']];
 let shownStarters = null;
 function showStarters(web) {
   const pairs = web ? WEB_STARTERS : PLAIN_STARTERS;
@@ -302,8 +302,8 @@ async function submit() {
   const text = input.value.trim();
   if (!text && !attachments.length && !improveOn) return;
   if (text.startsWith('/') && !attachments.length) { input.value = ''; autoGrow(); addMsg({ role: 'user', text }); return runSlash(text); }
-  if (state.agent === 'stopped') { addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' }); return; }
-  if (!state.signedIn) { addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' }); return; }
+  if (state.agent === 'stopped') { addMsg({ role: 'system', text: t('chat_stopped') }); return; }
+  if (!state.signedIn) { addMsg({ role: 'system', text: t('chat_signInFirst') }); return; }
   if (chat.length === 0 && !accountChoice && acctMismatch()) return showAcctCard();
   const files = attachments;
   attachments = [];
@@ -334,8 +334,8 @@ function acctMismatch() {
   return !!(a && b && a.toLowerCase() !== b.toLowerCase());
 }
 function showAcctCard() {
-  $('accountCardText').textContent = `This browser is signed in to claude.ai as ${state.account.email}, but chats run on Claude Code as ${state.claude.email}.`;
-  $('accountUse').textContent = `Use ${state.claude.email} for this chat`;
+  $('accountCardText').textContent = t('chat_acctText', state.account.email, state.claude.email);
+  $('accountUse').textContent = t('chat_acctUse', state.claude.email);
   $('accountCard').hidden = false;
 }
 function resetAcctCard() { accountChoice = false; $('accountCard').hidden = true; }
@@ -345,20 +345,20 @@ $('accountOpen').addEventListener('click', () => { $('accountCard').hidden = tru
 // The slash commands. The "/" menu lists them all, and the starter chips show only the essentials. A command with an act
 // runs the same action as the + menu; the rest are the test commands (no Claude needed).
 const COMMANDS = [
-  { cmd: 'help', text: 'What the commands do' },
-  { cmd: 'tabs', text: 'List my open tabs' },
-  { cmd: 'research', text: 'Compare the tabs you mention with @' },
-  { cmd: 'screenshot', act: 'snap', text: 'Screenshot of this tab' },
-  { cmd: 'upload', act: 'upload', text: 'Upload files' },
-  { cmd: 'caveman', act: 'caveman', text: 'Caveman mode: short replies' },
-  { cmd: 'tools', act: 'tools', text: 'Tools and plugins' },
-  { cmd: 'improve', act: 'improve', text: 'Improve Claude in Zen' },
-  { cmd: 'clear', text: 'Clear this chat' },
-  { cmd: 'ping', text: 'Check the add-on answers' },
+  { cmd: 'help', text: t('chat_cmdHelp') },
+  { cmd: 'tabs', text: t('chat_cmdTabs') },
+  { cmd: 'research', text: t('chat_cmdResearch') },
+  { cmd: 'screenshot', act: 'snap', text: t('chat_cmdScreenshot') },
+  { cmd: 'upload', act: 'upload', text: t('chat_cmdUpload') },
+  { cmd: 'caveman', act: 'caveman', text: t('chat_cmdCaveman') },
+  { cmd: 'tools', act: 'tools', text: t('chat_cmdTools') },
+  { cmd: 'improve', act: 'improve', text: t('chat_cmdImprove') },
+  { cmd: 'clear', text: t('chat_cmdClear') },
+  { cmd: 'ping', text: t('chat_cmdPing') },
 ];
 function helpText() {
-  return 'Type normally to talk to Claude. It can read and act on your tabs.\n\n'
-    + 'Commands (type / to see them; none needs Claude):\n'
+  return t('chat_helpIntro') + '\n\n'
+    + t('chat_helpCommands') + '\n'
     + COMMANDS.map(c => `/${c.cmd}: ${c.text}`).join('\n');
 }
 async function runSlash(text) {
@@ -368,12 +368,12 @@ async function runSlash(text) {
     await loadMacros();
     const macro = macrosCache.find(m => m.name === cmd);
     if (macro) return sendMacro(macro, text.slice(1 + cmd.length).trim());
-    return addMsg({ role: 'error', text: `Unknown command /${cmd}. Try /help.` });
+    return addMsg({ role: 'error', text: t('chat_unknownCmd', cmd) });
   }
   if (known.act) return doAct(known.act);
   if (cmd === 'research') {   // "Read these tabs and compare them." plus the mentioned tabs; the army runs when Quality has it on
     const named = await tabsToText(text.slice(1 + cmd.length).trim());
-    if (!named.sites.length) return addMsg({ role: 'error', text: 'Mention at least one tab with @' });
+    if (!named.sites.length) return addMsg({ role: 'error', text: t('chat_mentionOne') });
     return sendMacro({ text: 'Read these tabs and compare them.' }, named.text, named.sites);
   }
   if (cmd === 'help') return addMsg({ role: 'assistant', text: helpText() });
@@ -381,14 +381,14 @@ async function runSlash(text) {
   const tool = { tabs: 'tabs_list', ping: 'ping' }[cmd];
   const out = await call(tool);
   if (!out.ok) return addMsg({ role: 'error', text: out.error });
-  if (tool === 'ping') return addMsg({ role: 'assistant', text: `Pong. Add-on v${out.result.version} is answering.` });
-  addMsg({ role: 'assistant', text: `You have ${out.result.length} tab${out.result.length === 1 ? '' : 's'} open:`, tabs: out.result.slice(0, 50) });
+  if (tool === 'ping') return addMsg({ role: 'assistant', text: t('chat_pong', out.result.version) });
+  addMsg({ role: 'assistant', text: out.result.length === 1 ? t('chat_tabsOne', out.result.length) : t('chat_tabsMany', out.result.length), tabs: out.result.slice(0, 50) });
 }
 
 // A macro sends its text like a typed message. With army tasks it sends in Quality with the army on and lists the tasks.
 async function sendMacro(macro, more, tabSites) {
-  if (state.agent === 'stopped') { addMsg({ role: 'system', text: 'Claude is stopped. Press Start (top right) first.' }); return; }
-  if (!state.signedIn) { addMsg({ role: 'system', text: 'Sign in first: Profile page → Sign in with Claude.' }); return; }
+  if (state.agent === 'stopped') { addMsg({ role: 'system', text: t('chat_stopped') }); return; }
+  if (!state.signedIn) { addMsg({ role: 'system', text: t('chat_signInFirst') }); return; }
   const tasks = macro.army || [];
   const text = macro.text + (more ? '\n\n' + more : '') + (tasks.length ? '\n\nTasks for the army:\n' + tasks.map((t, i) => `${i + 1}. ${t}`).join('\n') : '');
   const id = `p${Date.now().toString(36)}${chatSeq++}`;
@@ -539,18 +539,18 @@ async function tabsToText(text) {
 const IMPROVE_EMPTY = 'Improve Claude in Zen: pick one change that helps most.';
 let improveOn = false;
 function startImprove() {
-  if (state.agent === 'stopped' || !state.signedIn) { addMsg({ role: 'system', text: 'Start Claude and sign in first, then improve.' }); return; }
+  if (state.agent === 'stopped' || !state.signedIn) { addMsg({ role: 'system', text: t('chat_improveNeedsStart') }); return; }
   improveOn = true;
   document.body.classList.add('improving');
   $('improveBar').hidden = false;
-  input.placeholder = 'Empty means Claude picks';
+  input.placeholder = t('chat_emptyPicks');
   input.focus();
 }
 function leaveImprove() {
   improveOn = false;
   document.body.classList.remove('improving');
   $('improveBar').hidden = true;
-  input.placeholder = 'Message Claude…';
+  input.placeholder = t('chat_messagePlaceholder');
 }
 $('improveLeave').addEventListener('click', leaveImprove);
 
@@ -577,38 +577,38 @@ function proposalFrom(ev) {
 function proposalCard(m) {
   const p = m.proposal;
   const box = el('div', 'proposal');
-  if (!p.changed) box.appendChild(el('p', 'pnote', 'Claude made no change to the add-on.'));
+  if (!p.changed) box.appendChild(el('p', 'pnote', t('chat_noChange')));
   else {
-    box.appendChild(el('p', 'phead', `Proposed change: ${p.changed} file${p.changed === 1 ? '' : 's'}, +${p.added} −${p.removed}`));
+    box.appendChild(el('p', 'phead', t('chat_proposed', p.changed === 1 ? t('chat_filesOne', p.changed) : t('chat_filesMany', p.changed), p.added, p.removed)));
     const list = el('ul', 'pfiles');
-    for (const f of p.files) list.appendChild(el('li', '', `${f.path}: ${f.status === 'added' ? 'new' : f.status === 'removed' ? 'removed' : 'edited'}, +${f.added} −${f.removed}`));
+    for (const f of p.files) list.appendChild(el('li', '', `${f.path}: ${f.status === 'added' ? t('chat_statusNew') : f.status === 'removed' ? t('chat_statusRemoved') : t('chat_statusEdited')}, +${f.added} −${f.removed}`));
     box.appendChild(list);
   }
   for (const b of p.blocked) box.appendChild(el('p', 'pwarn', b));
   if (p.tests) {
-    box.appendChild(el('p', p.tests.ok ? 'ptests ok' : 'ptests bad', `${p.tests.ok ? 'Tests passed' : 'Tests failed'}: ${p.tests.summary}`));
+    box.appendChild(el('p', p.tests.ok ? 'ptests ok' : 'ptests bad', p.tests.ok ? t('chat_testsPassed', p.tests.summary) : t('chat_testsFailed', p.tests.summary)));
     if (!p.tests.ok && p.tests.tail) box.appendChild(el('pre', 'pdiff', p.tests.tail));
-  } else if (p.changed) box.appendChild(el('p', 'pmuted', 'Not tested: the change was blocked.'));
+  } else if (p.changed) box.appendChild(el('p', 'pmuted', t('chat_notTested')));
   if (p.diff) {
     const det = document.createElement('details');
-    det.appendChild(el('summary', '', 'Show changes'));
+    det.appendChild(el('summary', '', t('chat_showChanges')));
     det.appendChild(el('pre', 'pdiff', p.diff));
     box.appendChild(det);
   }
-  if (p.diffFile) box.appendChild(el('p', 'pmuted', `Whole diff: ${p.diffFile}`));
+  if (p.diffFile) box.appendChild(el('p', 'pmuted', t('chat_wholeDiff', p.diffFile)));
   const st = m.proposalState;
   if (st) box.appendChild(el('p', st.pending ? 'pmuted' : st.ok ? 'pdone' : 'pwarn', st.text));
   if (st && st.ok !== false) return box;   // applying, applied or discarded: nothing more to do here
   if (!p.changed) return box;
   const row = el('div', 'pbtns');
-  const apply = el('button', 'pbtn primary', 'Apply');
+  const apply = el('button', 'pbtn primary', t('chat_apply'));
   apply.type = 'button';
   apply.disabled = !p.canApply;
-  apply.title = p.canApply ? 'Write this change into Claude in Zen' : 'This change did not pass its checks';
-  const discard = el('button', 'pbtn', 'Discard');
+  apply.title = p.canApply ? t('chat_applyTitle') : t('chat_applyBlocked');
+  const discard = el('button', 'pbtn', t('chat_discard'));
   discard.type = 'button';
-  apply.addEventListener('click', () => { setProposalState(p.id, { pending: true, text: 'Applying…' }); send('selfApply', { id: p.id }); });
-  discard.addEventListener('click', () => { setProposalState(p.id, { pending: true, text: 'Discarding…' }); send('selfDiscard', { id: p.id }); });
+  apply.addEventListener('click', () => { setProposalState(p.id, { pending: true, text: t('chat_applying') }); send('selfApply', { id: p.id }); });
+  discard.addEventListener('click', () => { setProposalState(p.id, { pending: true, text: t('chat_discarding') }); send('selfDiscard', { id: p.id }); });
   row.append(apply, discard);
   box.appendChild(row);
   return box;
