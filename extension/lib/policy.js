@@ -26,7 +26,7 @@ const BLOCKED_PATH_PATTERNS = [
 const GOOGLE_HANDS_OFF = 'Google sign-in pages are hands-off (the user can turn on Unsafe mode in Settings)';
 
 // Local pages (lib/local.js): a file: page is open to Claude only inside a folder the user allowed (opts.localGrants).
-// Outside them the answer names the folder to ask about. Army workers never get this far (lib/tools.js).
+// Outside them the answer names the folder to ask about. Army workers never get this far (lib/pageTools.js).
 function cizUrlBlocked(rawUrl, opts) {
   let u;
   try { u = new URL(rawUrl); } catch { return { blocked: true, reason: 'unparseable URL' }; }
@@ -132,13 +132,15 @@ function cizInFolder(path, folder) {
 
 // Rule 2: never type passwords, 2FA codes or payment details.
 // Used by the fill/type tools in P2 to refuse the field outright.
+// Self-contained: pageOp.js turns this function's source into the tab's script, so it may call no helper from this file.
 function cizSensitiveField(desc) {
   const type = String(desc.type || '').toLowerCase();
   if (type === 'password') return 'password field';
+  // Lower case with accents removed: "cartão", "CARTAO" and "cartao" match alike. The words below have no accents.
   const hay = [desc.name, desc.id, desc.autocomplete, desc.label, desc.placeholder]
-    .filter(Boolean).join(' ').toLowerCase();
-  if (/one-time-code|otp|2fa|totp|verification code|security code/.test(hay)) return '2FA code field';
-  if (/cc-|card.?number|cardnumber|cvv|cvc|expir|iban|routing/.test(hay)) return 'payment field';
-  if (/current-password|new-password|passwd|password/.test(hay)) return 'password field';
+    .filter(Boolean).join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (/one-time-code|otp|2fa|totp|verification code|security code|codigo de verificacao|codigo de seguranca|verificacao em duas etapas|codigo de acceso|codigo de verificacion/.test(hay)) return '2FA code field';
+  if (/cc-|card.?number|cardnumber|cvv|cvc|expir|iban|routing|cartao|numero do cartao|nome no cartao|validade do cartao|vencimento|tarjeta|numero de tarjeta|fecha de vencimiento|titular/.test(hay)) return 'payment field';
+  if (/current-password|new-password|passwd|password|senha|contrasena|clave/.test(hay)) return 'password field';
   return null;
 }
