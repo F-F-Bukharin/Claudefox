@@ -23,15 +23,9 @@ You need
    It is safe to run again. If a step stops with a message, fix that and run it again.
 
 2. Load the add-on in Firefox
-   Unsigned build (the usual one for now): Firefox opens about:debugging. Click
-   "Load Temporary Add-on...", paste the path (Ctrl+V) and press Enter, or pick claudefox.xpi
-   from this folder. Firefox forgets temporary add-ons when it closes, so load it again after
-   each restart (the setup does not need to run again).
-   Signed build (whoever sent this will say so; the folder then has a file called SIGNED):
-   Firefox opens about:addons. Gear icon -> Install Add-on From File -> paste the path, Enter.
-   It stays installed.
-   Firefox Developer Edition and Nightly can keep an unsigned build too: about:config ->
-   xpinstall.signatures.required = false, then install it from about:addons as above.
+   The setup opens Firefox on about:addons. Gear icon -> Install Add-on From File -> pick
+   claudefox.xpi from this folder (or paste its path), Enter. It stays installed, and Firefox
+   updates it by itself when a new version comes out.
 
 3. Open the panel
    The Claudefox toolbar button (or the puzzle-piece menu), or Alt+Shift+C. Sign in to

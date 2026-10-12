@@ -68,8 +68,8 @@ try {
   }
   check('the setup prints no parentheses inside an if block', inBlock.length === 0, inBlock.join(' | '));
   const startHere = fs.readFileSync(path.join(s, 'START HERE.txt'), 'latin1');
-  check('START HERE is the Firefox one: Claudefox, about:debugging, claudefox.xpi, no Zen', /^Claudefox - setup for friends/.test(startHere) && startHere.includes('about:debugging')
-    && startHere.includes('claudefox.xpi') && !/zen/i.test(startHere));
+  check('START HERE is the Firefox one: Claudefox, about:addons and no about:debugging, claudefox.xpi, no Zen', /^Claudefox - setup for friends/.test(startHere) && startHere.includes('about:addons')
+    && !startHere.includes('about:debugging') && startHere.includes('claudefox.xpi') && !/zen/i.test(startHere));
   check('panel texts friends read say Firefox', /already open in Firefox\./.test(panel) && /Firefox remembers it after that/.test(panel) && />Using Firefox now</.test(panel)
     && /The panel opens in the sidebar\./.test(panel) && !/title bar above the panel/.test(panel)
     && fs.readFileSync(path.join(s, 'extension', 'background.js'), 'utf8').includes("'Firefox opened: the agent is on.'"));
