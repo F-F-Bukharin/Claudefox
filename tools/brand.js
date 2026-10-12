@@ -74,7 +74,31 @@ function brand(stage) {
     const m = JSON.parse(fs.readFileSync(path.join(stage, 'extension', 'manifest.json'), 'utf8'));
     if (m.name !== NAME) problems.push(`the manifest's name is ${JSON.stringify(m.name)}`);
   } catch (e) { problems.push(`extension/manifest.json: ${e.message}`); }
+  // The GitHub links from tools/release.json: the add-on's homepage and the update file Firefox checks. They are part
+  // of the signed package, so they go in before signing; without them a friend's copy could never update itself.
+  const links = releaseLinks();
+  if (links.error) problems.push(links.error);
+  else {
+    try {
+      const file = path.join(stage, 'extension', 'manifest.json');
+      const m = JSON.parse(fs.readFileSync(file, 'utf8'));
+      m.homepage_url = links.homepage;
+      m.browser_specific_settings = m.browser_specific_settings || {};
+      m.browser_specific_settings.gecko = m.browser_specific_settings.gecko || {};
+      m.browser_specific_settings.gecko.update_url = links.updates;
+      fs.writeFileSync(file, JSON.stringify(m, null, 2) + '\n');
+    } catch (e) { problems.push(`extension/manifest.json: ${e.message}`); }
+  }
   return problems;
+}
+
+// tools/release.json names the public GitHub repo as owner/name. Returns the two addresses, or { error }.
+function releaseLinks(file = path.join(__dirname, 'release.json')) {
+  let repo;
+  try { repo = JSON.parse(fs.readFileSync(file, 'utf8')).repo; } catch (e) { return { error: `tools/release.json: ${e.message}` }; }
+  if (typeof repo !== 'string' || !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(repo)) return { error: `tools/release.json: "repo" must be owner/name, got ${JSON.stringify(repo)}` };
+  const base = `https://github.com/${repo}`;
+  return { repo, homepage: base, updates: `${base}/releases/latest/download/updates.json` };
 }
 
 if (require.main === module) {
@@ -88,4 +112,4 @@ if (require.main === module) {
   console.log(`Branded ${stage} as ${NAME}.`);
 }
 
-module.exports = { brand, NAME, RULES };
+module.exports = { brand, releaseLinks, NAME, RULES };

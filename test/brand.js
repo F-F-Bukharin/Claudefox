@@ -48,6 +48,9 @@ try {
   check('the add-on is called Claudefox, for Firefox, with its id unchanged', m.name === 'Claudefox' && /pages in Firefox\. Not affiliated with or endorsed by Anthropic or Mozilla\./.test(m.description)
     && m.browser_specific_settings.gecko.id === 'claude-in-zen@f.local' && m.sidebar_action.default_title === 'Claudefox', JSON.stringify({ name: m.name, description: m.description }));
   const panel = fs.readFileSync(path.join(s, 'extension', 'panel.html'), 'utf8');
+  check('the friends add-on links to its GitHub page and the update file Firefox checks', m.homepage_url === 'https://github.com/F-F-Bukharin/Claudefox'
+    && m.browser_specific_settings.gecko.update_url === 'https://github.com/F-F-Bukharin/Claudefox/releases/latest/download/updates.json'
+    && m.browser_specific_settings.gecko.id === 'claude-in-zen@f.local', JSON.stringify([m.homepage_url, m.browser_specific_settings.gecko.update_url]));
   check('the empty chat asks "What should Claude do in Firefox?"', panel.includes('What should Claude do in Firefox?') && !panel.includes('What should I do in Zen?') && /<title>Claudefox<\/title>/.test(panel));
   const left = walk(s).filter(f => fs.readFileSync(f, 'latin1').includes('Claude in Zen')).map(f => path.relative(s, f));
   check('no "Claude in Zen" is left anywhere in the copy', left.length === 0, left.join(', '));
@@ -83,6 +86,8 @@ try {
   check('Windows files keep their CRLF line endings', [batText, startHere, fs.readFileSync(path.join(s, 'host', 'install.ps1'), 'latin1')].every(b => b.includes('\r\n') && !/[^\r]\n/.test(b)));
   check('the source and this PC\'s install stay Claude in Zen', JSON.parse(read('extension/manifest.json')).name === 'Claude in Zen' && read('extension/panel.html').includes('What should I do in Zen?')
     && fs.existsSync(path.join(root, 'Set up Claude in Zen.bat')) && read('START HERE.txt').startsWith('Claude in Zen'));
+  const own = JSON.parse(read('extension/manifest.json'));
+  check('this PC\'s own build has no GitHub homepage or update address', !own.homepage_url && !own.browser_specific_settings.gecko.update_url);
 } finally { fs.rmSync(s, { recursive: true, force: true }); }
 
 // A rule that stops matching (someone changed the text) stops the build, naming the rule.
@@ -93,6 +98,15 @@ try {
   const r = run(s2);
   check('a rule with no match fails the build and says which', r.status === 1 && /no match for "What should I do in Zen\?" in extension\/panel\.html/.test(r.stderr), r.stderr);
 } finally { fs.rmSync(s2, { recursive: true, force: true }); }
+
+// Without tools/release.json the friends build stops: an add-on signed without its update address could never update.
+const s3 = stage();
+const lone = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-brand-tools-'));
+try {
+  fs.copyFileSync(path.join(root, 'tools', 'brand.js'), path.join(lone, 'brand.js'));
+  const r = spawnSync(process.execPath, [path.join(lone, 'brand.js'), s3], { encoding: 'utf8' });
+  check('without tools/release.json the friends build stops and says why', r.status === 1 && /tools\/release\.json/.test(r.stderr), r.stderr);
+} finally { fs.rmSync(s3, { recursive: true, force: true }); fs.rmSync(lone, { recursive: true, force: true }); }
 
 // The PowerShell side (no PowerShell here): the friends build brands its copy and packs that copy; the two builds
 // never pick up each other's signed file.
@@ -120,6 +134,19 @@ check('signed builds are matched by name: Claudefox for friends, Claude in Zen f
 check('build-xpi packs another folder when asked, and this PC\'s build by default', /param\(\[string\]\$Source, \[string\]\$Out\)/.test(read('tools/build-xpi.ps1'))
   && /else \{ Join-Path \$root 'build\\claude-in-zen\.xpi' \}/.test(read('tools/build-xpi.ps1')));
 check('the changed PowerShell keeps CRLF', ['tools/build-friends.ps1', 'tools/build-xpi.ps1', 'tools/xpi-tools.ps1', 'tools/install-xpi.ps1'].every(f => { const t = read(f); return t.includes('\r\n') && !/[^\r]\n/.test(t); }));
+
+// Releases (PowerShell, read here): the signed Claudefox of this version with its update address checked, updates.json
+// with the asset's link and hash, and the public clone refreshed without touching its own files.
+const has = f => fs.existsSync(path.join(root, f));
+const rel = has('tools/prepare-release.ps1') ? read('tools/prepare-release.ps1') : '';
+const relBat = has('tools/Prepare release.bat') ? read('tools/Prepare release.bat') : '';
+check('the release step takes the signed Claudefox of this version and checks its update address', /Find-SignedXpi \$root \$v 'Claudefox'/.test(rel)
+  && /\.browser_specific_settings\.gecko\.update_url -ne \$updates/.test(rel) && /releases\/latest\/download\/updates\.json/.test(rel));
+check('updates.json links the release asset with its sha256, written without a BOM', /releases\/download\/v\$v\/\$name/.test(rel)
+  && /"update_hash": "sha256:\$hash"/.test(rel) && /Get-FileHash .*-Algorithm SHA256/.test(rel) && /New-Object Text\.UTF8Encoding \$false/.test(rel));
+check('the public clone gets the branded build and keeps its README, LICENSE, .gitattributes and .git', /New-ClaudefoxStage \$root \$stage/.test(rel)
+  && /robocopy .*\/MIR/.test(rel) && /\/XD \.git/.test(rel) && /\/XF README\.md LICENSE \.gitattributes/.test(rel));
+check('the release files keep CRLF and the .bat runs the script', rel !== '' && relBat !== '' && [rel, relBat].every(t => t.includes('\r\n') && !/[^\r]\n/.test(t)) && /prepare-release\.ps1/.test(relBat));
 
 console.log(`${passed} checks passed${failed ? `, ${failed} failed` : ''}`);
 process.exitCode = failed ? 1 : 0;
