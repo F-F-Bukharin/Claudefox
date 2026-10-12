@@ -61,6 +61,12 @@
         <p class="muted small">Watching runs Python, yt-dlp and ffmpeg on this PC.</p>
         <div class="row"><button id="watchAllow" type="button">Allow</button> <button id="watchDeny" type="button">Deny</button></div>
       </div>
+      <!-- Claude asks before it uses a page on a site. Allow and Deny are the only answers to a risky step. -->
+      <div id="siteCard" class="card" hidden>
+        <p>Claude wants to use <span id="siteCardSite" class="mono"></span></p>
+        <p id="siteCardAction" class="muted small"></p>
+        <div class="row"><button id="siteMsg" type="button">Allow this message</button> <button id="siteChat" type="button">Allow this chat</button> <button id="siteAllow" type="button">Allow</button> <button id="siteDeny" type="button">Deny</button></div>
+      </div>
       <!-- Claude asks to look in a folder on this computer: the answer is given in the helper's confirm window -->
       <div id="grantAsk" class="confirm grant-ask" role="status" aria-labelledby="grantTitle" aria-describedby="grantFolder" hidden>
         <p id="grantTitle"><b>Claude asks to look in this folder</b></p>
@@ -210,6 +216,11 @@
       </div>
       <p id="unsafeNote" class="muted small unsafe-note"></p>
       <div class="row">
+        <label for="trustedToggle">Trusted</label>
+        <span class="val"><input type="checkbox" id="trustedToggle" class="switch"></span>
+      </div>
+      <p id="trustedNote" class="muted small">Claude acts on any site without asking. Pages can try to steer it.</p>
+      <div class="row">
         <label for="watchToggle">Watch videos</label>
         <span class="val"><input type="checkbox" id="watchToggle" class="switch"></span>
       </div>
@@ -224,6 +235,15 @@
       </div>
       <ul id="localList" class="locallist" aria-label="Folders Claude may look in"></ul>
       <p id="localNote" class="muted small local-note"></p>
+      <div class="row">
+        <span>Sites</span>
+        <span class="val">Allow or Block</span>
+      </div>
+      <ul id="siteList" class="locallist" aria-label="Sites Allow or Block applies to"></ul>
+      <div class="row">
+        <input type="text" id="siteAdd" placeholder="example.org" aria-label="Site to add">
+        <button type="button" id="siteAddBtn">Add site</button>
+      </div>
       <div class="row">
         <span>Google sign-in pages</span>
         <span class="val" id="googleVal">always hands-off</span>

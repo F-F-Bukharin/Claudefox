@@ -140,6 +140,35 @@ function renderLocal(s) {
   $('localNote').classList.toggle('warnnote', s.fileAccess === 'no');
 }
 
+// Sites (Profile, Permissions): the list the background keeps in storage.local sites. Allow and Block are the choices, and Remove
+// takes a site off the list. A change to the stored list redraws it.
+function renderSites(sites) {
+  const list = $('siteList');
+  list.textContent = '';
+  for (const site of Object.keys(sites)) {
+    const li = el('li');
+    const name = el('span', 'mono', site);
+    const choices = ['allow', 'block'].map(value => {
+      const b = actBtn(value === 'allow' ? 'Allow' : 'Block', 'link', () => send('siteListSet', { site, value }));
+      b.setAttribute('aria-pressed', String(sites[site] === value));
+      return b;
+    });
+    const rm = actBtn('Remove', 'link', () => send('siteListSet', { site, value: null }));
+    li.append(name, ...choices, rm);
+    list.appendChild(li);
+  }
+}
+$('siteAddBtn').addEventListener('click', () => {
+  const site = $('siteAdd').value.trim();
+  if (!site) return;
+  $('siteAdd').value = '';
+  send('siteListSet', { site, value: 'allow' });
+});
+try {
+  browser.storage.local.get('sites').then(got => renderSites(got.sites || {}));
+  browser.storage.onChanged.addListener((changes, area) => { if (area === 'local' && changes.sites) renderSites(changes.sites.newValue || {}); });
+} catch {}
+
 // Tools and plugins (Settings). Switches, sign-in, add and remove go to the helper through the background page.
 $('toolsCheck').addEventListener('click', () => send('toolsCheck'));
 $('addBtn').addEventListener('click', () => {
@@ -196,6 +225,17 @@ $('watchOnLoadToggle').addEventListener('change', e => {
 $('watchAllow').addEventListener('click', () => answerWatch(true));
 $('watchDeny').addEventListener('click', () => answerWatch(false));
 function answerWatch(allow) { if (state.watchAsk) send('watchAnswer', { id: state.watchAsk.id, allow }); }
+$('siteMsg').addEventListener('click', () => answerSite('message'));
+$('siteChat').addEventListener('click', () => answerSite('chat'));
+$('siteDeny').addEventListener('click', () => answerSite('deny'));
+$('siteAllow').addEventListener('click', () => answerSite('allow'));
+function answerSite(choice) { if (state.siteAsk) send('siteAnswer', { id: state.siteAsk.id, choice }); }
+// Trusted: a turn-on waits for the helper's confirm window, so the switch shows the state until that says yes
+$('trustedToggle').addEventListener('change', e => {
+  const on = e.target.checked;
+  if (on) e.target.checked = !!state.trusted;
+  send('setTrusted', { on });
+});
 let watchShownId = '';   // the card id last shown to the helper: watchShown goes once per id
 
 // ------------------------------------------------------------ accounts (Profile)

@@ -104,6 +104,12 @@ async function handlePanel(msg, port) {
     case 'setWatchOnLoad': return setWatchOnLoad(!!msg.value);
     case 'watchShown':     return sendNative({ type: 'watch_shown', id: String(msg.id || '').slice(0, 40) });
     case 'watchAnswer':    return sendNative({ type: 'watch_answer', id: String(msg.id || '').slice(0, 40), allow: !!msg.allow });
+    case 'siteShown':      if (typeof cizSiteGate !== 'undefined') cizSiteGate.shown(String(msg.id || '').slice(0, 40)); return;
+    case 'siteAnswer':
+      if (typeof cizSiteGate !== 'undefined' && ['message', 'chat', 'deny', 'allow'].includes(msg.choice)) cizSiteGate.answer(String(msg.id || '').slice(0, 40), msg.choice);
+      return;
+    case 'setTrusted':     return setTrusted(!!msg.on);
+    case 'siteListSet':    return siteListSet(msg.site, msg.value);
     case 'localGrantRemove': return cizLocal.remove(String(msg.folder || '').slice(0, 1000));
     case 'modUpdate':
       if (!sendNative({ type: 'mod_update', id: String(msg.id || ''), enabled: msg.enabled, broken: msg.broken })) return cizState.addLog('error', 'Mods: the helper is not connected, so the change was not saved.');

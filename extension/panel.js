@@ -91,6 +91,9 @@ function claudeLabel(s) {
   return ['ok', c.email ? `signed in · ${c.email}` : 'signed in', `${plan}The chat spends this account.`];
 }
 
+// The site card: the line under "Claude wants to use <site>" for each thing Claude asks to do on the page.
+const SITE_ACTIONS = { read: 'Read the page', act: 'Act on the page', open: 'Open the page', post: 'Submit a form', leave: 'Leave for this site' };
+let siteShownId = '';   // the site card id last shown to the helper: siteShown goes once per id
 function render(s, log) {
   const pill = $('agentPill');
   pill.className = 'pill ' + (s.agent === 'stopped' ? 'stopped' : s.signedIn ? 'active' : '');
@@ -173,6 +176,20 @@ function render(s, log) {
   if (s.watchAsk) {
     $('watchCardSource').textContent = String(s.watchAsk.source || '').slice(0, 200);
     if (watchShownId !== s.watchAsk.id) { watchShownId = s.watchAsk.id; send('watchShown', { id: s.watchAsk.id }); }
+  }
+  // Trusted: the switch mirrors the state (a turn-on waits for the confirm window, see panel-settings.js)
+  $('trustedToggle').checked = !!s.trusted;
+  $('trustedToggle').disabled = s.agent === 'stopped';
+  // the site card: Claude asks before it uses a page on a site; a risky step offers only Allow and Deny
+  $('siteCard').hidden = !s.siteAsk;
+  if (s.siteAsk) {
+    const risky = s.siteAsk.kind === 'risky';
+    $('siteCardSite').textContent = String(s.siteAsk.site || '').slice(0, 200);
+    $('siteCardAction').textContent = SITE_ACTIONS[s.siteAsk.action] || 'Use the page';
+    $('siteMsg').hidden = risky;
+    $('siteChat').hidden = risky;
+    $('siteAllow').hidden = !risky;
+    if (siteShownId !== s.siteAsk.id) { siteShownId = s.siteAsk.id; send('siteShown', { id: s.siteAsk.id }); }
   }
   $('googleVal').textContent = s.unsafe ? 'allowed (Unsafe mode)' : 'always hands-off';
   $('googleVal').classList.toggle('warn', !!s.unsafe);

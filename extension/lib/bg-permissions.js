@@ -1,6 +1,6 @@
 'use strict';
 // Claude in Zen: Stop and Start, the helper's confirm window, and the permission switches: file tools, unsafe mode,
-// watch, and the army. A question left open in the confirm window counts as no.
+// watch, Trusted, the Sites list and the army. A question left open in the confirm window counts as no.
 
 // ---------------------------------------------------------------- Stop
 // Rule 1: Stop cancels pending actions, disconnects the native host and
@@ -10,14 +10,16 @@ async function stopAll(source) {
   // Everything is cut in this first step, before any await: a tool call, a worker's call or a folder question that
   // arrives while the tabs close below already finds the agent stopped and the helper gone. (set() changes the state
   // at once; only saving it waits.)
-  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, pending: 0 });
+  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, trusted: false, siteAsk: null, pending: 0 });
   for (const [id, a] of pendingActions) {
     try { a.controller.abort(new Error('Stopped')); } catch {}
     pendingActions.delete(id);
   }
   sendNative({ type: 'watch_off' });   // before the helper goes: watching off, and a waiting card is cancelled
+  sendNative({ type: 'trusted_off' });   // Trusted goes off with the other switches
   disconnectNative('stopped');   // the helper exits, which kills any running Claude Code turn and its tool server
   endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)
+  if (typeof cizSiteGate !== 'undefined') cizSiteGate.cancel();   // an open site card counts as no
   failChats('Stopped.');
   cizNetReset();                 // forget recorded requests, stop watching consoles
   await stopped;
@@ -109,6 +111,40 @@ async function setUnsafe(value) {
   if (!r.ok) return cizState.addLog('info', `Unsafe mode stays off: ${r.error || 'not allowed in the confirm window.'}`);
   await cizState.set({ unsafe: true });
   await cizState.addLog('warn', 'Unsafe mode on: Claude may act on Google sign-in pages. It still never types passwords, 2FA codes or payment details.');
+}
+
+// Trusted: Claude acts on any site without asking the site card. Session only: Stop, an add-on restart or a Zen restart
+// turns it off, and the helper is told when it does.
+async function setTrusted(on) {
+  if (!on) {
+    sendNative({ type: 'trusted_off' });
+    await cizState.set({ trusted: false });
+    return;
+  }
+  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on Trusted.');
+  const r = await askConfirm({ kind: 'trusted' });
+  if (!r.ok) return cizState.addLog('info', `Trusted stays off: ${r.error || 'not allowed in the confirm window.'}`);
+  await cizState.set({ trusted: true });
+  await cizState.addLog('warn', 'Trusted on: Claude acts on any site without asking until you press Stop or restart Zen. Pages can try to steer it.');
+}
+
+// The Sites list (storage.local sites): a site is its host, lowercase, with one leading www. dropped. Value 'allow' or 'block';
+// null removes the site.
+function listSiteOf(text) {
+  const t = String(text || '').trim();
+  if (!t) return '';
+  try { return new URL(t.includes('://') ? t : 'https://' + t).hostname.replace(/^www\./, ''); } catch { return ''; }
+}
+async function siteListSet(site, value) {
+  const text = String(site || '').trim();
+  if (!text) return;
+  const host = listSiteOf(text);
+  if (!host) return cizState.addLog('error', `Sites: "${text.slice(0, 80)}" is not a site. Type a host name such as example.org.`);
+  if (value !== 'allow' && value !== 'block' && value !== null) return;
+  const { sites } = await browser.storage.local.get('sites');
+  const next = Object.assign({}, sites);
+  if (value === null) delete next[host]; else next[host] = value;
+  await browser.storage.local.set({ sites: next });
 }
 
 // Watch videos (the watch_video tool). The switch lasts for this session: Stop, an add-on restart or a Zen restart turns
