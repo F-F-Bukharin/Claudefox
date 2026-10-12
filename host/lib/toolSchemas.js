@@ -2,6 +2,8 @@
 // The Zen tools Claude sees. The add-on implements each one (extension/lib/tools.js); "progress" is
 // answered by the tool server itself. This file holds the names, descriptions and input schemas.
 
+const { FILE_PAGES_NOT_TABS } = require('./rules');
+
 const TAB = { tab_id: { type: 'integer', description: 'Tab to act on. Omit to use the current tab.' } };
 const REF = { ref: { type: 'string', description: 'Element reference from read_page or find, e.g. "ref_12".' } };
 const SELECTOR = { selector: { type: 'string', description: 'CSS selector, used when no ref is given.' } };
@@ -213,7 +215,7 @@ const TOOLS = [
   {
     name: 'local_page_open',
     title: 'Open local page',
-    description: 'Open a page or file from this computer (an HTML game, a saved page, a PDF, an image) in a new Zen tab, in front, so you can see and use it with screenshot, get_page_text, find, click and press_key. Give its full path or file: URL. The first time in a folder, the user is asked to allow that folder; then the whole folder is open to you. tab_open and navigate cannot open file: pages.',
+    description: 'Open a page or file from this computer (an HTML game, a saved page, a PDF, an image) in a new Zen tab, in front, so you can see and use it with screenshot, get_page_text, find, click and press_key. Give its full path or file: URL. The first time in a folder, the user is asked to allow that folder; then the whole folder is open to you. ' + FILE_PAGES_NOT_TABS,
     inputSchema: obj({
       path: { type: 'string', description: 'Full path, like C:\\Users\\you\\Downloads\\game\\index.html, or a file: URL.' },
     }, ['path']),

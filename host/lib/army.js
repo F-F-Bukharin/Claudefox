@@ -13,6 +13,7 @@ const log = require('./log');
 const guard = require('./guard');
 const { LIMITS, hostOf } = require('./armyguard');
 const { workerArgs } = require('./chatargs');
+const { splitLines } = require('./jsonlines');
 
 const MAX_TASKS = 5;
 const MAX_RUNS_PER_TURN = 2;
@@ -174,11 +175,7 @@ function createArmy(deps) {
       }
     };
     child.stdout.setEncoding('utf8');
-    child.stdout.on('data', d => {
-      buf += d;
-      let i;
-      while ((i = buf.indexOf('\n')) !== -1) { onLine(buf.slice(0, i)); buf = buf.slice(i + 1); }
-    });
+    child.stdout.on('data', d => { buf = splitLines(buf + d, onLine); });
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', d => { stderr = (stderr + d).slice(-4000); });
     child.on('error', e => endWorker(w, 'failed', `Could not run Claude Code: ${e.message}`));
