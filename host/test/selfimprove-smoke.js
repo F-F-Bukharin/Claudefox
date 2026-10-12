@@ -177,6 +177,13 @@ putFile('extension/mods/syntax/panel.js', 'const a = ;\n');
   const modRule = tool => `${tool}(/${G.posix(path.join(sb5.work, 'extension', 'mods'))}/**)`;
   check('an improve run has the five file tools only: no shell, no web, no browser tools', val('--tools') === 'Read,Glob,Grep,Edit,Write' && val('--allowedTools') === `Read,Glob,Grep,${modRule('Edit')},${modRule('Write')}` && a.includes('--strict-mcp-config') && !a.join(' ').includes('Bash') && !a.join(' ').includes('WebSearch'));
   check('an improve run asks for nothing: dontAsk, not acceptEdits, and only the user settings load', val('--permission-mode') === 'dontAsk' && !a.includes('acceptEdits') && val('--setting-sources') === 'user');
+  // The copy lives in the data folder's self/, which the chat's deny rules keep unwritable; deny beats allow, so the
+  // run's own rules must leave the copy's folder out, or Edit and Write on its mods are refused.
+  const runDeny = JSON.parse(fs.readFileSync(val('--settings'), 'utf8')).permissions.deny;
+  const selfRule = tool => `${tool}(/${G.posix(path.dirname(sb5.work))}/**)`;
+  check('the run may write its own copy: its deny rules leave the copies folder out, and the chat keeps it denied',
+    sb5.work.startsWith(S.SELF_DIR) && !runDeny.some(r => r === selfRule('Edit') || r === selfRule('Write') || r === `Edit(/${G.posix(S.SELF_DIR)}/**)`)
+    && G.denyRules().includes(`Edit(/${G.posix(S.SELF_DIR)}/**)`) && runDeny.some(r => r.startsWith('Read(')), JSON.stringify(runDeny.filter(r => r.includes('self'))));
   check('plugins are forced off for the run', JSON.parse(fs.readFileSync(val('--settings'), 'utf8')).enabledPlugins['vidiq@test'] === false);
   const prompt = val('--append-system-prompt');
   check('the master prompt names the copy, the mods folder, and what may not change', prompt.includes(sb5.work) && prompt.includes('extension/mods/') && /Nothing outside extension\/mods\/ may change/.test(prompt));

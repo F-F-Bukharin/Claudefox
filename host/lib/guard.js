@@ -97,7 +97,8 @@ function registryPersonal() {
 // Deny rules for every chat turn (passed in --settings permissions.deny). A protected place gets Read, Edit and Write
 // denies. The data folder, the Startup folder and the PowerShell profiles get Edit and Write denies: Windows and
 // PowerShell run files there. readPersonal is the Documents lookup (the tests inject one).
-function denyRules(readPersonal = registryPersonal) {
+// writable: data-folder subfolders this caller's own run may write (Improve's copies); the chat passes none.
+function denyRules(readPersonal = registryPersonal, { writable = [] } = {}) {
   const rules = new Set();
   const add = (v, file) => {
     const p = escapeRule(posix(v));
@@ -119,7 +120,8 @@ function denyRules(readPersonal = registryPersonal) {
   // The data folder: everything in it except the workspace, where a file-tools folder may sit. Its direct files go by
   // the one-level pattern, its folders (listed each turn) by the recursive one.
   let inBase = [];
-  try { inBase = fs.readdirSync(P.BASE, { withFileTypes: true }).filter(e => e.isDirectory() && !same(e.name, path.basename(P.WORKSPACE))); } catch {}
+  try { inBase = fs.readdirSync(P.BASE, { withFileTypes: true }).filter(e => e.isDirectory() && !same(e.name, path.basename(P.WORKSPACE))
+    && !writable.some(w => same(path.join(P.BASE, e.name), path.resolve(w)))); } catch {}
   noWrite.push(...inBase.map(e => path.join(P.BASE, e.name)));
   for (const v of noWrite) for (const d of new Set([path.resolve(v), real(v)])) {
     for (const tool of ['Edit', 'Write']) rules.add(`${tool}(/${escapeRule(posix(d))}/**)`);

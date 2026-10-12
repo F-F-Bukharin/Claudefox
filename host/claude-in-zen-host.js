@@ -79,6 +79,7 @@ const { findClaude, claudeEnv, statusOf, sendStatus } = createClaudeCode({ accou
 const toolbox = createToolbox({ findClaude, claudeEnv, dirOf: id => accountDir(id), emit: m => sendAddon(m), confirm: q => confirm.ask(q) });
 
 const grants = createGrants(P.LOCAL_GRANTS);
+if (grants.note) log.info(grants.note);
 function sendGrants() { sendAddon({ type: 'local_grants', folders: grants.list() }); }
 const local = createLocalPages({ askAddon, confirm: q => confirm.ask(q), grants, changed: sendGrants,
   asking: folder => sendAddon({ type: 'local_question', folder }) });

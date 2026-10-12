@@ -378,7 +378,7 @@ function args(sandbox, choice, settings) {
   const s = JSON.parse(JSON.stringify(settings || {}));
   if (s.enabledPlugins) for (const k of Object.keys(s.enabledPlugins)) s.enabledPlugins[k] = false;
   s.disableClaudeAiConnectors = true;
-  s.permissions = { deny: guard.denyRules() };
+  s.permissions = { deny: guard.denyRules(undefined, { writable: [SELF_DIR] }) };   // deny beats allow: the copy must stay writable
   const file = path.join(sandbox.dir, 'settings.json');
   fs.writeFileSync(file, JSON.stringify(s, null, 1));
   // Asks nothing (dontAsk refuses what is not allowed), reads wherever the deny rules allow, and edits only the copy's mods.
