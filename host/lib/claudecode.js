@@ -17,7 +17,9 @@ function findClaude() {
   // A test stub for the program's path. It counts only with CLAUDE_IN_ZEN_TEST=1 (lib/paths.js), so a variable in a
   // user's environment cannot point the helper at another program.
   const stub = P.testHook('CLAUDE_IN_ZEN_CLAUDE');
-  if (stub) candidates.push(stub);
+  // A helper under test (CLAUDE_IN_ZEN_TEST=1) uses its stub or nothing: it never falls back to the real Claude Code in the
+  // home folder or on PATH, so no test can start it.
+  if (process.env.CLAUDE_IN_ZEN_TEST === '1') { try { return stub && fs.statSync(stub).isFile() ? stub : null; } catch { return null; } }
   candidates.push(path.join(os.homedir(), '.local', 'bin', names[0]));
   for (const dir of (process.env.PATH || '').split(path.delimiter)) {
     if (dir) for (const n of names) candidates.push(path.join(dir, n));

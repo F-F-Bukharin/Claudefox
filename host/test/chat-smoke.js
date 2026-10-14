@@ -532,6 +532,9 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-pick-'));
     const env2 = { ...process.env, LOCALAPPDATA: tmp2, CLAUDE_IN_ZEN_PICK: pickedDir };
     for (const k of ['CLAUDE_IN_ZEN_TEST', 'CLAUDE_IN_ZEN_PIPE', 'CLAUDE_IN_ZEN_CONFIRM', 'CLAUDE_IN_ZEN_CLAUDE', 'CLAUDE_IN_ZEN_SCRIPT']) delete env2[k];
+    // Without the test hooks this helper would look for the real Claude Code in the home folder and on PATH: give it neither.
+    const empty2 = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-nopath-'));
+    Object.assign(env2, { HOME: tmp2, USERPROFILE: tmp2, PATH: empty2 });
     const helper2 = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env: env2, stdio: ['pipe', 'pipe', 'inherit'] });
     const got2 = []; let buf2 = Buffer.alloc(0);
     helper2.stdout.on('data', chunk => {

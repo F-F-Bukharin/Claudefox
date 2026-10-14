@@ -174,6 +174,14 @@ async function main() {
   check('without CLAUDE_IN_ZEN_TEST the override is ignored, and findClaude finds nothing', unset === 'null', unset);
   check('with CLAUDE_IN_ZEN_TEST=1 the override is the program found', on === fakeClaude, on);
   check('with CLAUDE_IN_ZEN_TEST=0 the override is ignored too', zero === 'null', zero);
+  // A missing stub never falls back: a "claude" on PATH (the real one, on a developer's machine) is not used.
+  const onPath = path.join(bin, process.platform === 'win32' ? 'claude.exe' : 'claude');
+  fs.writeFileSync(onPath, '');
+  const missing = findWith({ CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: path.join(tmp, 'no-such-claude') });
+  check('with CLAUDE_IN_ZEN_TEST=1 and a missing stub, findClaude finds nothing, even with claude on PATH', missing === 'null', missing);
+  const noStub = findWith({ CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: '' });
+  check('with CLAUDE_IN_ZEN_TEST=1 and no stub at all, findClaude finds nothing, even with claude on PATH', noStub === 'null', noStub);
+  fs.unlinkSync(onPath);
 }
 
 main().then(() => {
