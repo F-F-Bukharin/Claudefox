@@ -7,7 +7,7 @@
 const texts = {
   en: {
     'unsafe.title': 'Claude in Zen: turn on Unsafe mode?',
-    'unsafe.text': 'Claude may then act on Google sign-in and account pages like on any other site, to debug sign-in problems. It still never types passwords, 2FA codes or payment details.\n\nUnsafe mode turns off when you press Stop or restart Zen.',
+    'unsafe.text': 'Claude may then act on Google sign-in and account pages like on any other site, to debug sign-in problems. It also stops asking before it uses another site, sends a form, follows a link to another site or saves a picture. It still never types passwords, 2FA codes or payment details.\n\nUnsafe mode turns off when you press Stop or restart Zen.',
     'unsafe.yes': 'Turn on', 'unsafe.no': 'Cancel',
     'trusted.title': 'Claude in Zen: turn on Trusted mode?',
     'trusted.text': 'Claude acts on any site without asking. Pages can try to steer it. It stays on until you press Stop.',
@@ -46,7 +46,7 @@ const texts = {
   },
   pt_BR: {
     'unsafe.title': 'Claude in Zen: ativar o modo Inseguro?',
-    'unsafe.text': 'O Claude poderá então agir em páginas de login e de conta do Google como em qualquer outro site, para depurar problemas de login. Ele continua sem digitar senhas, códigos 2FA ou dados de pagamento.\n\nO modo Inseguro desliga quando você aperta Parar ou reinicia o Zen.',
+    'unsafe.text': 'O Claude poderá então agir em páginas de login e de conta do Google como em qualquer outro site, para depurar problemas de login. Ele também deixa de perguntar antes de usar outro site, enviar um formulário, seguir um link para outro site ou salvar uma imagem. Ele continua sem digitar senhas, códigos 2FA ou dados de pagamento.\n\nO modo Inseguro desliga quando você aperta Parar ou reinicia o Zen.',
     'unsafe.yes': 'Ativar', 'unsafe.no': 'Cancelar',
     'trusted.title': 'Claude in Zen: ativar o modo Confiável?',
     'trusted.text': 'O Claude age em qualquer site sem perguntar. As páginas podem tentar influenciá-lo. O modo fica ativo até você apertar Parar.',

@@ -35,7 +35,7 @@ const NOT_PIC = 'This is not a PNG, JPEG, GIF or WebP picture, so it was not sav
 
 // The test server: every route is described by the table below; hits are recorded with their headers.
 const hits = [];
-let counter = 0;
+let counter = 0, busyHits = 0, busyAlways = 0;
 const routes = {
   '/png': () => ({ type: 'image/png', body: PNG }),
   '/a/cat.jpg': () => ({ type: 'image/jpeg', body: PNG }),
@@ -56,6 +56,8 @@ const routes = {
   '/redir-ftp': () => ({ status: 302, headers: { Location: 'ftp://pics.test/x.png' } }),
   '/nolocation': () => ({ status: 302, body: Buffer.alloc(0) }),
   '/missing': () => ({ status: 404, body: Buffer.from('nope') }),
+  '/busy-once.png': () => (++busyHits === 1 ? { status: 429, headers: { 'Retry-After': '1' }, body: Buffer.from('slow down') } : { body: PNG }),
+  '/busy.png': () => { busyAlways++; return { status: 429, headers: { 'Retry-After': '1' }, body: Buffer.from('slow down') }; },
 };
 const routeFor = p => {
   if (routes[p]) return routes[p];
@@ -218,11 +220,22 @@ async function main() {
     const r = await downloader({ transport }).download({ url: url('/png'), folder: dir });
     const hdr = (seenHttp[0] && seenHttp[0].headers) || {};
     const bad = Object.keys(hdr).filter(k => /^(cookie|authorization|referer)$/i.test(k));
-    check('client sends User-Agent Claudefox and none of the three', r.ok === true && bad.length === 0 && hdr['User-Agent'] === 'Claudefox', `${bad.join(',')} ${hdr['User-Agent']}`);
+    check('client sends a descriptive Claudefox User-Agent with a contact address, an Accept for pictures, and none of the three',
+      r.ok === true && bad.length === 0 && hdr['User-Agent'] === lib.USER_AGENT && /^Claudefox\/\S+ \(.*https:\/\//.test(hdr['User-Agent']) && /image\//.test(hdr.Accept || ''), `${bad.join(',')} ${hdr['User-Agent']}`);
     const served = hits.filter(h => h.path === '/png').pop();
-    check('the server sees the same', !!served && served.headers['user-agent'] === 'Claudefox' && !served.headers.cookie && !served.headers.authorization && !served.headers.referer);
+    check('the server sees the same', !!served && served.headers['user-agent'] === lib.USER_AGENT && !served.headers.cookie && !served.headers.authorization && !served.headers.referer);
     const s = await downloader({ transport }).download({ url: `https://pics.test:${server.address().port}/png`, folder: dir });
     check('https uses transport.https with the pinned lookup', s.ok === true && seenHttps.length === 1 && typeof seenHttps[0].lookup === 'function', s.error || `${seenHttps.length} https request(s)`);
+  });
+
+  await run('HTTP 429: one more try after the wait the site asks for, then a clear refusal', async () => {
+    const dir = freshFolder();
+    const t0 = Date.now();
+    const once = await downloader({ retryCapMs: 60 }).download({ url: url('/busy-once.png'), folder: dir });
+    check('a site that is busy once: the second try saves the picture', once.ok === true && busyHits === 2, once.error || JSON.stringify(once));
+    check('the wait is capped by retryCapMs (Retry-After 1 s, cap 60 ms)', Date.now() - t0 < 900, `${Date.now() - t0} ms`);
+    const always = await downloader({ retryCapMs: 30 }).download({ url: url('/busy.png'), folder: dir });
+    check('a site that stays busy: tried twice, then the limit text', always.ok === false && always.error === lib.LIMITED && busyAlways === 2, `${always.error} ${busyAlways}`);
   });
 
   await run('a missing folder, or a file in its place, is refused', async () => {

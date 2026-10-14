@@ -48,7 +48,7 @@ const CIZ_ACT_TOOLS = new Set(['click', 'hover', 'fill', 'fill_form', 'type_text
 async function cizSiteOpts(args) {
   let blocks = {};
   try { blocks = (await browser.storage.local.get('sites')).sites || {}; } catch {}
-  return { trusted: !!cizState.get().trusted, blocks, army: (args && args.__army) || null };
+  return { trusted: !!cizState.get().trusted || !!cizState.get().unsafe, blocks, army: (args && args.__army) || null };
 }
 
 // true when the tab may be used; false when the tab moved to another site while the user was asked (read it again).
@@ -408,7 +408,7 @@ const CIZ_TOOLS = {
     // Only the chat window's tabs, and a site outside the chat's list shows as id and site only (siteGate.tabView).
     const wid = cizSiteGate.windowId();
     const tabs = await browser.tabs.query(wid != null ? { windowId: wid } : { lastFocusedWindow: true });
-    const opts = { trusted: !!cizState.get().trusted, blocks: (await cizSiteOpts({})).blocks };
+    const opts = { trusted: !!cizState.get().trusted || !!cizState.get().unsafe, blocks: (await cizSiteOpts({})).blocks };
     return tabs.map(t => {
       const view = cizSiteGate.tabView(t, opts);
       const army = view.url !== undefined && cizArmy.owner(t.id);   // a tab an army worker is using, so Claude leaves it to that worker

@@ -146,6 +146,10 @@ const refused = (res, re) => !res.ok && re.test(res.error);
     r = await call('read_page', { tab_id: 2 });
     check('trusted does not lift a block', refused(r, /is blocked in your site list/), JSON.stringify(r));
     await state.set({ trusted: false }); delete local.sites;
+    await state.set({ unsafe: true }); begin(); clear();
+    r = await call('read_page', { tab_id: 2 });
+    check('Unsafe mode counts as trusted: a read outside the list runs without a card', r.ok && did('read:2') && noCard(), JSON.stringify(r));
+    await state.set({ unsafe: false }); delete local.sites;
 
     // 4. acting asks like reading
     begin(); clear();
@@ -248,6 +252,12 @@ const refused = (res, re) => !res.ok && re.test(res.error);
     m = lastChat();
     check('startChat sends trusted true when the state says so', m && m.id === 'chat2' && m.trusted === true, JSON.stringify(m));
     await helperSays({ type: 'chat_done', id: 'chat2', ok: true });
+    await state.set({ trusted: false, unsafe: true });
+    await fromPanel({ type: 'chat', id: 'chat2u', text: 'hi' });
+    m = lastChat();
+    check('startChat sends trusted true in Unsafe mode', m && m.id === 'chat2u' && m.trusted === true && m.unsafe === true, JSON.stringify(m));
+    await helperSays({ type: 'chat_done', id: 'chat2u', ok: true });
+    await state.set({ trusted: true, unsafe: false });
     await fromPanel({ type: 'chat', id: 'chat3', text: 'improve', improve: true });
     m = lastChat();
     check('an improve chat sends sites [] and trusted false', m && m.id === 'chat3' && JSON.stringify(m.sites) === '[]' && m.trusted === false, JSON.stringify(m));

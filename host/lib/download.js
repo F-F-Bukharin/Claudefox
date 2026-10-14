@@ -20,6 +20,10 @@ const NO_FOLDER = 'The folder is not there.';
 const STOPPED = 'Stopped.';
 const FAILED = 'The picture could not be downloaded.';
 const TOO_MANY = 'Too many redirects.';
+const LIMITED = 'The site is limiting downloads right now (HTTP 429). Wait a minute, then try again.';
+// Sites such as Wikimedia answer 429 to a bare client name: they want to know what is asking and how to reach its maker.
+const USER_AGENT = 'Claudefox/0.11 (picture saver in a Firefox add-on; +https://github.com/F-F-Bukharin/Claudefox)';
+const ACCEPT = 'image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.5';
 const REDIRECT_CODES = [301, 302, 303, 307, 308];
 const noop = () => {};
 
@@ -137,7 +141,7 @@ function pin(dial) {
   };
 }
 
-// One GET with only the User-Agent header, no agent, pinned to the dialled addresses.
+// One GET with only the User-Agent and Accept headers (no cookie, no referer), no agent, pinned to the dialled addresses.
 function get(job, u, dial) {
   return new Promise((resolve, reject) => {
     const mod = u.protocol === 'https:' ? job.transport.https : job.transport.http;
@@ -146,7 +150,7 @@ function get(job, u, dial) {
       hostname: bareHost(u),
       port: u.port || (u.protocol === 'https:' ? 443 : 80),
       path: `${u.pathname}${u.search}`,
-      headers: { 'User-Agent': 'Claudefox' },
+      headers: { 'User-Agent': USER_AGENT, Accept: ACCEPT },
       agent: false,
       lookup: pin(dial),
     }, res => { res.on('error', noop); resolve(res); });
@@ -154,6 +158,15 @@ function get(job, u, dial) {
     req.on('error', reject);
     req.end();
   });
+}
+
+// Retry-After in seconds or as a date; missing or odd means 2 s. Never less than 0.5 s or more than cap.
+function retryAfterMs(value, cap) {
+  let ms = 2000;
+  const v = String(value || '').trim();
+  if (/^\d+$/.test(v)) ms = Number(v) * 1000;
+  else if (v && !Number.isNaN(Date.parse(v))) ms = Date.parse(v) - Date.now();
+  return Math.min(Math.max(ms, 500), cap);
 }
 
 // Follows the hops: each one is checked before it is requested, redirects are counted, and the final body is read.
@@ -179,8 +192,18 @@ async function attempt(job, text, folder) {
       u = next.url;
       continue;
     }
+    // Busy (429) or briefly down (503): one more try after the wait the server asks for, at most retryCapMs.
+    if ((status === 429 || status === 503) && !job.retried) {
+      job.retried = true;
+      const wait = retryAfterMs(res.headers['retry-after'], job.retryCapMs);
+      res.destroy();
+      await new Promise(r => setTimeout(r, wait));
+      if (job.halted) throw new Stop(job.halted);
+      continue;
+    }
     if (status < 200 || status > 299) {
       res.destroy();
+      if (status === 429) throw new Stop(LIMITED);
       throw new Stop(`The server did not send the picture (HTTP ${status}).`);
     }
     return store(job, folder, u, await readBody(job, res));
@@ -275,6 +298,7 @@ function createDownloader(opts = {}) {
     maxBytes: 20 * MB,
     timeoutMs: 30000,
     maxRedirects: 3,
+    retryCapMs: 5000,
     transport: { http, https },
     connectTo: address => address,
     ...opts,
@@ -282,4 +306,4 @@ function createDownloader(opts = {}) {
   return { download: args => download(o, args || {}) };
 }
 
-module.exports = { createDownloader, addressAllowed };
+module.exports = { createDownloader, addressAllowed, USER_AGENT, LIMITED };

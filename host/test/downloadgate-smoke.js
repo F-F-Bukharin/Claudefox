@@ -9,7 +9,7 @@ let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
 // A section that throws (a missing module, say) is one FAIL, and the sections after it still run.
 const run = async (name, fn) => { try { await fn(); } catch (e) { check(name, false, String(e.message || e).split('\n')[0]); } };
-const NOT_ALLOWED = 'Claude can save pictures only to the pictures folder or a folder you allowed.';
+const NOT_ALLOWED = 'Claude can save pictures only to the Downloads folder or a folder you allowed.';
 const INFO = { host: 'example.com', name: 'cat.gif', folder: '/home/u/Art' };
 
 // A gate with its cards recorded; the waits are short.
@@ -119,7 +119,10 @@ async function gateSection() {
 async function folderSection() {
   const { pictureFolder } = require('../lib/downloadgate');
   const ctx = { outputDir: path.join('/data', 'out'), allowed: [path.resolve('/home/u/Art')], folderProblem: () => '' };
-  check('folder: no folder goes to the pictures folder of the output folder', pictureFolder({}, ctx).folder === path.join('/data', 'out', 'pictures'));
+  check('folder: with no Downloads folder known, no folder goes to the pictures folder of the output folder', pictureFolder({}, ctx).folder === path.join('/data', 'out', 'pictures'));
+  const dl = path.join('/home', 'u', 'Downloads');
+  check('folder: no folder goes straight into the Downloads folder', pictureFolder({}, Object.assign({}, ctx, { downloadsDir: dl, isDir: f => f === dl })).folder === dl);
+  check('folder: a Downloads folder that is missing falls back to the pictures folder', pictureFolder({}, Object.assign({}, ctx, { downloadsDir: dl, isDir: () => false })).folder === path.join('/data', 'out', 'pictures'));
   check('folder: an allowed folder is used', pictureFolder({ folder: '/home/u/Art' }, ctx).folder === path.resolve('/home/u/Art'));
   check('folder: a folder the user did not allow is refused', pictureFolder({ folder: '/home/u/Other' }, ctx).error === NOT_ALLOWED);
   check('folder: a relative folder is refused', pictureFolder({ folder: 'Art' }, ctx).error === NOT_ALLOWED);
@@ -129,8 +132,34 @@ async function folderSection() {
   check('folder: the guard is asked about it for writing', asked.length === 1 && asked[0][0] === path.resolve('/home/u/Art') && asked[0][1] === 'write', JSON.stringify(asked));
 }
 
+// One Yes covers the message (chat turn); Unsafe mode shows no card at all.
+async function onceSection() {
+  const r = rig();
+  const p1 = r.gate.ask(INFO, { turn: 't1' });
+  r.gate.shown(r.last()); r.gate.answer(r.last(), true);
+  check('once: the first picture of a message asks', (await p1).ok === true && r.shows.length === 1);
+  const again = await r.gate.ask(Object.assign({}, INFO, { name: 'dog.png' }), { turn: 't1' });
+  check('once: a second picture in the same message saves with no new card', again.ok === true && r.shows.length === 1, JSON.stringify(again));
+  const p3 = r.gate.ask(INFO, { turn: 't2' });
+  check('once: the next message asks again', r.shows.length === 2);
+  r.gate.shown(r.last()); r.gate.answer(r.last(), false);
+  check('once: and a No there refuses', (await p3).ok === false);
+  const p4 = r.gate.ask(INFO, { turn: 't2' });
+  check('once: a No does not count as a Yes for the message', r.shows.length === 3);
+  r.gate.cancel(); await p4;
+  const p5 = r.gate.ask(INFO, { turn: 't1' });
+  check('once: Stop forgets the Yes', r.shows.length === 4);
+  r.gate.cancel(); await p5;
+  const none = await r.gate.ask(INFO, { turn: '' });
+  check('once: outside a chat turn every picture asks (no panel here: refused)', none.ok === false && r.shows.length === 5);
+  const shows = r.shows.length;
+  const un = await r.gate.ask(INFO, { turn: 't9', unsafe: true });
+  check('unsafe: Unsafe mode saves with no card', un.ok === true && r.shows.length === shows, JSON.stringify(un));
+}
+
 (async () => {
   await run('gate section', gateSection);
+  await run('once section', onceSection);
   await run('folder section', folderSection);
   console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);
   process.exit(failed ? 1 : 0);

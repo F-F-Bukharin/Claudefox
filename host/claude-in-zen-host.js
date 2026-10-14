@@ -505,17 +505,19 @@ function announceClients() {
 // The helper tools that read a page or a file: a read that worked in a running turn sends page_read (see the dispatch below).
 const PAGE_READ_TOOLS = new Set(['read_document', 'local_files', 'local_file_read', 'watch_video', 'army_wait']);
 // download_image (lib/downloadgate.js): a picture from a public address, saved only after the user allows it in a card.
-// The folder is the pictures folder, or a folder the user allowed: a local-page folder, or the file-tools folder in write mode.
+// The folder is the user's Downloads folder, or a folder the user allowed: a local-page folder, or the file-tools folder in write mode.
 async function downloadImage(args) {
   let u = null;
   try { u = new URL(String((args && args.url) || '').trim()); } catch { u = null; }
   if (!u || (u.protocol !== 'https:' && u.protocol !== 'http:')) throw new Error('Give the address of the picture, starting with https://.');
   const allowed = grants.list().map(f => path.resolve(f));
   if (confirmed.files && confirmed.files.mode === 'write') allowed.push(path.resolve(confirmed.files.folder));
-  const picked = pictureFolder(args || {}, { outputDir: OUTPUT_DIR, allowed, folderProblem: (f, mode) => guard.folderProblem(f, mode) });
+  const picked = pictureFolder(args || {}, { downloadsDir: P.DOWNLOADS_DIR, isDir, outputDir: OUTPUT_DIR, allowed, folderProblem: (f, mode) => guard.folderProblem(f, mode) });
   if (picked.error) throw new Error(picked.error);
   const name = u.pathname.split('/').filter(Boolean).pop() || u.hostname;
-  const ask = await downloadGate.ask({ host: u.hostname, name, folder: picked.folder });
+  const turn = chatTurns.current();   // one Yes covers the message; Unsafe mode asks nothing
+  const ask = await downloadGate.ask({ host: u.hostname, name, folder: picked.folder },
+    { turn: turn ? turn.id : '', unsafe: !!turn && turn.unsafe === true && confirmed.unsafe === true });
   if (!ask.ok) throw new Error(ask.message);
   fs.mkdirSync(picked.folder, { recursive: true });
   const ac = new AbortController();

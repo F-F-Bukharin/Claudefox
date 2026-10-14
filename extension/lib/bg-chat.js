@@ -40,7 +40,7 @@ function cizChatId() { return chatRuns.size ? [...chatRuns.keys()][0] : ''; }
 // Whenever the chat's site list changes during a turn (a card answered), the helper hears the new list.
 cizSiteGate.onChange = list => {
   const id = cizChatId();
-  if (id) sendNative({ type: 'scope', id, sites: list, trusted: !!cizState.get().trusted });
+  if (id) sendNative({ type: 'scope', id, sites: list, trusted: !!cizState.get().trusted || !!cizState.get().unsafe });   // Unsafe includes Trusted
 };
 
 const CHAT_ATTACH_MAX = 12;
@@ -126,7 +126,7 @@ async function startChatNow(msg, id, text, improve, attachments, fail) {
   }
   const sent = sendNative({ type: 'chat', id, text, model, tab, resume, files, folder: files ? s.filesFolder : '',
     unsafe: !improve && !sched && !!s.unsafe, caveman: !improve && !sched && !!s.caveman, attachments, improve,
-    sites, trusted: !improve && !sched && !!s.trusted, scheduled: !!sched });
+    sites, trusted: !improve && !sched && (!!s.trusted || !!s.unsafe), scheduled: !!sched });
   if (!sent) { chatRuns.delete(id); chatBusyPush(); cizSiteGate.end(id); return fail(t('bg_helperUnreachable')); }
   await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
     : sched ? `scheduled macro ${sched.macro} → Claude Code, Speed, reading ${sched.sites.join(', ')}`

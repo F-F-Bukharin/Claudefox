@@ -22,6 +22,8 @@ module.exports = {
   MCP_CONFIG: path.join(BASE, 'mcp.json'),
   MCP_ARMY_CONFIG: path.join(BASE, 'mcp-army.json'),   // the lead's tool server in Army mode (army_start, army_wait)
   ARMY_DIR: path.join(BASE, 'army'),                    // one tool-server config per running army worker
+  // Pictures Claude saves (download_image) go straight into the user's Downloads folder (a test may move it).
+  DOWNLOADS_DIR: testHook('CLAUDE_IN_ZEN_DOWNLOADS') || path.join(process.env.USERPROFILE || os.homedir(), 'Downloads'),
   OUTPUT_DIR: path.join(BASE, 'output'),                // files Claude makes and the add-on stores here (Settings, Saving files; lib/output.js)
   LOCAL_GRANTS: path.join(BASE, 'local-grants.json'),   // folders the user allowed for local pages (lib/localpages.js)
   WATCH_DIR: path.join(BASE, 'watch'),                 // one run folder per watch_video run (lib/watchrun.js)

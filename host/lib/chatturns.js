@@ -224,7 +224,8 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     const choice = improve ? MODELS.selfimprove : chatModel(msg.model);
     const armyOn = !improve && !scheduled && (msg.model === 'army' || msg.model === 'armymax');
     const unsafe = !improve && !scheduled && msg.unsafe === true && confirmed.unsafe;   // only when the user allowed it in the confirm window
-    const trusted = !improve && !scheduled && msg.trusted === true && confirmed.trusted === true;   // Trusted mode: only when the user allowed it too
+    // Trusted mode, or Unsafe mode (which includes it): only when the user allowed it in the confirm window too.
+    const trusted = !improve && !scheduled && msg.trusted === true && (confirmed.trusted === true || unsafe === true);
     const caveman = !improve && !scheduled && msg.caveman === true;
     const resume = !improve && typeof msg.resume === 'string' && /^[0-9a-f-]{36}$/i.test(msg.resume) ? msg.resume : '';
     const key = activeId();
@@ -232,7 +233,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     // The turn is reserved now (one at a time); it starts after the tool list is fresh and the uploads are saved.
     const run = { id, child: null, key, files, effort: choice.effort, sessionId: resume, finished: false, stderr: '', resultError: '', started: Date.now(), timer: null,
       wroteText: false, actedSinceText: false, progressIds: new Set(), improve, scheduled, sandbox, army: armyOn, armyRuns: [],
-      sites: Array.isArray(msg.sites) ? msg.sites.map(String) : [], msgTrusted: msg.trusted === true, localRead: false };
+      sites: Array.isArray(msg.sites) ? msg.sites.map(String) : [], msgTrusted: msg.trusted === true, localRead: false, unsafe: unsafe === true };
     chat = run;
     emitChat(run, { kind: 'meta', model: choice.model, effort: choice.effort });   // what the helper asked for
     run.timer = setTimeout(() => cancelChat(id, 'The answer took longer than an hour and was stopped.'), CHAT_TIMEOUT_MS);
@@ -452,7 +453,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
   // The WebFetch hook's question: may this address go on in the running turn of this session?
   function webfetchCheck(session, url) {
     const run = chat && session && chat.sessionId === session ? chat : null;
-    return decide(run, url, !!run && run.msgTrusted === true && confirmed.trusted === true);
+    return decide(run, url, !!run && run.msgTrusted === true && (confirmed.trusted === true || (run.unsafe === true && confirmed.unsafe === true)));
   }
 
   const busy = () => !!chat;
