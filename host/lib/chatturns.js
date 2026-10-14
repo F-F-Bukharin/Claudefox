@@ -22,7 +22,11 @@ const CHAT_TIMEOUT_MS = 60 * 60 * 1000;   // long jobs (a whole course's homewor
 // An idle chat process is stopped after this long (CLAUDE_IN_ZEN_IDLE_MS shortens it, only with CLAUDE_IN_ZEN_TEST=1).
 const IDLE_MS = process.env.CLAUDE_IN_ZEN_TEST === '1' && Number(process.env.CLAUDE_IN_ZEN_IDLE_MS) > 0 ? Number(process.env.CLAUDE_IN_ZEN_IDLE_MS) : 10 * 60 * 1000;
 const STREAM_PROBE_MS = 5000;   // a new process that stops this soon, with an error and no output, did not take --input-format
-const LIMIT_RE = /usage limit|limit reached|rate.?limit|reached your|limit will reset|out of (extra )?usage/i;
+const LIMIT_RE = /usage limit|limit reached|rate.?limit|reached your|limit will reset|out of (extra )?usage|hit your (?:\w+ )?limit|(?:weekly|session|daily) limit/i;
+// Claude Code's sign-in for this account is gone or expired: the panel offers to sign in again.
+const AUTH_RE = /Failed to authenticate|OAuth (?:session|token)\b[^\n]*(?:expired|revoked|invalid)|authentication_error|Please run \/login|Not logged in/i;
+// Resuming a session this account's Claude Code does not have (another account made it): the turn starts a new one.
+const MISSING_SESSION_RE = /No conversation found with session ID/i;
 
 function brief(v, n) {
   const s = typeof v === 'string' ? v : JSON.stringify(v);
@@ -152,6 +156,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
 
   function finishChat(run, ok, error) {
     if (run.finished) return;
+    if (!ok && run.retryCtx && !run.retried && run.retryCtx.resume && MISSING_SESSION_RE.test(String(error || ''))) return retryFresh(run);
     run.finished = true;
     clearTimeout(run.timer);
     if (chat === run) chat = null;
@@ -167,7 +172,21 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     }
     const err = ok ? '' : String(error || 'Claude Code stopped without an answer.').slice(0, 1500);
     if (!ok) log.warn(`chat ${run.id} failed: ${err.slice(0, 200)}`); else log.info(`chat ${run.id} done ${Date.now() - run.started} ms`);
-    sendAddon({ type: 'chat_done', id: run.id, ok: !!ok, error: err, limit: !ok && LIMIT_RE.test(err), sessionId: run.sessionId || '' });
+    sendAddon({ type: 'chat_done', id: run.id, ok: !!ok, error: err, limit: !ok && LIMIT_RE.test(err), auth: !ok && !LIMIT_RE.test(err) && AUTH_RE.test(err),
+      account: run.key || '', sessionId: run.sessionId || '' });
+  }
+
+  // The conversation to resume is not on this account (it was made with another one): the same message goes again,
+  // once, as a new conversation, and the panel is told why.
+  function retryFresh(run) {
+    run.retried = true;
+    log.info(`chat ${run.id}: the session to resume was not found; starting a new one`);
+    if (run.sess) { const s = run.sess; run.sess = null; if (!s.dead) dropProc(s, false); }
+    run.child = null; run.stderr = ''; run.resultError = ''; run.sessionId = '';
+    emitChat(run, { kind: 'notice', key: 'stream_newConversation', text: 'That conversation is not on this account, so Claude started a new one.' });
+    const c = Object.assign({}, run.retryCtx, { resume: '', probe: false });
+    run.retryCtx = c;
+    if (c.improve || streamUnsupported) oneShot(run, c); else streamTurn(run, c);
   }
 
   function startChat(msg) {
@@ -237,6 +256,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
       const sig = JSON.stringify([choice.model, choice.effort, caveman, unsafe, trusted, files.mode, files.folder, opts.mcpConfig || P.MCP_CONFIG,
         tb.settings, tb.servers, tb.allowTools, tb.skills, key, opts.watch, armyOn, scheduled]);
       const c = { exe, id, key, choice, files, resume, opts, tb, saved, prompt, sig, improve, armyOn, unsafe, caveman, probe: false };
+      run.retryCtx = c;
       if (improve || streamUnsupported) oneShot(run, c); else streamTurn(run, c);
     });
   }

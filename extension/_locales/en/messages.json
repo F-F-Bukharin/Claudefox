@@ -538,5 +538,8 @@
   "hist_export": { "message": "Export Markdown" },
   "hist_delete": { "message": "Delete" },
   "hist_interrupted": { "message": "This answer was interrupted." },
-  "hist_notSent": { "message": "This message was not sent." }
+  "hist_notSent": { "message": "This message was not sent." },
+  "stream_signInExpired": { "message": "Claude Code's sign-in for this account expired. Sign in again, then send your message again." },
+  "stream_signInAgain": { "message": "Sign in again" },
+  "stream_newConversation": { "message": "That conversation is not on this account, so Claude started a new one." }
 }

@@ -162,7 +162,8 @@ async function onChatDone(msg) {
   if (own && msg.sessionId) await cizState.set({ chatSession: String(msg.sessionId) });
   if (own && !msg.ok && /No conversation found/i.test(err)) await cizState.set({ chatSession: '' });
   if (!msg.ok) await cizState.addLog(msg.limit ? 'warn' : 'error', `Chat: ${err.split('\n')[0].slice(0, 200)}`);
-  postToPanels({ type: 'chatDone', id, ok: !!msg.ok, error: err, limit: !!msg.limit, sessionId: String(msg.sessionId || '') });
+  postToPanels({ type: 'chatDone', id, ok: !!msg.ok, error: err, limit: !!msg.limit, auth: !msg.ok && !!msg.auth,
+    account: String(msg.account || '').slice(0, 64), sessionId: String(msg.sessionId || '') });
   if (run && run.scheduled) await cizMacros.finished(run, msg);
   chatBusyPush();
   drainChatQueue();

@@ -79,6 +79,11 @@ process.stdin.on('end', async () => {
   try { settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8')); } catch {}
   fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ argv, prompt, cwd: process.cwd(), settings,
     apiKey: process.env.ANTHROPIC_API_KEY || null, config: process.env.CLAUDE_CONFIG_DIR || null }));
+  // A session another account made: this profile's Claude Code has never heard of it.
+  if (argv.includes('--resume') && argv[argv.indexOf('--resume') + 1] === 'aaaaaaaa-0000-0000-0000-000000000000') {
+    process.stderr.write('No conversation found with session ID: aaaaaaaa-0000-0000-0000-000000000000\\n');
+    process.exit(1);
+  }
   const out = o => process.stdout.write(JSON.stringify(o) + '\\n');
   const sid = '11111111-2222-3333-4444-555555555555';
   const servers = [{ name: 'claude-in-zen', status: 'connected', source: 'dynamic' }];
@@ -86,6 +91,8 @@ process.stdin.on('end', async () => {
   out({ type: 'system', subtype: 'init', session_id: sid, mcp_servers: servers });
   if (prompt === 'SLEEP') return setTimeout(() => {}, 60000);
   if (prompt === 'LIMIT') { out({ type: 'result', subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1760000000', session_id: sid }); return; }
+  if (prompt === 'WEEKLY') { out({ type: 'result', subtype: 'success', is_error: true, result: "You've hit your weekly limit \u00b7 resets Oct 17, 11am (America/Sao_Paulo)", session_id: sid }); return; }
+  if (prompt === 'AUTH') { out({ type: 'result', subtype: 'success', is_error: true, result: 'Failed to authenticate: OAuth session expired and could not be refreshed', session_id: sid }); return; }
   process.stdout.write('not json, should be ignored\\n');
   // call the real tool server, the way Claude Code would
   const cfg = JSON.parse(fs.readFileSync(argv[argv.indexOf('--mcp-config') + 1], 'utf8')).mcpServers['claude-in-zen'];
@@ -460,6 +467,21 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     toHelper({ type: 'chat', id: 'c5', text: 'LIMIT' });
     const lim = await next(m => m.type === 'chat_done' && m.id === 'c5', 15000);
     check('usage limit flagged', !lim.ok && lim.limit === true, lim.error);
+
+    // A weekly limit gets the limit card too; an expired sign-in gets a sign-in card for the account in use.
+    toHelper({ type: 'chat', id: 'cw', text: 'WEEKLY' });
+    const wk = await next(m => m.type === 'chat_done' && m.id === 'cw', 15000);
+    check('a weekly limit is flagged as a limit', !wk.ok && wk.limit === true && !wk.auth, wk.error);
+    toHelper({ type: 'chat', id: 'ca', text: 'AUTH' });
+    const au = await next(m => m.type === 'chat_done' && m.id === 'ca', 15000);
+    check('an expired Claude Code sign-in is flagged with the account to sign in again', !au.ok && au.auth === true && !au.limit && typeof au.account === 'string' && au.account.length > 0, JSON.stringify(au));
+    // Resuming a conversation this account does not have (it was made on another account): the message goes again as a new one.
+    toHelper({ type: 'chat', id: 'cr', text: 'hi', resume: 'aaaaaaaa-0000-0000-0000-000000000000' });
+    const fresh = await next(m => m.type === 'chat_done' && m.id === 'cr', 20000);
+    const rfresh = JSON.parse(fs.readFileSync(record, 'utf8'));
+    check('a session the account does not have: the turn starts a new conversation and answers', fresh.ok && !rfresh.argv.includes('--resume') && fresh.sessionId === '11111111-2222-3333-4444-555555555555', JSON.stringify(fresh));
+    const nn = eventsFor('cr').find(e => e.kind === 'notice' && e.key === 'stream_newConversation');
+    check('and the panel is told why, by key', !!nn && /new one/.test(nn.text), JSON.stringify(nn));
 
     toHelper({ type: 'chat', id: 'c6', text: 'SLEEP' });
     await sleep(800);

@@ -88,6 +88,23 @@ async function checks(lang) {
   const card = [...$('messages').querySelectorAll('.msg')].pop();
   ok(`${L}: the limit card says when the limit resets`, card.querySelector('.limit').textContent === M('stream_limitResets', '15:00'), card.querySelector('.limit').textContent);
   ok(`${L}: and its switch button`, card.querySelector('.limitbtn').textContent === M('stream_switchAccount'), card.querySelector('.limitbtn').textContent);
+  // a weekly limit that resets on another day: the day comes with the time
+  w.eval(`chat.push(${JSON.stringify({ role: 'assistant', id: 'lim2', text: '', steps: [], pending: false, error: "You've hit your weekly limit · resets Oct 17, 11am (America/Sao_Paulo)", limit: true })}); renderChat();`);
+  const wk = [...$('messages').querySelectorAll('.msg')].pop();
+  ok(`${L}: a weekly limit card gives the day and the time`, wk.querySelector('.limit').textContent === M('stream_limitResets', 'Oct 17, 11:00'), wk.querySelector('.limit').textContent);
+  // an expired Claude Code sign-in: a sign-in card for the account the chat used
+  const aid = P.send('hello');
+  P.onMsg({ type: 'chatEvent', id: aid, event: { kind: 'notice', key: 'stream_newConversation', text: 'That conversation is not on this account, so Claude started a new one.' } });
+  P.onMsg({ type: 'chatDone', id: aid, ok: false, error: 'Failed to authenticate: OAuth session expired and could not be refreshed', limit: false, auth: true, account: 'acct2' });
+  await tick();
+  const ac = [...$('messages').querySelectorAll('.msg.assistant')].pop();
+  ok(`${L}: a notice the helper names by key is in the panel's language`, ac.textContent.includes(M('stream_newConversation')), ac.textContent);
+  ok(`${L}: the expired sign-in card says what happened`, ac.querySelector('.limit') && ac.querySelector('.limit').textContent === M('stream_signInExpired'), ac.querySelector('.limit') && ac.querySelector('.limit').textContent);
+  const sb = ac.querySelector('.limitbtn');
+  ok(`${L}: and its button signs that account in again`, sb && sb.textContent === M('stream_signInAgain'));
+  if (sb) sb.click();
+  const last = P.sent[P.sent.length - 1];
+  ok(`${L}: the button asks for the sign-in of the account the chat used`, last && last.type === 'accountSignIn' && last.id === 'acct2', JSON.stringify(last));
 
   // the model line: Speed, Speed Plus, Quality, army off and on, max effort
   const eh = M('main_effortHigh'), em = M('main_effortMax');

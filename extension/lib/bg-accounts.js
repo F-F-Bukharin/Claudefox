@@ -213,6 +213,7 @@ async function onAccountResult(msg) {
         return cizState.addLog('error', `Switch failed: ${msg.error}`);
       }
       await cizState.set({ chatSession: '' });   // conversations belong to the account that had them
+      if (typeof winSessions !== 'undefined') winSessions.clear();   // each window's too
       await followClaudeAccount();   // if claude.ai is already on the chosen account, the add-on follows it now
       const who = msg.email || accountLabel(id);
       await accountNote(true, t('bg_acctNow', who));
@@ -228,6 +229,7 @@ async function onAccountResult(msg) {
       await cizState.set({ accountLogin: null });
       if (!msg.ok) return cizState.addLog(/Cancelled/.test(msg.error) ? 'info' : 'error', `Sign-in: ${msg.error}`);
       await cizState.set({ chatSession: '' });
+      if (typeof winSessions !== 'undefined') winSessions.clear();
       return cizState.addLog('info', msg.already
         ? `${msg.email} was already on the list. Switched to it.`
         : `Signed in as ${msg.email || 'the new account'}. The chat uses it now.`);

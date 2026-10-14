@@ -17,7 +17,8 @@ function onChatEvent(id, ev) {
   }
   else if (ev.kind === 'army') onArmyEvent(m, ev);
   else if (ev.kind === 'notice') {
-    m.notices = (m.notices || []).concat([{ text: String(ev.text || '').slice(0, 300), action: ev.action && typeof ev.action === 'object' ? ev.action : null }]).slice(-5);
+    const said = ev.key && /^stream_\w+$/.test(ev.key) && cizI18n.has(ev.key) ? t(ev.key) : String(ev.text || '');   // a notice the helper names by key is in the panel's language
+    m.notices = (m.notices || []).concat([{ text: said.slice(0, 300), action: ev.action && typeof ev.action === 'object' ? ev.action : null }]).slice(-5);
   }
   else if (ev.kind === 'tool') {
     m.steps.push(Object.assign({ name: String(ev.name || 'tool'), input: String(ev.input || ''), state: 'run' }, ev.id ? { id: String(ev.id) } : {}, ev.server ? { server: String(ev.server).slice(0, 60) } : {}));
@@ -89,6 +90,8 @@ function onChatDone(msg) {
   if (!msg.ok) {
     m.error = msg.error || t('stream_wentWrong');
     m.limit = !!msg.limit;
+    m.auth = !!msg.auth;
+    m.account = typeof msg.account === 'string' ? msg.account : '';
   } else if (!m.text.trim()) {
     m.text = t('stream_noReplyText');
   }
@@ -258,14 +261,15 @@ const expandedSteps = new Set();   // finished answers whose action list is open
 
 // The reset time in a usage-limit message ("resets 3pm", "resets at 15:00", "resets 3:30 PM"), as 24-hour HH:MM; '' when there is none.
 function limitResetAt(text) {
-  const m = /\bresets?(?:\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(String(text || ''));
-  if (!m || (!m[2] && !m[3])) return '';
-  let h = Number(m[1]);
-  const min = Number(m[2] || 0), ap = (m[3] || '').toLowerCase();
+  const m = /\bresets?(?:\s+(?:at|on))?\s+(?:([A-Z][a-z]{2,8}\.?\s+\d{1,2}),?\s+(?:at\s+)?)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(String(text || ''));
+  if (!m || (!m[3] && !m[4])) return '';
+  let h = Number(m[2]);
+  const day = m[1] ? m[1].replace(/\s+/, ' ') + ', ' : '';
+  const min = Number(m[3] || 0), ap = (m[4] || '').toLowerCase();
   if (min > 59 || (ap ? h < 1 || h > 12 : h > 23)) return '';
   if (ap === 'pm' && h < 12) h += 12;
   if (ap === 'am' && h === 12) h = 0;
-  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+  return day + String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
 }
 
 function progressBlock(m) {
@@ -542,6 +546,16 @@ function buildMsg(m) {
       sw.disabled = !!state.switching;
       sw.addEventListener('click', () => send('switchAccount'));
       div.append(hint, sw);
+    }
+    else if (m.auth) {   // Claude Code's sign-in for this account expired: sign it in again, then send again
+      const hint = document.createElement('div');
+      hint.className = 'limit';
+      hint.textContent = t('stream_signInExpired');
+      const btn = document.createElement('button');
+      btn.className = 'primary limitbtn';
+      btn.textContent = t('stream_signInAgain');
+      btn.addEventListener('click', () => send('accountSignIn', { id: m.account || 'main' }));
+      div.append(hint, btn);
     }
   }
 
