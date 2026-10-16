@@ -3,7 +3,7 @@
 // the panel chat with Allow and Deny. Allow lets the download run; a No, a card no panel shows, and a card with no answer
 // are all refused. A No counts at any phase; a Yes counts only once the panel shows the card.
 // One Yes covers the whole message: later pictures in the same chat turn (a retry with another address, a second picture)
-// save without a new card. In Unsafe mode (the user allowed it in the confirm window) there is no card at all.
+// save without a new card. In Unsafe mode or Automatic mode (the user allowed it in the confirm window) there is no card at all.
 //
 // The timings are options so the tests can run in milliseconds; the host takes the defaults, which are the spec's.
 const path = require('path');
@@ -28,10 +28,11 @@ function createDownloadGate(deps) {
     c.done(result);
   }
 
-  // opts: { turn: the running chat turn's id ('' outside a turn), unsafe: Unsafe mode is on for this turn }.
+  // opts: { turn: the running chat turn's id ('' outside a turn), unsafe: Unsafe mode is on for this turn, auto: the turn is automatic
+  // (Automatic mode, see chatturns.automatic) }.
   function ask(info, opts = {}) {
     const turn = String(opts.turn || '');
-    if (opts.unsafe === true) return Promise.resolve({ ok: true, asked: false });
+    if (opts.unsafe === true || opts.auto === true) return Promise.resolve({ ok: true, asked: false });
     if (turn && turn === allowedTurn) return Promise.resolve({ ok: true, asked: false });
     if (card) return Promise.resolve({ ok: false, message: BUSY });
     return new Promise(done => {

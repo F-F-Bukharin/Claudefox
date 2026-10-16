@@ -71,7 +71,7 @@
         <p class="small" data-i18n="ui_downloadOnce">Allow covers every picture Claude saves for this message.</p>
         <div class="row"><button id="downloadAllow" type="button" data-i18n="ui_allow">Allow</button> <button id="downloadDeny" type="button" data-i18n="ui_deny">Deny</button></div>
       </div>
-      <!-- Claude asks to put a file from this computer into a page: only Allow and Deny answer it, in Trusted mode too. -->
+      <!-- Claude asks to put a file from this computer into a page: only Allow and Deny answer it, unless Automatic or Unsafe mode answers for the user. -->
       <div id="uploadCard" class="card" hidden>
         <p id="uploadCardText"></p>
         <div class="row"><button id="uploadAllow" type="button" data-i18n="ui_allow">Allow</button> <button id="uploadDeny" type="button" data-i18n="ui_deny">Deny</button></div>
@@ -264,10 +264,10 @@
       </div>
       <p id="unsafeNote" class="muted small unsafe-note"></p>
       <div class="row">
-        <label for="trustedToggle" data-i18n="ui_trusted">Trusted</label>
+        <label for="trustedToggle" data-i18n="ui_trusted">Automatic</label>
         <span class="val"><input type="checkbox" id="trustedToggle" class="switch"></span>
       </div>
-      <p id="trustedNote" class="muted small" data-i18n="ui_trustedNote">Claude acts on any site without asking. Pages can try to steer it.</p>
+      <p id="trustedNote" class="muted small" data-i18n="ui_trustedNote">Claude answers Yes by itself to the questions about pictures, other sites, form sends, uploads, form filling and folders. Google sign-in pages, blocked sites and protected folders stay off-limits. Pages can try to steer it.</p>
       <div class="row">
         <label for="watchToggle" data-i18n="ui_watchVideos">Watch videos</label>
         <span class="val"><input type="checkbox" id="watchToggle" class="switch"></span>

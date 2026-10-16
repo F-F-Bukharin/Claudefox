@@ -1,6 +1,6 @@
 'use strict';
 // Uploads and page dialogs (E13): the upload card in the real panel.html/panel.js (jsdom); the add-on side, lib/pageTools.js
-// in a vm with fake timers, state and tab (the card's wait, Trusted, Deny, the timers, the parts, the dialog note); and the
+// in a vm with fake timers, state and tab (the card's wait, Automatic, Deny, the timers, the parts, the dialog note); and the
 // page side, lib/pageOp.js and pageOpAct.js as the add-on injects them (jsdom): attach, and the dialog guard in a click, an
 // Enter and a submit. Optional: needs jsdom (npm i --no-save jsdom, or NODE_PATH pointing at one). Skips without it.
 //   NODE_PATH=... node test/dom-upload.js
@@ -49,19 +49,19 @@ async function panelPart() {
     $('uploadCard').hidden === false && $('uploadCardText').textContent === 'Claude wants to upload photo.png (2.4 MB) to example.com');
   await step('uploadShown goes once per card id', () => sentOf('uploadShown').length === 1 && sentOf('uploadShown')[0].id === '7');
   await push({ uploadAsk: ASK, trusted: true });
-  await step('Trusted mode still shows the upload card', () => $('uploadCard').hidden === false);
+  await step('the panel shows the card whenever the add-on asks, whatever the switches say', () => $('uploadCard').hidden === false);
   await step('Allow posts uploadAnswer with allow true', () => { $('uploadAllow').click(); return sentOf('uploadAnswer').some(m => m.id === '7' && m.allow === true); });
   await push({ uploadAsk: { id: '8', name: 'a.txt', size: '1 KB', site: 'example.com' }, trusted: true });
   await step('Deny posts uploadAnswer with allow false', () => { $('uploadDeny').click(); return sentOf('uploadAnswer').some(m => m.id === '8' && m.allow === false); });
 }
 
 // The add-on side: lib/pageTools.js in a vm, with fake timers, state and tab. The card waits for the panel's answer (5 s to
-// show, 120 s to answer); Trusted does not skip it; Deny, the timers and Stop refuse; an allowed upload is sent in parts and
+// show, 120 s to answer); Automatic and Unsafe mode skip it; Deny, the timers and Stop refuse; an allowed upload is sent in parts and
 // attached in the page; the dialog note is the line the helper's result shows.
 async function addonPart() {
   const timers = [], inPage = [];
   const fire = ms => { for (const t of timers) if (t.ms === ms && !t.cancelled && !t.done) { t.done = true; t.fn(); } };
-  const cizState = { value: { trusted: true }, get() { return this.value; }, set(p) { Object.assign(this.value, p); return this.value; } };
+  const cizState = { value: { trusted: false, unsafe: false }, get() { return this.value; }, set(p) { Object.assign(this.value, p); return this.value; } };
   const ctx = vm.createContext({ URL, cizState, browser: { runtime: { getManifest: () => ({ version: '0.11.0' }) } },
     setTimeout: (fn, ms) => { const t = { fn, ms }; timers.push(t); return t; }, clearTimeout: t => { if (t) t.cancelled = true; } });
   vm.runInContext(fs.readFileSync(EXT + 'lib/policy.js', 'utf8') + '\n' + fs.readFileSync(EXT + 'lib/pageTools.js', 'utf8')
@@ -72,12 +72,47 @@ async function addonPart() {
   ctx.cizInPage = async (tab, op, args) => { inPage.push({ op, args }); return { attached: args.name }; };
   const refusal = p => p.then(() => null, e => e.message);
   const ask = id => ({ ask: true, id, selector: '#up', name: 'a.txt', type: 'text/plain', size: 2, parts: 1 });
-  await step('the card waits in the add-on state with the name and the site, even in Trusted mode', async () => {
+  await step('with Automatic off, the card waits in the add-on state with the name and the site', async () => {
     const p = ctx.CIZ_TOOLS.upload_attach(ask('u0')); await tick();
     const s = cizState.value.uploadAsk;
     ctx.cizUploadGate.answer('u0', false);
     await refusal(p);
-    return cizState.value.trusted === true && !!s && s.id === 'u0' && s.name === 'a.txt' && s.site === 'example.com';
+    return cizState.value.trusted === false && cizState.value.unsafe === false && !!s && s.id === 'u0' && s.name === 'a.txt' && s.site === 'example.com';
+  });
+  // The ask resolves { accepted } with no card, or stays waiting (a card is up): the race tells which.
+  const askNoCard = async id => {
+    const p = ctx.CIZ_TOOLS.upload_attach(ask(id));
+    const first = await Promise.race([p.then(v => v, e => ({ error: e.message })), wait(60).then(() => 'waiting')]);
+    const card = cizState.value.uploadAsk;
+    if (first === 'waiting') { ctx.cizUploadGate.answer(id, false); await refusal(p); }
+    return { first, card };
+  };
+  await step('Automatic mode: the upload is accepted with no card, and the bytes attach', async () => {
+    cizState.value.trusted = true;
+    const r = await askNoCard('a1');
+    await ctx.CIZ_TOOLS.upload_part({ id: 'a1', index: 0, data: 'aGk=' });
+    const before = inPage.length;
+    const done = await ctx.CIZ_TOOLS.upload_attach({ attach: true, id: 'a1' });
+    cizState.value.trusted = false;
+    return r.first && r.first.accepted === true && r.card === null && inPage.length === before + 1 && done.attached === 'a.txt';
+  });
+  await step('Unsafe mode: the upload is accepted with no card', async () => {
+    cizState.value.unsafe = true;
+    const r = await askNoCard('a2');
+    cizState.value.unsafe = false;
+    return r.first && r.first.accepted === true && r.card === null;
+  });
+  await step('Automatic mode in a scheduled macro\'s turn still shows the card', async () => {
+    cizState.value.trusted = true;
+    ctx.cizSiteGate = { scheduled: () => true };
+    const r = await askNoCard('a3');
+    delete ctx.cizSiteGate;
+    cizState.value.trusted = false;
+    return r.first === 'waiting' && !!r.card && r.card.id === 'a3';
+  });
+  await step('Automatic off again: the card is back', async () => {
+    const r = await askNoCard('a4');
+    return r.first === 'waiting' && !!r.card && r.card.id === 'a4';
   });
   await step('Deny refuses with "The user did not allow this upload." and clears the card', async () => {
     const p = ctx.CIZ_TOOLS.upload_attach(ask('u1')); await tick();
@@ -100,6 +135,7 @@ async function addonPart() {
     return (await refusal(p)) === REFUSED && cizState.value.uploadAsk === null;
   });
   await step('Allow sends the part and attaches it in the page with name, type and base64', async () => {
+    inPage.length = 0;
     const p = ctx.CIZ_TOOLS.upload_attach(ask('u5')); await tick();
     ctx.cizUploadGate.answer('u5', true);
     const accepted = await p;

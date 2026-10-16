@@ -1,6 +1,6 @@
 'use strict';
 // Claude in Zen: Stop and Start, the helper's confirm window, and the permission switches: file tools, unsafe mode,
-// watch, Trusted, the Sites list and the army. A question left open in the confirm window counts as no.
+// watch, Automatic (the state key `trusted`), the Sites list and the army. A question left open in the confirm window counts as no.
 
 // ---------------------------------------------------------------- Stop
 // Rule 1: Stop cancels pending actions, disconnects the native host and
@@ -18,7 +18,7 @@ async function stopAll(source) {
   }
   sendNative({ type: 'watch_off' });   // before the helper goes: watching off, and a waiting card is cancelled
   sendNative({ type: 'download_off' });   // a picture card waiting is cancelled, and a download in progress stops
-  sendNative({ type: 'trusted_off' });   // Trusted goes off with the other switches
+  sendNative({ type: 'trusted_off' });   // Automatic goes off with the other switches
   disconnectNative(t('bg_nativeUserStopped'));   // the helper exits, which kills any running Claude Code turn and its tool server
   endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)
   if (typeof cizSiteGate !== 'undefined') cizSiteGate.cancel();   // an open site card counts as no
@@ -117,19 +117,20 @@ async function setUnsafe(value) {
   await cizState.addLog('warn', 'Unsafe mode on: Claude may act on Google sign-in pages. It still never types passwords, 2FA codes or payment details.');
 }
 
-// Trusted: Claude acts on any site without asking the site card. Session only: Stop, an add-on restart or a Zen restart
-// turns it off, and the helper is told when it does.
+// Automatic mode (the state key and messages are still `trusted`): the asks for pictures, sites, form sends, uploads, form
+// filling and folders are answered Yes by themselves. Blocked sites, Google sign-in pages and protected folders stay refused.
+// Session only: Stop, an add-on restart or a Zen restart turns it off, and the helper is told when it does.
 async function setTrusted(on) {
   if (!on) {
     sendNative({ type: 'trusted_off' });
     await cizState.set({ trusted: false });
     return;
   }
-  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on Trusted.');
+  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on Automatic mode.');
   const r = await askConfirm({ kind: 'trusted' });
-  if (!r.ok) return cizState.addLog('info', `Trusted stays off: ${r.error || 'not allowed in the confirm window.'}`);
+  if (!r.ok) return cizState.addLog('info', `Automatic mode stays off: ${r.error || 'not allowed in the confirm window.'}`);
   await cizState.set({ trusted: true });
-  await cizState.addLog('warn', 'Trusted on: Claude acts on any site without asking until you press Stop or restart Zen. Pages can try to steer it.');
+  await cizState.addLog('warn', 'Automatic on: Claude answers Yes by itself to pictures, other sites, form sends, uploads, form filling and folders until you press Stop or restart Zen. Google sign-in pages, blocked sites and protected folders stay off-limits. Pages can try to steer it.');
 }
 
 // The Sites list (storage.local sites): a site is its host, lowercase, with one leading www. dropped. Value 'allow' or 'block';

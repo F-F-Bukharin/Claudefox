@@ -155,6 +155,11 @@ async function onceSection() {
   const shows = r.shows.length;
   const un = await r.gate.ask(INFO, { turn: 't9', unsafe: true });
   check('unsafe: Unsafe mode saves with no card', un.ok === true && r.shows.length === shows, JSON.stringify(un));
+  const au = await r.gate.ask(INFO, { turn: 't9', auto: true });
+  check('auto: Automatic mode saves with no card', au.ok === true && au.asked === false && r.shows.length === shows, JSON.stringify(au));
+  const notAuto = r.gate.ask(INFO, { turn: 't9', auto: false });
+  check('auto: with Automatic off the picture asks a card', r.shows.length === shows + 1);
+  r.gate.cancel(); await notAuto;
 }
 
 (async () => {

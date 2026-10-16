@@ -217,7 +217,7 @@ function render(s, log) {
     $('watchCardSource').textContent = String(s.watchAsk.source || '').slice(0, 200);
     if (watchShownId !== s.watchAsk.id) { watchShownId = s.watchAsk.id; send('watchShown', { id: s.watchAsk.id }); }
   }
-  // Trusted: the switch mirrors the state (a turn-on waits for the confirm window, see panel-settings.js)
+  // Automatic (state key trusted): the switch mirrors the state (a turn-on waits for the confirm window, see panel-settings.js)
   $('trustedToggle').checked = !!s.trusted;
   $('trustedToggle').disabled = s.agent === 'stopped';
   // the site card: Claude asks before it uses a page on a site; a risky step offers only Allow and Deny

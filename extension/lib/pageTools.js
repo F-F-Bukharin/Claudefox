@@ -45,10 +45,19 @@ async function cizLocalGate(gate) {
 // The site gate (lib/siteGate.js) for web tabs. Acting tools are 'act'; everything else that looks at a tab is 'read'.
 const CIZ_ACT_TOOLS = new Set(['click', 'hover', 'fill', 'fill_form', 'type_text', 'press_key', 'scroll', 'media', 'navigate', 'upload_attach']);
 
+// Automatic mode (the state key is still `trusted`) or Unsafe mode, which includes it: the one rule for "this ask is answered Yes
+// by itself" (site cards, form sends, uploads, fill_form). A scheduled macro's turn only reads its own sites, so it is never
+// automatic. Blocked sites, Google sign-in pages and protected folders are refused by their own checks, not by this rule.
+function cizAutomatic() {
+  const s = cizState.get();
+  if (!s.trusted && !s.unsafe) return false;
+  return !(typeof cizSiteGate !== 'undefined' && cizSiteGate.scheduled && cizSiteGate.scheduled());
+}
+
 async function cizSiteOpts(args) {
   let blocks = {};
   try { blocks = (await browser.storage.local.get('sites')).sites || {}; } catch {}
-  return { trusted: !!cizState.get().trusted || !!cizState.get().unsafe, blocks, army: (args && args.__army) || null };
+  return { trusted: cizAutomatic(), blocks, army: (args && args.__army) || null };
 }
 
 // true when the tab may be used; false when the tab moved to another site while the user was asked (read it again).
@@ -264,7 +273,7 @@ async function cizGoogleExport(tab, args) {
 }
 
 // fill_form's card (the panel shows it): one at a time. The panel shows it within CIZ_FILL_MS.shown and answers within
-// CIZ_FILL_MS.answer; a card never shown, never answered, or ended by Stop is a Deny. Trusted mode does not skip it.
+// CIZ_FILL_MS.answer; a card never shown, never answered, or ended by Stop is a Deny. Automatic mode and Unsafe mode skip it.
 const CIZ_FILL_MS = { shown: 5000, answer: 120000 };
 let cizFillCard = null, cizFillSeq = 0;
 function cizFillCut(v) {
@@ -301,7 +310,7 @@ function cizFillCancel() { if (cizFillCard) cizFillEnd(cizFillCard, false); }
 // "2.4 MB", "35 KB": the size in the upload card (the same rule as sizeText in panel-chat.js).
 function cizSizeText(n) { return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`; }
 
-// The upload card: "Claude wants to upload <name> (<size>) to <site>". Every upload asks, Trusted mode too. The panel calls
+// The upload card: "Claude wants to upload <name> (<size>) to <site>". Every upload asks, except in Automatic or Unsafe mode. The panel calls
 // shown(id) when the card is on screen (SHOWN_MS), then answer(id, allow) (ANSWER_MS); no shown or no answer refuses. One
 // card at a time: wait() refuses a second one while one is open. cancel() (Stop) refuses the open card. State: uploadAsk
 // { id, name, size, site } while the card is open, else null. Timers are looked up at call time and always cleared.
@@ -364,7 +373,7 @@ async function cizUploadAttach(args) {
     const site = cizSiteOf(tab.url);
     const where = site || (/^file:/i.test(tab.url || '') ? 'a local page' : 'this page');
     const target = args.ref ? { ref: String(args.ref) } : { selector: String(args.selector) };
-    const allowed = await cizUploadGate.wait({ id, name, size, site: where });
+    const allowed = cizAutomatic() || await cizUploadGate.wait({ id, name, size, site: where });
     if (!allowed) throw new Error(CIZ_UPLOAD_REFUSED);
     cizUploads.set(id, { tabId: tab.id, key: site || String(tab.url || '').split(/[?#]/)[0], site: where, count, parts: [], target, name, type: String(args.type || 'application/octet-stream').slice(0, 100) });
     return { accepted: true };
@@ -408,7 +417,7 @@ const CIZ_TOOLS = {
     // Only the chat window's tabs, and a site outside the chat's list shows as id and site only (siteGate.tabView).
     const wid = cizSiteGate.windowId();
     const tabs = await browser.tabs.query(wid != null ? { windowId: wid } : { lastFocusedWindow: true });
-    const opts = { trusted: !!cizState.get().trusted || !!cizState.get().unsafe, blocks: (await cizSiteOpts({})).blocks };
+    const opts = { trusted: cizAutomatic(), blocks: (await cizSiteOpts({})).blocks };
     return tabs.map(t => {
       const view = cizSiteGate.tabView(t, opts);
       const army = view.url !== undefined && cizArmy.owner(t.id);   // a tab an army worker is using, so Claude leaves it to that worker
@@ -503,7 +512,7 @@ const CIZ_TOOLS = {
     if (sensitive) throw new Error(`Refused: this is a ${sensitive.sensitive}. Ask the user to type it themselves.`);
     if (cizFillCard) throw new Error("Another form fill is waiting for the user's answer. Try again when it is done.");
     const rows = fields.map((f, i) => ({ label: labels[i].label, value: cizFillCut(f.value) }));
-    if (!(await cizFillAsk(site, rows))) throw new Error('The user did not approve filling this form.');
+    if (!cizAutomatic() && !(await cizFillAsk(site, rows))) throw new Error('The user did not approve filling this form.');
     const now = await cizTabFor(args);
     if (now.id !== tab.id || cizSiteOf(now.url) !== site) throw new Error('The tab moved to another site while the user was asked. Read the page again.');
     const out = [];

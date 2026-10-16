@@ -46,7 +46,7 @@ const { createUpdates } = require('./lib/updates');
 const confirm = createConfirm({ killTree });
 const confirmed = { unsafe: false, trusted: false, files: null, watch: false };   // files: { mode, folder }; watch: video watching (lib/watchgate.js)
 // What was allowed, told to the add-on after hello and after every change, so its switches never show more than the helper
-// holds (a restarted helper has forgotten everything). trusted is Trusted mode, which lib/confirmflow.js turns on.
+// holds (a restarted helper has forgotten everything). trusted is Automatic mode (called trusted inside), which lib/confirmflow.js turns on.
 function sendConfirmedState() {
   sendAddon({ type: 'confirmed_state', unsafe: confirmed.unsafe === true, trusted: confirmed.trusted === true,
     files: confirmed.files ? { mode: confirmed.files.mode, folder: confirmed.files.folder } : null });
@@ -91,7 +91,8 @@ const grants = createGrants(P.LOCAL_GRANTS);
 if (grants.note) log.info(grants.note);
 function sendGrants() { sendAddon({ type: 'local_grants', folders: grants.list() }); }
 const local = createLocalPages({ askAddon, confirm: q => confirm.ask(q), grants, changed: sendGrants,
-  asking: folder => sendAddon({ type: 'local_question', folder }) });
+  asking: folder => sendAddon({ type: 'local_question', folder }),
+  automatic: () => chatTurns.automatic() });   // Automatic or Unsafe mode answers a folder question Yes (chatTurns is built just below; this runs later)
 
 const chatTurns = createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountDir, activeId, toolbox, confirmed, sameDir, isDir, ROOT,
   shuttingDown: () => shuttingDown });
@@ -515,9 +516,9 @@ async function downloadImage(args) {
   const picked = pictureFolder(args || {}, { downloadsDir: P.DOWNLOADS_DIR, isDir, outputDir: OUTPUT_DIR, allowed, folderProblem: (f, mode) => guard.folderProblem(f, mode) });
   if (picked.error) throw new Error(picked.error);
   const name = u.pathname.split('/').filter(Boolean).pop() || u.hostname;
-  const turn = chatTurns.current();   // one Yes covers the message; Unsafe mode asks nothing
+  const turn = chatTurns.current();   // one Yes covers the message; Automatic and Unsafe mode ask nothing
   const ask = await downloadGate.ask({ host: u.hostname, name, folder: picked.folder },
-    { turn: turn ? turn.id : '', unsafe: !!turn && turn.unsafe === true && confirmed.unsafe === true });
+    { turn: turn ? turn.id : '', unsafe: !!turn && turn.unsafe === true && confirmed.unsafe === true, auto: chatTurns.automatic() });
   if (!ask.ok) throw new Error(ask.message);
   fs.mkdirSync(picked.folder, { recursive: true });
   const ac = new AbortController();

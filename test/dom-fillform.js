@@ -54,7 +54,7 @@ await check('formlabels changes nothing on the page: value, scroll, events', () 
 });
 
 // ---- the add-on: lib/pageTools.js in a vm; cizInPage runs the real page code in the jsdom page above
-const state = { trusted: false, fillAsk: null };
+const state = { trusted: false, unsafe: false, fillAsk: null };
 const sets = [], ops = [];
 const actx = vm.createContext({ console, URL, setTimeout, clearTimeout,
   pageOps: (op, args) => { ops.push(op); const { __army, ...a } = args || {}; return pageRun(op, a); },
@@ -122,15 +122,47 @@ await check('no answer is Deny: the card times out and nothing is filled', async
   vm.runInContext('CIZ_FILL_MS.shown = 5000; CIZ_FILL_MS.answer = 120000;', actx);
   return r.err === 'The user did not approve filling this form.' && nameVal() === 'Ana' && state.fillAsk === null;
 });
-await check('Trusted mode still shows the card', async () => {
-  state.trusted = true;
-  const p = settle(T.fill_form({ fields: [F('name', 'Di')] }));
+// Automatic mode (Trusted mode's state key) and Unsafe mode answer the card themselves; with both off it asks (the checks above).
+const fillNoCard = async value => {
+  sets.length = 0; submits = 0;
+  const p = settle(T.fill_form({ fields: [F('name', value)] }));
   await tick();
-  const shown = !!state.fillAsk;
-  B('cizFillShown')(state.fillAsk.id); B('cizFillAnswer')(state.fillAsk.id, false);
-  await p;
+  const shown = !!state.fillAsk || cardSet();
+  if (shown) { B('cizFillShown')(state.fillAsk.id); B('cizFillAnswer')(state.fillAsk.id, false); }
+  return Object.assign({ shown }, await p);
+};
+await check('Automatic mode fills with no card, reports per field, and submits nothing', async () => {
+  state.trusted = true;
+  const r = await fillNoCard('Ana');
   state.trusted = false;
-  return shown;
+  return !r.shown && !r.err && r.res.fields[0].filled === '3 characters' && r.res.submitted === false && submits === 0 && nameVal() === 'Ana';
+});
+await check('Unsafe mode fills with no card', async () => {
+  state.unsafe = true;
+  const r = await fillNoCard('Bea');
+  state.unsafe = false;
+  const ok = !r.shown && !r.err && nameVal() === 'Bea';
+  await fillNoCard('Ana').catch(() => {});
+  return ok;
+});
+await check('Automatic mode still refuses a password field before anything is filled', async () => {
+  state.trusted = true;
+  sets.length = 0;
+  const r = await settle(T.fill_form({ fields: [F('name', 'Cy'), F('pw', 'x')] }));
+  state.trusted = false;
+  return /Refused/.test(r.err || '') && /password/.test(r.err || '') && !cardSet() && nameVal() !== 'Cy';
+});
+await check('Automatic mode in a scheduled macro\'s turn still shows the card', async () => {
+  state.trusted = true;
+  vm.runInContext('cizSiteGate = { scheduled: () => true };', actx);
+  const r = await fillNoCard('Di');
+  vm.runInContext('cizSiteGate = undefined;', actx);
+  state.trusted = false;
+  return r.shown && nameVal() !== 'Di';
+});
+await check('Automatic off: the card is shown again', async () => {
+  const r = await fillNoCard('Ed');
+  return r.shown && nameVal() !== 'Ed';
 });
 await check('fill_form is an act tool for the site gate, as fill is', () => B("CIZ_ACT_TOOLS.has('fill_form')") === true);
 await check('a worker call to fill_form is refused: host guard refuses, worker lists leave it out', () => {

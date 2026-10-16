@@ -77,9 +77,10 @@ async function helperTests() {
   };
   // A folder the helper has not allowed yet asks again (an allowed one is answered without a window).
   const folder = path.join(tmp, 'docs'), folder2 = path.join(tmp, 'docs2'); fs.mkdirSync(folder); fs.mkdirSync(folder2);
+  // The files windows come first: once Automatic or Unsafe mode is on, the helper answers a folder question by itself.
   const kindsFor = f => [
-    ['unsafe', { kind: 'unsafe' }], ['trusted', { kind: 'trusted' }],
     ['files (read)', { kind: 'files', mode: 'read', folder: f }], ['files (write)', { kind: 'files', mode: 'write', folder: f }],
+    ['unsafe', { kind: 'unsafe' }], ['trusted', { kind: 'trusted' }],
   ];
   const T2 = T;
 
@@ -96,6 +97,7 @@ async function helperTests() {
   check('the Portuguese file window names the folder', !!pt['files (read)'] && pt['files (read)'].text.includes(folder));
   if (T2) check('the Portuguese Unsafe window is exactly the Portuguese text', pt.unsafe && pt.unsafe.text === T2.texts.pt_BR['unsafe.text'] && pt.unsafe.title === T2.texts.pt_BR['unsafe.title']);
 
+  toHelper({ type: 'unsafe_off' }); toHelper({ type: 'trusted_off' });   // so the files windows ask again
   toHelper({ type: 'lang', lang: 'en' });
   const en = {};
   for (const [name, msg] of kindsFor(folder2)) {
@@ -103,7 +105,12 @@ async function helperTests() {
     en[name] = win;
     check(`after {type:'lang', lang:'en'}: the ${name} window is in English`, !!win && /^(Turn on|Allow reading|Allow read and write)$/.test(win.yes) && win.no === 'Cancel' && /Claude in Zen/.test(win.title), JSON.stringify(win));
   }
-  check('the English windows are the old texts', en.trusted && en.trusted.text === 'Claude acts on any site without asking. Pages can try to steer it. It stays on until you press Stop.' && en.trusted.title === 'Claude in Zen: turn on Trusted mode?');
+  const AUTO_EN = 'Claude then answers Yes by itself to these questions: saving a picture, using another site, sending a form or following a link to another site after reading a page, uploading a file, filling a form, and allowing a folder for file tools or local pages.\n\nGoogle sign-in and account pages, sites you blocked and protected folders stay off-limits. It still never types passwords, 2FA codes or payment details. Pages can try to steer it.\n\nIt stays on until you press Stop.';
+  const AUTO_PT = 'O Claude passa a responder Sim sozinho a estas perguntas: salvar uma imagem, usar outro site, enviar um formulário ou seguir um link para outro site depois de ler uma página, enviar um arquivo, preencher um formulário e permitir uma pasta para as ferramentas de arquivos ou as páginas locais.\n\nAs páginas de login e de conta do Google, os sites que você bloqueou e as pastas protegidas continuam fora do alcance. Ele continua sem digitar senhas, códigos 2FA ou dados de pagamento. As páginas podem tentar influenciá-lo.\n\nO modo fica ativo até você apertar Parar.';
+  check('the English Automatic window: its title and what it answers and keeps', en.trusted && en.trusted.title === 'Claude in Zen: turn on Automatic mode?' && en.trusted.text === AUTO_EN, JSON.stringify(en.trusted));
+  check('the Portuguese Automatic window: its title and what it answers and keeps', pt.trusted && pt.trusted.title === 'Claude in Zen: ativar o modo automático?' && pt.trusted.text === AUTO_PT, JSON.stringify(pt.trusted));
+  check('the Unsafe window says it includes Automatic mode, in English and Portuguese', en.unsafe && /Unsafe mode includes Automatic mode/.test(en.unsafe.text) && pt.unsafe && /O modo Inseguro inclui o modo automático/.test(pt.unsafe.text));
+  check('no window text says Trusted or Confiável', !T || !Object.values(T.texts.en).some(v => /Trusted/.test(v)) && !Object.values(T.texts.pt_BR).some(v => /Confiável/.test(v)));
 
   toHelper({ type: 'lang', lang: 'pt_BR' });
   check('{type:"lang", lang:"pt_BR"} switches back', (await ask({ kind: 'trusted' })).win.yes === 'Ativar');

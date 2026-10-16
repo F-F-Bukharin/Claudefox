@@ -7,8 +7,9 @@ const T = require('./confirmtexts');
 
 // deps: { confirm, confirmed, sendAddon, sendConfirmedState, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState }
 function createConfirmFlow({ confirm, confirmed, sendAddon, sendConfirmedState, isDir, sameDir, watchWindow, saveWatchOnLoad, sendWatchState }) {
-  // The add-on asks before Unsafe mode, Trusted mode or file tools go on. The user answers in the confirm window; the helper keeps
-  // the answer, and chat turns get only what was allowed.
+  // The add-on asks before Unsafe mode, Automatic mode (kind 'trusted') or file tools go on. The user answers in the confirm window;
+  // the helper keeps the answer, and chat turns get only what was allowed. With Automatic or Unsafe mode on, the file-tools folder
+  // question is answered Yes without the window, after every refusal below has run.
   async function answerConfirm(msg) {
     const id = String(msg.id || '');
     const reply = (ok, error) => sendAddon({ type: 'confirm_result', id, ok: !!ok, error: error || '' });
@@ -31,6 +32,11 @@ function createConfirmFlow({ confirm, confirmed, sendAddon, sendConfirmedState, 
       if (why) return reply(false, `File tools can't use ${folder}: ${why}.`);
       const have = confirmed.files;
       if (have && sameDir(have.folder, folder) && (mode === 'read' || have.mode === 'write')) return reply(true);   // allowed already
+      if (confirmed.trusted === true || confirmed.unsafe === true) {   // Automatic or Unsafe mode: a Yes, with no window
+        confirmed.files = { mode, folder };
+        sendConfirmedState();
+        return reply(true);
+      }
       const r = await confirm.ask(T.q(mode === 'write' ? 'files.write' : 'files.read', folder));
       if (r.ok) { confirmed.files = { mode, folder }; sendConfirmedState(); }
       return reply(r.ok, r.error);

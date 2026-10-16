@@ -151,6 +151,56 @@ const refused = (res, re) => !res.ok && re.test(res.error);
     check('Unsafe mode counts as trusted: a read outside the list runs without a card', r.ok && did('read:2') && noCard(), JSON.stringify(r));
     await state.set({ unsafe: false }); delete local.sites;
 
+    // 3b. Automatic mode (the state key is still trusted): no site card, no risky card; blocks and Google sign-in stay
+    // off-limits; with it off every one of these asks; Unsafe lifts the Google rule.
+    await state.set({ trusted: true }); begin(); clear();
+    r = await call('read_page', {});   // the router marks the message read, so risky steps can ask
+    clear(); classifyAnswer = { found: true, submitsPost: true };
+    r = await call('click', { selector: 'button' });
+    check('Automatic: after a page read, a click that sends a form runs with no risky card', r.ok && did('click:1') && noCard(), JSON.stringify(r));
+    clear(); classifyAnswer = { found: true, leavesTo: 'away.example' };
+    r = await call('click', { selector: 'a' });
+    check('Automatic: a click that leaves for another site runs with no risky card', r.ok && did('click:1') && noCard(), JSON.stringify(r));
+    clear(); classifyAnswer = { found: true };
+    r = await call('navigate', { url: 'https://new3.example/' });
+    check('Automatic: navigate to another site after a page read asks nothing', r.ok && noCard() && updated.some(u => u[1].url === 'https://new3.example/'), JSON.stringify(r));
+    local.sites = { 'away.example': 'block' };
+    clear(); classifyAnswer = { found: true, leavesTo: 'away.example' };
+    r = await call('click', { selector: 'a' });
+    check('Automatic: a click that leaves for a blocked site is still refused', refused(r, /away\.example is blocked in your site list/) && !did('click:1') && noCard(), JSON.stringify(r));
+    delete local.sites;
+    clear();
+    r = await call('navigate', { url: 'https://accounts.google.com/signin' });
+    check('Automatic: Google sign-in pages stay off-limits for navigate', refused(r, /Google sign-in pages are hands-off/) && updated.length === 0, JSON.stringify(r));
+    r = await call('tab_open', { url: 'https://accounts.google.com/' });
+    check('Automatic: Google sign-in pages stay off-limits for tab_open', refused(r, /Google sign-in pages are hands-off/) && created.length === 0, JSON.stringify(r));
+    await state.set({ trusted: false, unsafe: true }); begin(); clear();
+    r = await call('navigate', { url: 'https://accounts.google.com/signin' });
+    check('Unsafe mode lifts the Google rule: navigate to a sign-in page goes', r.ok && updated.some(u => u[1].url === 'https://accounts.google.com/signin'), JSON.stringify(r));
+    await state.set({ trusted: false, unsafe: false }); begin(); clear();
+    r = await call('read_page', {});
+    clear(); classifyAnswer = { found: true, submitsPost: true };
+    c = await cards(call('click', { selector: 'button' }), ['deny']);
+    check('Automatic off: the same form send asks a risky card, and a deny stops the click', c.seen.length === 1 && c.seen[0].kind === 'risky' && c.seen[0].action === 'post' && !c.res.ok && !did('click:1'), JSON.stringify([c.seen, c.res]));
+    begin(); clear();
+    c = await cards(call('read_page', { tab_id: 2 }), ['deny']);
+    check('Automatic off: a site outside the list asks the site card', c.seen.length === 1 && c.seen[0].kind === 'site' && !c.res.ok, JSON.stringify([c.seen, c.res]));
+    // One rule for "is Automatic on": cizAutomatic() in lib/pageTools.js (Automatic or Unsafe; never a scheduled macro's turn).
+    const auto = () => g('cizAutomatic')();
+    await state.set({ trusted: false, unsafe: false });
+    const off = auto();
+    await state.set({ trusted: true });
+    const onA = auto();
+    await state.set({ trusted: false, unsafe: true });
+    const onU = auto();
+    gate.begin('sched1', { scheduled: ['start.example'] });
+    const inSched = auto();
+    gate.end('sched1');
+    await state.set({ trusted: false, unsafe: false });
+    check('cizAutomatic: off when neither switch is on, on for Automatic and for Unsafe, off in a scheduled macro\'s turn', off === false && onA === true && onU === true && inSched === false, JSON.stringify([off, onA, onU, inSched]));
+
+    clear(); classifyAnswer = { found: true };
+
     // 4. acting asks like reading
     begin(); clear();
     c = await cards(call('click', { tab_id: 2, selector: 'a' }), ['deny']);

@@ -224,7 +224,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     const choice = improve ? MODELS.selfimprove : chatModel(msg.model);
     const armyOn = !improve && !scheduled && (msg.model === 'army' || msg.model === 'armymax');
     const unsafe = !improve && !scheduled && msg.unsafe === true && confirmed.unsafe;   // only when the user allowed it in the confirm window
-    // Trusted mode, or Unsafe mode (which includes it): only when the user allowed it in the confirm window too.
+    // Automatic mode (still called trusted inside), or Unsafe mode (which includes it): only when the user allowed it in the confirm window too.
     const trusted = !improve && !scheduled && msg.trusted === true && (confirmed.trusted === true || unsafe === true);
     const caveman = !improve && !scheduled && msg.caveman === true;
     const resume = !improve && typeof msg.resume === 'string' && /^[0-9a-f-]{36}$/i.test(msg.resume) ? msg.resume : '';
@@ -450,16 +450,23 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
   function setLocalRead(id) {
     if (chat && chat.id === id) chat.localRead = true;
   }
+  // Is this turn automatic (Automatic mode, or Unsafe mode which includes it)? The add-on's message said so and the user allowed it
+  // in the confirm window too. The one rule for every question Automatic answers by itself in the helper.
+  function isAutomatic(run) {
+    return !!run && run.msgTrusted === true && (confirmed.trusted === true || (run.unsafe === true && confirmed.unsafe === true));
+  }
+  // The running turn is automatic: a picture, a local-page folder and the like are answered Yes without a card or a window.
+  const automatic = () => isAutomatic(chat);
   // The WebFetch hook's question: may this address go on in the running turn of this session?
   function webfetchCheck(session, url) {
     const run = chat && session && chat.sessionId === session ? chat : null;
-    return decide(run, url, !!run && run.msgTrusted === true && (confirmed.trusted === true || (run.unsafe === true && confirmed.unsafe === true)));
+    return decide(run, url, isAutomatic(run));
   }
 
   const busy = () => !!chat;
   const current = () => chat;
 
-  return { army, startChat, cancelChat, selfApply, selfDiscard, busy, current, setScope, setLocalRead, webfetchCheck };
+  return { army, startChat, cancelChat, selfApply, selfDiscard, busy, current, automatic, setScope, setLocalRead, webfetchCheck };
 }
 
 module.exports = { createChatTurns };

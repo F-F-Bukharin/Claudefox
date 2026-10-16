@@ -1,5 +1,5 @@
 'use strict';
-// The site card, the Trusted switch and the Sites list in the real panel (jsdom), and their background side: policy.js,
+// The site card, the Automatic switch (Trusted mode's internal name) and the Sites list in the real panel (jsdom), and their background side: policy.js,
 // state.js, bg-permissions.js and bg-panel.js run in one vm context. Optional DOM test: needs jsdom (npm i --no-save jsdom,
 // or NODE_PATH pointing at one). Skips without it.   NODE_PATH=... node test/dom-sites.js
 let JSDOM;
@@ -48,7 +48,7 @@ const rowFor = site => rows().find(li => li.querySelector('.mono').textContent =
 const SITE = { id: 's1', site: 'youtube.com', action: 'read', kind: 'site' };
 const RISKY = { id: 'r1', site: 'bank.example', action: 'post', kind: 'risky' };
 const ACTIONS = { read: 'Read the page', act: 'Act on the page', open: 'Open the page', post: 'Submit a form', leave: 'Leave for this site' };
-const TRUSTED_NOTE = 'Claude acts on any site without asking. Pages can try to steer it.';
+const AUTO_NOTE = 'Claude answers Yes by itself to the questions about pictures, other sites, form sends, uploads, form filling and folders. Google sign-in pages, blocked sites and protected folders stay off-limits. Pages can try to steer it.';
 
 (async () => {
   try {
@@ -78,17 +78,22 @@ const TRUSTED_NOTE = 'Claude acts on any site without asking. Pages can try to s
         return sent.length === 1 && m.type === 'siteAnswer' && m.id === q.id && m.choice === choice;
       }));
     push({ trusted: false });
-    await check('the Trusted switch shows the state: off', () => $('trustedToggle').checked === false);
+    await check('the Automatic switch shows the state: off', () => $('trustedToggle').checked === false);
     push({ trusted: true });
-    await check('the Trusted switch shows the state: on', () => $('trustedToggle').checked === true);
-    await check('the Trusted switch posts setTrusted with on, both ways', () => {
+    await check('the Automatic switch shows the state: on', () => $('trustedToggle').checked === true);
+    await check('the Automatic switch posts setTrusted with on, both ways', () => {
       sent.length = 0;
       $('trustedToggle').checked = false; change('trustedToggle');
       $('trustedToggle').checked = true; change('trustedToggle');
       const t = sentOf('setTrusted');
       return t.length === 2 && t[0].on === false && t[1].on === true;
     });
-    await check('the Trusted note reads exactly as specified', () => $('trustedNote').textContent === TRUSTED_NOTE);
+    await check('the Automatic note reads exactly as specified', () => $('trustedNote').textContent === AUTO_NOTE);
+    await check('the Automatic switch is labelled Automatic', () => w.document.querySelector('label[for="trustedToggle"]').textContent === 'Automatic');
+    await check('the Automatic row sits directly under the Unsafe mode row and its note', () => {
+      const row = $('trustedToggle').closest('.row');
+      return !!row && row.previousElementSibling === $('unsafeNote') && $('unsafeNote').previousElementSibling.contains($('unsafeToggle'));
+    });
     await wait(50);
     await check('the Sites list has a row per stored site, drawn from storage', () => rows().length === 2 && !!rowFor('youtube.com') && !!rowFor('bank.example'));
     await check('the current choice is marked on its row', () => btnIn(rowFor('youtube.com'), 'Allow').getAttribute('aria-pressed') === 'true'
@@ -156,25 +161,26 @@ const TRUSTED_NOTE = 'Claude acts on any site without asking. Pages can try to s
       await panelBg({ type: 'siteListSet', site: 'https://www.bank.example/', value: null });
       return JSON.stringify(bgSites) === '{"youtube.com":"allow"}';
     });
-    await check('Trusted on asks the confirm window, and is on after a yes', async () => {
+    await check('Automatic on asks the confirm window, and is on after a yes', async () => {
       askCalls.length = 0; confirmAnswer.ok = true;
       await panelBg({ type: 'setTrusted', on: true });
       return askCalls.length === 1 && askCalls[0].kind === 'trusted' && bg('cizState.get().trusted') === true;
     });
-    await check('Trusted stays off when the confirm window says no', async () => {
+    await check('the activity log says Automatic, not Trusted', () => bg('cizState.log().some(e => /^Automatic on:/.test(e.text))') && !bg('cizState.log().some(e => /Trusted/.test(e.text))'));
+    await check('Automatic stays off when the confirm window says no', async () => {
       await bg('cizState.set({ trusted: false })');
       confirmAnswer.ok = false;
       await panelBg({ type: 'setTrusted', on: true });
       confirmAnswer.ok = true;
       return bg('cizState.get().trusted') === false;
     });
-    await check('Trusted off tells the helper, and is off', async () => {
+    await check('Automatic off tells the helper, and is off', async () => {
       await bg('cizState.set({ trusted: true })');
       nativeSent.length = 0;
       await panelBg({ type: 'setTrusted', on: false });
       return nativeSent.some(m => m.type === 'trusted_off') && bg('cizState.get().trusted') === false;
     });
-    await check('Stop clears Trusted and the site question, tells the helper, and cancels the site gate', async () => {
+    await check('Stop clears Automatic and the site question, tells the helper, and cancels the site gate', async () => {
       await bg('cizState.set({ trusted: true, siteAsk: { id: "s9", site: "youtube.com", action: "read", kind: "site" } })');
       nativeSent.length = 0; siteCalls.length = 0;
       await bg('stopAll("test")');

@@ -190,6 +190,16 @@ const begin = (h, o) => h.g.begin(o.id || 'm1', Object.assign({ tabUrl: 'https:/
     check('trusted skips the card', p.done && p.ok && h.sets.length === 0);
   }
   {
+    // scheduled(): true only while a scheduled macro's turn runs, so Automatic mode never answers for one.
+    const h = mk();
+    const before = h.g.scheduled();
+    h.g.begin('sm1', { scheduled: ['feed.com'] });
+    const during = h.g.scheduled();
+    h.g.end('sm1');
+    const after = h.g.scheduled();
+    check('scheduled() is true only during a scheduled macro\'s turn', before === false && during === true && after === false, JSON.stringify([before, during, after]));
+  }
+  {
     const h = mk(); begin(h, { allow: ['in.com'] });
     const army = { run: 'run1', worker: 'w1' };
     const a = track(h.g.use('in.com', 'read', { army })); await tick();

@@ -7,10 +7,10 @@
 const texts = {
   en: {
     'unsafe.title': 'Claude in Zen: turn on Unsafe mode?',
-    'unsafe.text': 'Claude may then act on Google sign-in and account pages like on any other site, to debug sign-in problems. It also stops asking before it uses another site, sends a form, follows a link to another site or saves a picture. It still never types passwords, 2FA codes or payment details.\n\nUnsafe mode turns off when you press Stop or restart Zen.',
+    'unsafe.text': 'Claude may then act on Google sign-in and account pages like on any other site, to debug sign-in problems. Unsafe mode includes Automatic mode: Claude also answers Yes by itself to the questions about saving a picture, using another site, sending a form, following a link to another site, uploading a file, filling a form and allowing a folder. Sites you blocked and protected folders stay off-limits. It still never types passwords, 2FA codes or payment details.\n\nUnsafe mode turns off when you press Stop or restart Zen.',
     'unsafe.yes': 'Turn on', 'unsafe.no': 'Cancel',
-    'trusted.title': 'Claude in Zen: turn on Trusted mode?',
-    'trusted.text': 'Claude acts on any site without asking. Pages can try to steer it. It stays on until you press Stop.',
+    'trusted.title': 'Claude in Zen: turn on Automatic mode?',
+    'trusted.text': 'Claude then answers Yes by itself to these questions: saving a picture, using another site, sending a form or following a link to another site after reading a page, uploading a file, filling a form, and allowing a folder for file tools or local pages.\n\nGoogle sign-in and account pages, sites you blocked and protected folders stay off-limits. It still never types passwords, 2FA codes or payment details. Pages can try to steer it.\n\nIt stays on until you press Stop.',
     'trusted.yes': 'Turn on', 'trusted.no': 'Cancel',
     'files.read.title': 'Claude in Zen: turn on file tools?',
     'files.read.text': 'Let Claude read and search the files in this folder and its subfolders?\n\n$1\n\nNo changes, no shell.',
@@ -46,10 +46,10 @@ const texts = {
   },
   pt_BR: {
     'unsafe.title': 'Claude in Zen: ativar o modo Inseguro?',
-    'unsafe.text': 'O Claude poderá então agir em páginas de login e de conta do Google como em qualquer outro site, para depurar problemas de login. Ele também deixa de perguntar antes de usar outro site, enviar um formulário, seguir um link para outro site ou salvar uma imagem. Ele continua sem digitar senhas, códigos 2FA ou dados de pagamento.\n\nO modo Inseguro desliga quando você aperta Parar ou reinicia o Zen.',
+    'unsafe.text': 'O Claude poderá então agir em páginas de login e de conta do Google como em qualquer outro site, para depurar problemas de login. O modo Inseguro inclui o modo automático: o Claude também responde Sim sozinho às perguntas sobre salvar uma imagem, usar outro site, enviar um formulário, seguir um link para outro site, enviar um arquivo, preencher um formulário e permitir uma pasta. Os sites que você bloqueou e as pastas protegidas continuam fora do alcance. Ele continua sem digitar senhas, códigos 2FA ou dados de pagamento.\n\nO modo Inseguro desliga quando você aperta Parar ou reinicia o Zen.',
     'unsafe.yes': 'Ativar', 'unsafe.no': 'Cancelar',
-    'trusted.title': 'Claude in Zen: ativar o modo Confiável?',
-    'trusted.text': 'O Claude age em qualquer site sem perguntar. As páginas podem tentar influenciá-lo. O modo fica ativo até você apertar Parar.',
+    'trusted.title': 'Claude in Zen: ativar o modo automático?',
+    'trusted.text': 'O Claude passa a responder Sim sozinho a estas perguntas: salvar uma imagem, usar outro site, enviar um formulário ou seguir um link para outro site depois de ler uma página, enviar um arquivo, preencher um formulário e permitir uma pasta para as ferramentas de arquivos ou as páginas locais.\n\nAs páginas de login e de conta do Google, os sites que você bloqueou e as pastas protegidas continuam fora do alcance. Ele continua sem digitar senhas, códigos 2FA ou dados de pagamento. As páginas podem tentar influenciá-lo.\n\nO modo fica ativo até você apertar Parar.',
     'trusted.yes': 'Ativar', 'trusted.no': 'Cancelar',
     'files.read.title': 'Claude in Zen: ativar as ferramentas de arquivos?',
     'files.read.text': 'Permitir que o Claude leia e pesquise os arquivos desta pasta e das subpastas?\n\n$1\n\nSem alterações, sem shell.',

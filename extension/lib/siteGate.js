@@ -17,15 +17,16 @@
 //                      running message is ignored. Outside a turn the message scope lives until the next begin().
 //   list() -> string[]   the effective list now.       windowId() -> number|null   the window the message started in.
 //   onChange = fn(list)  set by the wiring; called whenever the effective list changes (after a "message" or "chat" answer).
-//   async use(site, action, opts)   action 'read'|'act'|'open'; opts { trusted, blocks: {site:'allow'|'block'}, army: {run, worker} }.
+//   async use(site, action, opts)   action 'read'|'act'|'open'; opts { trusted (Automatic mode, or Unsafe mode), blocks: {site:'allow'|'block'}, army: {run, worker} }.
 //        Resolves when allowed, throws Error(fixed text) when not. Order: a blocked entry (or a subdomain of one) -> blocked text,
 //        always; trusted -> allowed; army -> only the run's list (the effective list at the run's FIRST call), never a card; in the
 //        list or an allow entry in blocks -> allowed; denied earlier in this message -> refused text; else a card.
 //   async risky(site, action, opts)  action 'post'|'leave'; same blocks/trusted; army -> the workers text; page not read in this
 //        message -> allowed; else a kind 'risky' card (answers allow/deny). Denials are kept under action+site for the message.
 //   begin(id, { scheduled: [sites] })  a scheduled macro's turn (E8): use() allows exactly those sites and refuses the rest with
-//        "Outside this scheduled macro's sites: <site>.", no card, Trusted or not; risky() allows. The chat's own lists are untouched.
+//        "Outside this scheduled macro's sites: <site>.", no card, Automatic or not; risky() allows. The chat's own lists are untouched.
 //   markRead() / isRead()   the message has (not) read page content.
+//   scheduled() -> boolean   true while a scheduled macro's turn runs (Automatic mode never answers for one).
 //   tabView(tab, { trusted, blocks }) -> { id, site, active } for a blocked site or (not trusted) a site outside the list,
 //        else { id, windowId, active, title, url, audible }.
 //   The card: cizState.set({ siteAsk: { id, site, action, kind } }), kind 'site' (answers message|chat|deny) or 'risky'
@@ -71,7 +72,7 @@ const cizSiteGate = (() => {
   function checkUse(site, opts) {
     const o = opts || {};
     if (isBlocked(o.blocks, site)) throw new Error(`${site} is blocked in your site list.`);
-    if (sched) {   // a scheduled macro: its own sites only, never a card, Trusted does not widen it
+    if (sched) {   // a scheduled macro: its own sites only, never a card, Automatic does not widen it
       if (cizSiteMatch(sched, site)) return 'ok';
       throw new Error(`Outside this scheduled macro's sites: ${site}.`);
     }
@@ -178,6 +179,7 @@ const cizSiteGate = (() => {
     risky(site, action, opts) { return run(site, action, 'risky', () => checkRisky(site, action, opts)); },
     markRead() { pageRead = true; },
     isRead: () => pageRead,
+    scheduled: () => !!sched,
     tabView(tab, opts) {
       const o = opts || {};
       const site = cizSiteOf(tab.url);

@@ -240,7 +240,7 @@ $('siteChat').addEventListener('click', () => answerSite('chat'));
 $('siteDeny').addEventListener('click', () => answerSite('deny'));
 $('siteAllow').addEventListener('click', () => answerSite('allow'));
 function answerSite(choice) { if (state.siteAsk) send('siteAnswer', { id: state.siteAsk.id, choice }); }
-// Trusted: a turn-on waits for the helper's confirm window, so the switch shows the state until that says yes
+// Automatic (state key trusted): a turn-on waits for the helper's confirm window, so the switch shows the state until that says yes
 $('trustedToggle').addEventListener('change', e => {
   const on = e.target.checked;
   if (on) e.target.checked = !!state.trusted;

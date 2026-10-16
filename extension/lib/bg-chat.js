@@ -40,7 +40,7 @@ function cizChatId() { return chatRuns.size ? [...chatRuns.keys()][0] : ''; }
 // Whenever the chat's site list changes during a turn (a card answered), the helper hears the new list.
 cizSiteGate.onChange = list => {
   const id = cizChatId();
-  if (id) sendNative({ type: 'scope', id, sites: list, trusted: !!cizState.get().trusted || !!cizState.get().unsafe });   // Unsafe includes Trusted
+  if (id) sendNative({ type: 'scope', id, sites: list, trusted: cizAutomatic() });   // Unsafe includes Automatic
 };
 
 const CHAT_ATTACH_MAX = 12;
@@ -88,7 +88,7 @@ async function startChat(msg) {
 
 async function startChatNow(msg, id, text, improve, attachments, fail) {
   const s = cizState.get();
-  // A scheduled macro (E8) only reads: Speed, no tab, no files, no Unsafe, no Trusted, no army, and its own sites. A saved macro with
+  // A scheduled macro (E8) only reads: Speed, no tab, no files, no Unsafe, no Automatic, no army, and its own sites. A saved macro with
   // army tasks (E7) sends in Quality with the army on, whatever the switches say.
   const sched = msg.scheduled && typeof msg.scheduled === 'object' && msg.scheduled.macro ? { macro: String(msg.scheduled.macro).slice(0, 40), sites: (Array.isArray(msg.scheduled.sites) ? msg.scheduled.sites : []).map(String) } : null;
   const forceArmy = !improve && !sched && msg.army === true;
@@ -126,7 +126,7 @@ async function startChatNow(msg, id, text, improve, attachments, fail) {
   }
   const sent = sendNative({ type: 'chat', id, text, model, tab, resume, files, folder: files ? s.filesFolder : '',
     unsafe: !improve && !sched && !!s.unsafe, caveman: !improve && !sched && !!s.caveman, attachments, improve,
-    sites, trusted: !improve && !sched && (!!s.trusted || !!s.unsafe), scheduled: !!sched });
+    sites, trusted: !improve && !sched && cizAutomatic(), scheduled: !!sched });
   if (!sent) { chatRuns.delete(id); chatBusyPush(); cizSiteGate.end(id); return fail(t('bg_helperUnreachable')); }
   await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
     : sched ? `scheduled macro ${sched.macro} → Claude Code, Speed, reading ${sched.sites.join(', ')}`
@@ -304,7 +304,7 @@ async function onNativeMessage(msg) {
       if (s.trusted && !patch.trusted) {   // the helper forgot it: the turn that runs hears it too
         const running = cizChatId();
         if (running) sendNative({ type: 'scope', id: running, sites: cizSiteGate.list(), trusted: false });
-        await cizState.addLog('warn', 'Trusted mode is off: the helper restarted and did not keep it.');
+        await cizState.addLog('warn', 'Automatic mode is off: the helper restarted and did not keep it.');
       }
       if (s.unsafe && !patch.unsafe) await cizState.addLog('warn', 'Unsafe mode is off: the helper restarted and did not keep it. Turn it on again to be asked.');
       if (s.filesEnabled && !patch.filesEnabled) await cizState.addLog('warn', 'File tools are off: the helper restarted and did not keep them. Turn them on again to be asked.');

@@ -502,6 +502,10 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     toHelper({ type: 'confirm', id: 'kp0', kind: 'files', mode: 'write', folder });
     const heldA = await next(m => m.type === 'confirm_result' && m.id === 'kp0');
     check('a folder picked in the window does not replace the folder allowed before: the old one is answered at once, with no window', heldA.ok === true && questions().length === asked, JSON.stringify({ heldA, asked, now: questions().length }));
+    // With Unsafe mode (or Automatic mode) on, the helper answers a folder question Yes by itself (see trusted-smoke.js), so the
+    // window checks below run with Unsafe mode off, and it is turned on again before the checks that expect it.
+    toHelper({ type: 'unsafe_off' });
+    await next(m => m.type === 'confirmed_state' && m.unsafe === false);
     fs.writeFileSync(confirmAnswer, 'no');
     toHelper({ type: 'confirm', id: 'kp1', kind: 'files', mode: 'write', folder: pickedDir });
     const pickNo = await next(m => m.type === 'confirm_result' && m.id === 'kp1');
@@ -514,6 +518,9 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     await next(m => m.type === 'confirm_result' && m.id === 'kp3');
     const stPicked = await next(m => m.type === 'confirmed_state');
     check('a yes for the picked folder moves the allowed folder to it', stPicked.files && stPicked.files.folder === pickedDir && stPicked.files.mode === 'read', JSON.stringify(stPicked));
+    toHelper({ type: 'confirm', id: 'ku2', kind: 'unsafe' });
+    await next(m => m.type === 'confirm_result' && m.id === 'ku2');
+    await next(m => m.type === 'confirmed_state' && m.unsafe === true);
     toHelper({ type: 'files_off' });
     const stFilesOff = await next(m => m.type === 'confirmed_state');
     check('files_off is sent back as no file tools, Unsafe mode kept', stFilesOff.files === null && stFilesOff.unsafe === true, JSON.stringify(stFilesOff));

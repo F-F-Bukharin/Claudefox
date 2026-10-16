@@ -125,7 +125,8 @@ function createGrants(file) {
 
 // deps: { askAddon(type, payload, ms) -> Promise<{ ok, error, tab_id, title }>, confirm({ title, text, yes, no }) ->
 // Promise<{ ok, error }>, grants: createGrants(...), changed() (the list changed: tell the add-on),
-// asking(folder) (a question about this folder is on screen, or '' when it is over) }
+// asking(folder) (a question about this folder is on screen, or '' when it is over), automatic() (the running chat turn is
+// automatic: Automatic or Unsafe mode answers the folder question Yes without the window) }
 function createLocalPages(deps) {
   // A folder the user has not allowed yet: they answer in the confirm window. The window says which site was open when
   // Claude asked (no site: no page), so a page that tells Claude to read the user's files is visible to the user.
@@ -133,6 +134,13 @@ function createLocalPages(deps) {
   async function askFolder(folder, reading) {
     const have = deps.grants.covering(folder);
     if (have) return have;
+    if (deps.automatic && deps.automatic()) {   // Automatic or Unsafe mode: Yes with no window, but a protected folder is refused as ever
+      const why = guard.localProblem(folder, true);
+      if (why) throw new Error(`Not allowed: ${folder}: ${why}.`);
+      deps.grants.add(folder);
+      if (deps.changed) deps.changed();
+      return deps.grants.covering(folder) || folder;
+    }
     if (deps.asking) deps.asking(folder);
     let r;
     try {

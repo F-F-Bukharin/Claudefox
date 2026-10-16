@@ -82,6 +82,13 @@ if (data) {
     ['main_acctDiffers', '$1The chat spends this Claude Code account, which differs from the claude.ai account signed in to Zen.',
       '$1A conversa usa esta conta do Claude Code, que é diferente da conta do claude.ai conectada no Zen.'],
   ].every(([k, en, pt]) => data.en[k] && data.pt_BR[k] && data.en[k].message === en && data.pt_BR[k].message === pt));
+  // Automatic mode replaced the Trusted switch: the keys keep their names, the texts changed.
+  ok('Automatic switch: the label is Automatic / Modo automático', data.en.ui_trusted.message === 'Automatic' && data.pt_BR.ui_trusted.message === 'Modo automático');
+  ok('Automatic switch: the English note lists what it answers and what stays off-limits', data.en.ui_trustedNote.message
+    === 'Claude answers Yes by itself to the questions about pictures, other sites, form sends, uploads, form filling and folders. Google sign-in pages, blocked sites and protected folders stay off-limits. Pages can try to steer it.');
+  ok('Automatic switch: the Portuguese note says the same', data.pt_BR.ui_trustedNote.message
+    === 'O Claude responde Sim sozinho às perguntas sobre imagens, outros sites, envio de formulários, arquivos, preenchimento de formulários e pastas. As páginas de login do Google, os sites bloqueados e as pastas protegidas continuam fora do alcance. As páginas podem tentar influenciá-lo.');
+  ok('no visible text still says Trusted or Modo confiável', !Object.values(data.en).some(v => /\bTrusted\b/.test(v.message)) && !Object.values(data.pt_BR).some(v => /confiável/i.test(v.message)));
   ok('the Language row has its keys (lang_label, lang_auto), Auto translated', !!(data.en.lang_label && data.pt_BR.lang_label && data.en.lang_auto.message === 'Auto'
     && data.pt_BR.lang_auto.message === 'Automático'));
 

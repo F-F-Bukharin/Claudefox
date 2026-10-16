@@ -134,7 +134,7 @@ const TOOLS = [
   {
     name: 'fill_form',
     title: 'Fill form',
-    description: 'Fill several form fields at once. The user approves the list (label and value) in a card first. Never submits; never fills passwords, two-step codes or payment fields.',
+    description: 'Fill several form fields at once. The user approves the list (label and value) in a card first, unless Automatic or Unsafe mode is on. Never submits; never fills passwords, two-step codes or payment fields.',
     timeoutMs: 150000,
     inputSchema: obj({
       ...TAB,
@@ -234,7 +234,7 @@ const TOOLS = [
   {
     name: 'local_page_open',
     title: 'Open local page',
-    description: 'Open a page or file from this computer (an HTML game, a saved page, a PDF, an image) in a new Zen tab, in front, so you can see and use it with screenshot, get_page_text, find, click and press_key. Give its full path or file: URL. The first time in a folder, the user is asked to allow that folder; then the whole folder is open to you. ' + FILE_PAGES_NOT_TABS,
+    description: 'Open a page or file from this computer (an HTML game, a saved page, a PDF, an image) in a new Zen tab, in front, so you can see and use it with screenshot, get_page_text, find, click and press_key. Give its full path or file: URL. The first time in a folder, the user is asked to allow that folder, unless Automatic or Unsafe mode is on; then the whole folder is open to you. ' + FILE_PAGES_NOT_TABS,
     inputSchema: obj({
       path: { type: 'string', description: 'Full path, like C:\\Users\\you\\Downloads\\game\\index.html, or a file: URL.' },
     }, ['path']),
@@ -243,7 +243,7 @@ const TOOLS = [
   {
     name: 'local_files',
     title: 'List local folder',
-    description: 'What is in a folder on this computer: subfolders (ending in /) and files with their sizes. The first time in a folder, the user is asked to allow it.' + UNTRUSTED.replace('Page text', 'File names'),
+    description: 'What is in a folder on this computer: subfolders (ending in /) and files with their sizes. The first time in a folder, the user is asked to allow it, unless Automatic or Unsafe mode is on.' + UNTRUSTED.replace('Page text', 'File names'),
     inputSchema: obj({
       path: { type: 'string', description: 'Full path of the folder, like C:\\Users\\you\\Downloads.' },
     }, ['path']),
@@ -253,7 +253,7 @@ const TOOLS = [
   {
     name: 'local_file_read',
     title: 'Read local file',
-    description: 'The text of a file on this computer: HTML, scripts, CSS, text, JSON (Word, PowerPoint and Excel files come as Markdown). Use it to read a local game\'s code. Long files come in parts: pass start_at = next_start. The first time in a folder, the user is asked to allow it.' + UNTRUSTED.replace('Page text', 'File text'),
+    description: 'The text of a file on this computer: HTML, scripts, CSS, text, JSON (Word, PowerPoint and Excel files come as Markdown). Use it to read a local game\'s code. Long files come in parts: pass start_at = next_start. The first time in a folder, the user is asked to allow it, unless Automatic or Unsafe mode is on.' + UNTRUSTED.replace('Page text', 'File text'),
     inputSchema: obj({
       path: { type: 'string', description: 'Full path of the file, or its file: URL.' },
       start_at: { type: 'integer', description: 'Character offset to continue from (next_start of the previous part).' },
@@ -280,7 +280,7 @@ const TOOLS = [
   {
     name: 'download_image',
     title: 'Save picture',
-    description: 'Save a picture or GIF (PNG, JPEG, GIF or WebP) from a public web address to a folder on this computer. The first picture of a message asks the user in a card; after a Yes, the other pictures of the same message save without asking (in Unsafe mode nothing asks). Call it once per picture. Pictures behind a sign-in cannot be saved.',
+    description: 'Save a picture or GIF (PNG, JPEG, GIF or WebP) from a public web address to a folder on this computer. The first picture of a message asks the user in a card; after a Yes, the other pictures of the same message save without asking (in Automatic or Unsafe mode nothing asks). Call it once per picture. Pictures behind a sign-in cannot be saved.',
     inputSchema: obj({
       url: { type: 'string', description: 'The https or http address of the picture.' },
       folder: { type: 'string', description: 'Optional: a folder the user allowed, by its full path. Without it the picture goes to the user\'s Downloads folder.' },
@@ -288,11 +288,11 @@ const TOOLS = [
     timeoutMs: 180000,
     panelOnly: true,
   },
-  // Uploads (lib/upload.js): the user allows each file in a card in the panel, even in Trusted mode.
+  // Uploads (lib/upload.js): the user allows each file in a card in the panel, unless Automatic or Unsafe mode is on.
   {
     name: 'upload_file',
     title: 'Upload file',
-    description: 'Put a file from this computer into a file field (input type=file) on the page. The file must be in a folder the user allowed (a local-page folder or the file-tools folder) and at most 25 MB. Every call asks the user in a card first, in Trusted mode too. Find the field with find or read_page first; then submit the form yourself.',
+    description: 'Put a file from this computer into a file field (input type=file) on the page. The file must be in a folder the user allowed (a local-page folder or the file-tools folder) and at most 25 MB. Every call asks the user in a card first, unless Automatic or Unsafe mode is on. Find the field with find or read_page first; then submit the form yourself.',
     inputSchema: obj({
       ...REF, ...SELECTOR, ...TAB,
       path: { type: 'string', description: 'The full path of the file.' },

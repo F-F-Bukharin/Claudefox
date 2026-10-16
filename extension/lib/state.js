@@ -20,7 +20,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   siteAsk: null,              // { id, site, action, kind } while the panel's site card waits for an answer
   fillAsk: null,              // { id, site, rows } while the panel's fill card waits for an answer
   uploadAsk: null,            // { id, name, size, site } while the upload card (upload_file) waits for an answer in the panel
-  trusted: false,             // Trusted: Claude acts on any site without asking. Session only (load() clears it)
+  trusted: false,             // Automatic mode: pictures, sites, form sends, uploads, form filling and folders are answered Yes by themselves. Session only (load() clears it)
   accounts: [],               // chat accounts from the helper: { id, email, plan, loggedIn, active }
   accountLogin: null,         // { id, isNew } while a sign-in window is open
   accountBusy: '',            // the account id whose switch is waiting for the helper
