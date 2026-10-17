@@ -111,7 +111,7 @@ try {
     && fs.readFileSync(path.join(s, 'extension', 'lib', 'policy.js'), 'utf8').includes(`NATIVE_HOST_OLD: '${OLD_WORD('_')}'`)
     && /\$name\s+= 'claudefox'/.test(fs.readFileSync(path.join(s, 'host', 'install.ps1'), 'latin1')) && /path\.join\(LOCAL, 'claudefox'\)/.test(fs.readFileSync(path.join(s, 'host', 'lib', 'paths.js'), 'utf8'))
     && m.browser_specific_settings.gecko.id === 'claude-in-zen@f.local');
-  check('a file without the old name keeps every byte', fs.readFileSync(path.join(s, 'extension', 'lib', 'state.js')).equals(fs.readFileSync(path.join(root, 'extension', 'lib', 'state.js'))));
+  check('a file without the old name keeps every byte', fs.readFileSync(path.join(s, 'extension', 'lib', 'i18n.js')).equals(fs.readFileSync(path.join(root, 'extension', 'lib', 'i18n.js'))));
   check('Windows files keep their CRLF line endings', [batText, startHere, fs.readFileSync(path.join(s, 'host', 'install.ps1'), 'latin1')].every(b => b.includes('\r\n') && !/[^\r]\n/.test(b)));
   check('the source and this PC\'s install say Claudefox, and Zen where they mean the browser', JSON.parse(read('extension/manifest.json')).name === 'Claudefox' && read('extension/panel.html').includes('What should I do in Zen?')
     && fs.existsSync(path.join(root, 'Set up Claudefox.bat')) && read('START HERE.txt').startsWith('Claudefox'));
@@ -277,6 +277,33 @@ if (!process.env.CLAUDEFOX_FRIENDS_INNER) {
     check('friends suite: the staged copy is branded', r.status === 0, r.stderr);
     const left = walk(sf).filter(f => fs.readFileSync(f, 'latin1').includes(OLD_NAME)).map(f => path.relative(sf, f));
     check('friends suite: no old product name is left in any file of the copy', left.length === 0, left.join(', '));
+    // D3 (spec): no "Zen" is left in the friends copy outside an explicit allowlist. A word "Zen" (any case) is either text a
+    // friend or Claude reads, which must say Firefox by now, or code that is really about Zen; the second kind is listed here, by file.
+    const ZEN_WORD = /\bzen\b/i;
+    const ZEN_KEEP_ANY = [   // in any file
+      [new RegExp(esc(ADDON_ID), 'g'), 'the add-on id (an install keeps it, so updates still reach the same add-on)'],
+      [new RegExp(`${OLD_WORD('[-_]')}(-host\\.bat|\\.json)?`, 'g'), 'the old data folder, launcher and registration that install.ps1 moves and removes'],
+      [/zen:\\?\/\\?\//g, 'the link scheme Claude writes for a tab or a file; the panel turns it into a link (lib/markdown.js)'],
+      [/zen\.exe/g, 'the name of the program, where a comment or a lookup names it'],
+    ];
+    const ZEN_KEEP = {   // file (or a folder, ending in /) -> [pattern, why]
+      'test/': [/\bzen\b/gi, 'the tests check the source, which still says Zen where it means the browser; friends do not read them'],
+      'host/test/': [/\bzen\b/gi, 'the same: tests of the helper'],
+      'extension/panel.js': [/\bzen\b/g, 'a local variable (the account email of the browser), not text'],
+      'host/lib/localpages.js': [/^\s*\/\/.*$|'Zen Browser'|\|zen\|/gm, 'finds the browser to open local pages in, and Zen Browser is one it looks for; its comments say how'],
+      'host/lib/updates.js': [/^\s*\/\/.*$|\bzen\b/gm, 'finds out whether a Zen profile links the add-on to the project folder (link.ps1); inert in a friends copy'],
+      'host/lib/guard.js': [/^\s*\/\/.*$|'zen'|'\.zen'/gm, 'the protected folders: the Zen profile folders stay off-limits to Claude'],
+    };
+    const zenLeft = [];
+    for (const f of walk(sf)) {
+      const rel = path.relative(sf, f).split(path.sep).join('/');
+      if (!/\.(js|json|html|css|svg|txt|md|bat|cmd|ps1|py)$/i.test(rel)) continue;
+      let text = fs.readFileSync(f, 'latin1');
+      for (const [re] of ZEN_KEEP_ANY) text = text.replace(re, '');
+      for (const k of Object.keys(ZEN_KEEP)) if (k.endsWith('/') ? rel.startsWith(k) : rel === k) text = text.replace(ZEN_KEEP[k][0], '');
+      text.split('\n').forEach((l, i) => { if (ZEN_WORD.test(l)) zenLeft.push(`${rel}:${i + 1} ${l.trim().slice(0, 90)}`); });
+    }
+    check('friends suite: no "Zen" is left in the copy outside the allowlist', zenLeft.length === 0, `${zenLeft.length} left: ${zenLeft.slice(0, 12).join(' | ')}`);
     const inner = spawnSync(process.execPath, [path.join(sf, 'test', 'run-all.js')], { cwd: sf, encoding: 'utf8', timeout: 600000,
       env: { ...process.env, CLAUDEFOX_FRIENDS_INNER: '1' } });
     const out = `${inner.stdout || ''}${inner.stderr || ''}`;
