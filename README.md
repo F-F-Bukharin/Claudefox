@@ -147,7 +147,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `tools\Install helper.bat` | Installs only the helper. Run it yourself: installs made from the Claude desktop app land in its private copy of AppData, which Zen can't see. |
 | `tools\Sign in Claude Code.bat` | Signs the add-on's Claude Code profile (`%LOCALAPPDATA%\claudefox\claude`) in. Separate from Claude Code in VS Code or a terminal. |
 | `tools\Link add-on to Zen.bat` | **Best for development.** Close Zen first. Points Zen at `extension\` in this folder, so **update** in Settings reloads add-on and helper in one click: no `.xpi`, no install prompt, no restart. Undo with `zen-profile\link.ps1 -Unlink`. |
-| `tools\Install in Zen.bat` | Builds `build\claudefox.xpi` (or picks the newest signed one in `build\signed`) and opens it in Zen for a permanent install. Run it again to update. |
+| `tools\Install in Zen.bat` | Builds `build\claudefox.xpi` (or picks the newest signed build of this PC's own add-on in `build\signed`, never a friends-signed one) and opens it in Zen for a permanent install. Run it again to update. |
 | `tools\Load in Zen.bat` | Builds `build\claudefox.xpi` and opens `about:debugging` with its path copied (temporary install). |
 | `tools\Sign add-on.bat` | Signs the add-on with Mozilla into `build\signed` (needs API keys, see below). |
 | `tools\Build friends zip.bat` | Builds `build\friends\Claudefox-v<version>.zip`: a copy that `tools\brand.js` turns from Zen to Firefox (the source says Zen where it means the browser; the copy says Firefox), using a signed Claudefox `.xpi` from `build\signed` if there is one. |

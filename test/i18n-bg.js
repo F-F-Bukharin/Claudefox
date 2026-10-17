@@ -104,11 +104,11 @@ const menuTitles = () => ['ask-selection', 'ask-page', 'ask-link'].map(id => {
     ok('en: an about: page is captured, as the screenshot tool captures it', (await snapReply('about:config')).data === 'AAAA');
     ok('en: a page that shows saved passwords is refused, in English', await snapError('about:logins') === "This tab can't be captured: that page shows saved passwords.");
     // A file: page in a folder the user allowed is captured; one outside is refused with the folder reason, before any capture.
-    await g('cfxState').set({ localGrants: ['C:\\Users\\F\\Notes'] });
-    ok('a file: page in an allowed folder can be captured', (await snapReply('file:///C:/Users/F/Notes/page.html')).data === 'AAAA');
+    await g('cfxState').set({ localGrants: ['C:\\Users\\you\\Notes'] });
+    ok('a file: page in an allowed folder can be captured', (await snapReply('file:///C:/Users/you/Notes/page.html')).data === 'AAAA');
     captured.length = 0;
     ok('a file: page outside the allowed folders is refused with the folder reason, before any capture',
-      await snapError('file:///C:/Users/F/Other/page.html') === "This tab can't be captured: the user has not allowed Claude to look in C:\\Users\\F\\Other." && captured.length === 0);
+      await snapError('file:///C:/Users/you/Other/page.html') === "This tab can't be captured: the user has not allowed Claude to look in C:\\Users\\you\\Other." && captured.length === 0);
     await g('cfxState').set({ localGrants: [] });
     // Google sign-in: refused without Unsafe mode (above), and captured with it.
     await g('cfxState').set({ unsafe: true });

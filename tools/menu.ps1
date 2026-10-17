@@ -201,7 +201,7 @@ $script:steps = @(
     Title = 'Install the add-on in Zen (not linked)'
     Recommended = $false
     NeedsZen = $false
-    Detail = 'Builds the file and opens Zen''s install prompt: click Add, then Okay. Does nothing while Zen is linked to this folder (step 4). Uses the signed build for this version when there is one. Makes: the build folder.'
+    Detail = 'Builds the file and opens Zen''s install prompt: click Add, then Okay. Does nothing while Zen is linked to this folder (step 4). Uses a signed build of this PC's own add-on for this version when there is one (never a friends-signed build). Makes: the build folder.'
     Jobs = @( (New-PsJob (Join-Path $tools 'install-xpi.ps1') '' @(0, 2)) )
   },
   @{

@@ -93,7 +93,7 @@ function cfxPathParts(path) {
 
 function cfxJoinPath(p) { return p.drive ? `${p.drive}:\\${p.segs.join('\\')}` : `/${p.segs.join('/')}`; }
 
-// file:///C:/Users/H/game/index.html -> C:\Users\H\game\index.html; file:///home/f/game/index.html -> /home/f/game/index.html.
+// file:///C:/Users/you/game/index.html -> C:\Users\you\game\index.html; file:///home/you/game/index.html -> /home/you/game/index.html.
 // null for other URLs and for a host other than localhost (no network shares).
 function cfxFilePath(rawUrl) {
   let u;
