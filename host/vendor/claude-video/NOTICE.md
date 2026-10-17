@@ -1,4 +1,4 @@
-# NOTICE: claude-video, trimmed for Claude in Zen
+# NOTICE: claude-video, trimmed for Claudefox
 
 This folder is a trimmed copy of **claude-video** v0.3.2 by Bradley Bonanno, used under the MIT licence (the full text is in `LICENSE` beside this file). It is the upstream `skills/watch/scripts` folder, from the claude-video-main archive, with the changes listed below.
 

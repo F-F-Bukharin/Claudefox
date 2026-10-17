@@ -3,8 +3,9 @@
 // Loaded first by the background page; later phases (page actions, files)
 // call into this before doing anything.
 
-const CIZ = {
-  NATIVE_HOST: 'claude_in_zen',          // HKCU\Software\Mozilla\NativeMessagingHosts\claude_in_zen
+const CFX = {
+  NATIVE_HOST: 'claudefox',              // HKCU\Software\Mozilla\NativeMessagingHosts\claudefox
+  NATIVE_HOST_OLD: 'claude_in_zen',      // the registration before 0.11; the add-on tries it once when claudefox is missing (lib/bg-chat.js)
   DEBUG_PORT_URL: 'http://127.0.0.1:9222/',
   CLAUDE_ORIGIN: 'https://claude.ai',
   LOG_LIMIT: 200,
@@ -27,15 +28,15 @@ const GOOGLE_HANDS_OFF = 'Google sign-in pages are hands-off (the user can turn 
 
 // Local pages (lib/local.js): a file: page is open to Claude only inside a folder the user allowed (opts.localGrants).
 // Outside them the answer names the folder to ask about. Army workers never get this far (lib/pageTools.js).
-function cizUrlBlocked(rawUrl, opts) {
+function cfxUrlBlocked(rawUrl, opts) {
   let u;
   try { u = new URL(rawUrl); } catch { return { blocked: true, reason: 'unparseable URL' }; }
   if (u.protocol === 'file:') {
-    const path = cizFilePath(rawUrl);
+    const path = cfxFilePath(rawUrl);
     if (!path) return { blocked: true, reason: 'file: pages on network shares or odd paths are off-limits' };
-    if (((opts && opts.localGrants) || []).some(f => cizInFolder(path, f))) return { blocked: false, local: true, path };
+    if (((opts && opts.localGrants) || []).some(f => cfxInFolder(path, f))) return { blocked: false, local: true, path };
     // A URL ending in / is Zen's listing of a folder, so that folder is the one to ask about.
-    const folder = /\/$/.test(u.pathname) ? path : cizFolderOf(path);
+    const folder = /\/$/.test(u.pathname) ? path : cfxFolderOf(path);
     return { blocked: true, needGrant: folder, path, reason: `the user has not allowed Claude to look in ${folder}` };
   }
   if (!/^https?:$/.test(u.protocol)) {
@@ -56,22 +57,22 @@ function cizUrlBlocked(rawUrl, opts) {
 
 // Seeing is not touching: screenshots may show about: pages (Firefox settings, about:config, about:support...),
 // which add-ons can never read or act on, except the pages that list saved passwords. Web pages follow the rules
-// above; file: pages follow the folder grants (cizUrlBlocked); moz-extension: and other non-web pages stay out.
+// above; file: pages follow the folder grants (cfxUrlBlocked); moz-extension: and other non-web pages stay out.
 const VIEW_BLOCKED_ABOUT = /^about:(logins|loginsimportreport|keychain|certificate)\b/i;
 
-function cizViewBlocked(rawUrl, opts) {
+function cfxViewBlocked(rawUrl, opts) {
   const url = String(rawUrl || '');
   if (/^about:/i.test(url)) {
     return VIEW_BLOCKED_ABOUT.test(url) ? { blocked: true, reason: 'that page shows saved passwords' } : { blocked: false, about: true };
   }
-  return cizUrlBlocked(url, opts);
+  return cfxUrlBlocked(url, opts);
 }
 
 // ---- Paths on this computer. Pure functions, so tests can call them directly.
 // Windows drive paths (either slash, compared without case) and POSIX paths. '.' and '..' are resolved, and '..'
 // never climbs above the drive or /. Anything else (relative paths, network shares like \\server or //server, NUL) is null.
 
-function cizPathParts(path) {
+function cfxPathParts(path) {
   const s = String(path == null ? '' : path);
   if (!s || s.includes('\0')) return null;
   const m = /^([A-Za-z]):[\\/]([\s\S]*)$/.exec(s);
@@ -88,11 +89,11 @@ function cizPathParts(path) {
   return { drive, segs };
 }
 
-function cizJoinPath(p) { return p.drive ? `${p.drive}:\\${p.segs.join('\\')}` : `/${p.segs.join('/')}`; }
+function cfxJoinPath(p) { return p.drive ? `${p.drive}:\\${p.segs.join('\\')}` : `/${p.segs.join('/')}`; }
 
 // file:///C:/Users/H/game/index.html -> C:\Users\H\game\index.html; file:///home/f/game/index.html -> /home/f/game/index.html.
 // null for other URLs and for a host other than localhost (no network shares).
-function cizFilePath(rawUrl) {
+function cfxFilePath(rawUrl) {
   let u;
   try { u = new URL(String(rawUrl)); } catch { return null; }
   if (u.protocol !== 'file:') return null;
@@ -101,30 +102,30 @@ function cizFilePath(rawUrl) {
   try { p = decodeURIComponent(u.pathname); } catch { return null; }
   if (p.includes('\0')) return null;
   const win = /^\/([A-Za-z])[:|](?:[\\/]([\s\S]*))?$/.exec(p);
-  const parts = cizPathParts(win ? `${win[1]}:\\${win[2] || ''}` : p);
-  return parts ? cizJoinPath(parts) : null;
+  const parts = cfxPathParts(win ? `${win[1]}:\\${win[2] || ''}` : p);
+  return parts ? cfxJoinPath(parts) : null;
 }
 
 // A folder written one way: no trailing separator (except the root, C:\ or /). '' when it is not a full path.
-function cizNormFolder(path) { const p = cizPathParts(path); return p ? cizJoinPath(p) : ''; }
+function cfxNormFolder(path) { const p = cfxPathParts(path); return p ? cfxJoinPath(p) : ''; }
 
 // The folder a file is in.
-function cizFolderOf(path) {
-  const p = cizPathParts(path);
+function cfxFolderOf(path) {
+  const p = cfxPathParts(path);
   if (!p) return '';
   p.segs.pop();
-  return cizJoinPath(p);
+  return cfxJoinPath(p);
 }
 
-function cizSamePath(a, b) {
-  const pa = cizPathParts(a), pb = cizPathParts(b);
+function cfxSamePath(a, b) {
+  const pa = cfxPathParts(a), pb = cfxPathParts(b);
   if (!pa || !pb || pa.drive !== pb.drive) return false;
-  return pa.drive ? cizJoinPath(pa).toLowerCase() === cizJoinPath(pb).toLowerCase() : cizJoinPath(pa) === cizJoinPath(pb);
+  return pa.drive ? cfxJoinPath(pa).toLowerCase() === cfxJoinPath(pb).toLowerCase() : cfxJoinPath(pa) === cfxJoinPath(pb);
 }
 
 // A folder holds itself and its subfolders, whole names only: C:\ab is not inside C:\a.
-function cizInFolder(path, folder) {
-  const pa = cizPathParts(path), pf = cizPathParts(folder);
+function cfxInFolder(path, folder) {
+  const pa = cfxPathParts(path), pf = cfxPathParts(folder);
   if (!pa || !pf || pa.drive !== pf.drive || pf.segs.length > pa.segs.length) return false;
   const same = pa.drive ? (x, y) => x.toLowerCase() === y.toLowerCase() : (x, y) => x === y;
   return pf.segs.every((seg, i) => same(seg, pa.segs[i]));
@@ -133,7 +134,7 @@ function cizInFolder(path, folder) {
 // Rule 2: never type passwords, 2FA codes or payment details.
 // Used by the fill/type tools in P2 to refuse the field outright.
 // Self-contained: pageOp.js turns this function's source into the tab's script, so it may call no helper from this file.
-function cizSensitiveField(desc) {
+function cfxSensitiveField(desc) {
   const type = String(desc.type || '').toLowerCase();
   if (type === 'password') return 'password field';
   // Lower case with accents removed: "cartão", "CARTAO" and "cartao" match alike. The words below have no accents.
@@ -146,9 +147,9 @@ function cizSensitiveField(desc) {
 }
 
 // The site of a page address and the site-list match (used by the site gate, the page tools and the upload card).
-// cizSiteOf(url): lowercase host of an http(s) URL without one leading "www." and one trailing dot; IPv4, [IPv6] and localhost as they
-// are; '' for anything else. cizSiteMatch(list, site): an entry equals site or site ends with "." + entry (IPs, [IPv6], localhost: exact).
-function cizSiteOf(url) {
+// cfxSiteOf(url): lowercase host of an http(s) URL without one leading "www." and one trailing dot; IPv4, [IPv6] and localhost as they
+// are; '' for anything else. cfxSiteMatch(list, site): an entry equals site or site ends with "." + entry (IPs, [IPv6], localhost: exact).
+function cfxSiteOf(url) {
   const m = /^https?:\/\/([^\/?#\s]*)/i.exec(String(url == null ? '' : url).trim());
   if (!m) return '';
   let h = m[1].slice(m[1].lastIndexOf('@') + 1).toLowerCase();
@@ -160,7 +161,7 @@ function cizSiteOf(url) {
   return /^[a-z0-9._-]+$/.test(h) ? h : '';
 }
 
-function cizSiteMatch(list, site) {
+function cfxSiteMatch(list, site) {
   if (!site || !list) return false;
   const exact = site.charAt(0) === '[' || site === 'localhost' || /^\d+(\.\d+){3}$/.test(site);
   for (let i = 0; i < list.length; i++) {

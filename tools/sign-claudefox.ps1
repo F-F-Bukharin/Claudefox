@@ -1,4 +1,4 @@
-# Claude in Zen: signs Claudefox (the friends build) with Mozilla, unlisted: for sharing, not listed on the add-ons
+# Claudefox: signs Claudefox (the friends build) with Mozilla, unlisted: for sharing, not listed on the add-ons
 # store. It signs a clean, branded copy (New-ClaudefoxStage), so this PC's mods and saved files never leave it. The
 # keys come from the WEB_EXT_API_KEY and WEB_EXT_API_SECRET user environment variables and are never printed. The
 # signed .xpi lands in build\signed, where build-friends.ps1 picks it up for this version.

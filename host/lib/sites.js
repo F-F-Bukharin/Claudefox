@@ -4,7 +4,7 @@
 // message, so a local file's text cannot steer a fetch somewhere else.
 
 // The tools that read the user's own files. One of them in a message turns WebFetch off for the rest of that message.
-const LOCAL_READ_TOOLS = ['Read', 'Glob', 'Grep', 'mcp__claude-in-zen__read_document', 'mcp__claude-in-zen__local_files', 'mcp__claude-in-zen__local_file_read'];
+const LOCAL_READ_TOOLS = ['Read', 'Glob', 'Grep', 'mcp__claudefox__read_document', 'mcp__claudefox__local_files', 'mcp__claudefox__local_file_read'];
 
 const NO_CHECK = 'Claudefox could not check this address, so WebFetch is blocked.';
 const OFF = 'WebFetch is off for the rest of this message because Claude read a local file.';

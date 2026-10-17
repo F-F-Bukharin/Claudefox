@@ -1,5 +1,5 @@
-# Claude in Zen: puts zen-profile\user.js and userChrome.css into your Zen profile(s), merging with what is there.
-# Our lines sit between "Claude in Zen BEGIN/END" markers, so running it again just updates them.
+# Claudefox: puts zen-profile\user.js and userChrome.css into your Zen profile(s), merging with what is there.
+# Our lines sit between "Claude in Zen BEGIN/END" markers (kept from before the rename: they are already in profile files), so running it again just updates them.
 #   Apply:  powershell -NoProfile -ExecutionPolicy Bypass -File zen-profile\apply.ps1
 #   Undo:   powershell -NoProfile -ExecutionPolicy Bypass -File zen-profile\apply.ps1 -Remove
 param([switch]$Remove)
@@ -23,7 +23,7 @@ if (Get-Process zen -ErrorAction SilentlyContinue) { Write-Host 'Zen is running:
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 function Merge($file, $block, $comment) {
   $close = if ($comment -eq '/*') { ' */' } else { '' }
-  $begin = "$comment Claude in Zen BEGIN$close"; $end = "$comment Claude in Zen END$close"
+  $begin = "$comment Claude in Zen BEGIN$close"; $end = "$comment Claude in Zen END$close"   # kept: profile files already carry these lines
   $text = if (Test-Path $file) { [IO.File]::ReadAllText($file) } else { '' }
   $pattern = '(?s)\r?\n?' + [regex]::Escape($begin) + '.*?' + [regex]::Escape($end) + '\r?\n?'
   $text = [regex]::Replace($text, $pattern, "`r`n").TrimEnd()

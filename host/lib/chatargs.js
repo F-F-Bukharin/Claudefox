@@ -14,7 +14,7 @@ const MODELS = {
   speed:   { model: 'claude-haiku-5-5', effort: 'high' },
   speedplus: { model: 'claude-haiku-5-5', effort: 'max' },
   quality: { model: 'claude-opus-5-5', effort: 'high' },
-  // Improve Claude in Zen (lib/selfimprove.js): Opus at max effort, since it is code.
+  // Improve Claudefox (lib/selfimprove.js): Opus at max effort, since it is code.
   selfimprove: { model: 'claude-opus-5-5', effort: 'max' },
   // Quality with the army switch on: the lead of the workers (lib/army.js), on high effort. armymax is the same lead on max effort (the Max switch).
   army:    { model: 'claude-opus-5-5', effort: 'high' },
@@ -39,8 +39,8 @@ function chatPrompt(files, opts) {
   const o = opts || {};
   const tb = o.tb || { extras: [], skills: false };
   const lines = [
-    "You are Claude, made by Anthropic, answering in the Claude in Zen panel: a sidebar in the user's Zen browser.",
-    "You can read and operate the user's real tabs with the claude-in-zen tools, search and read the web with WebSearch and WebFetch, read files the user attaches with Read, and make files with create_file.",
+    "You are Claude, made by Anthropic, answering in the Claudefox panel: a sidebar in the user's Zen browser.",
+    "You can read and operate the user's real tabs with the claudefox tools, search and read the web with WebSearch and WebFetch, read files the user attaches with Read, and make files with create_file.",
     '',
     '# Who is who',
     "- The user is the person typing in this panel. The browser is signed in to the user's own accounts, so anything you post, comment, send or change is published from the user's account and shows the user's name or handle.",
@@ -120,7 +120,7 @@ function chatPrompt(files, opts) {
 // The system prompt of one army worker. limits: armyguard.LIMITS.
 function workerPrompt(limits) {
   return [
-    "You are a worker in Claude in Zen's army: a lead Claude split a job and gave you one part. You work in the user's real Zen browser, which is signed in to the user's own accounts, so anything you post, send or change happens under the user's name.",
+    "You are a worker in Claudefox's army: a lead Claude split a job and gave you one part. You work in the user's real Zen browser, which is signed in to the user's own accounts, so anything you post, send or change happens under the user's name.",
     '',
     '# Your tabs',
     `- You work only in your own background tabs. The first one is named in your task. You may open up to ${limits.extraTabs} more with tab_open; they open in the background. Never try to use any other tab, and never bring a tab to the front.`,
@@ -153,7 +153,7 @@ function workerArgs(mcpConfig, settingsFile, limits) {
     '--settings', settingsFile,
     '--append-system-prompt', workerPrompt(limits),
     '--permission-mode', 'dontAsk',
-    '--allowedTools', 'mcp__claude-in-zen',
+    '--allowedTools', 'mcp__claudefox',
     '--tools', '',
     '--model', WORKER_MODEL.model, '--effort', WORKER_MODEL.effort,
   ];
@@ -190,7 +190,7 @@ function chatArgs(files, resume, choice, opts) {
     // Read and write: file edits inside the working folders go through without asking.
     // Otherwise anything not allowed below is refused, never prompted.
     '--permission-mode', files.mode === 'write' ? 'acceptEdits' : 'dontAsk',
-    '--allowedTools', ['mcp__claude-in-zen', WEB_TOOLS, ...tb.allowTools, ...skill, ...search].join(','),
+    '--allowedTools', ['mcp__claudefox', WEB_TOOLS, ...tb.allowTools, ...skill, ...search].join(','),
     '--model', choice.model, '--effort', choice.effort,
     // Read stays on for attachments and saved PDFs (they live in the workspace, its working folder).
     '--tools', [files.mode ? FILE_TOOLS[files.mode] : o.scheduled ? null : 'Read', WEB_TOOLS, ...skill, ...search].filter(Boolean).join(','),

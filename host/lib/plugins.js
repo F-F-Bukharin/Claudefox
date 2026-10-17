@@ -32,7 +32,7 @@ const RECOMMENDED = ['vidiq', 'caveman'];
 // mode. Matched as whole names in a plugin's name or label, a server's name, or the command or address that starts it.
 const SHELL_TOOLS = ['desktop-commander', 'mcp-server-commands', 'server-win-cli', 'win-cli-mcp-server', 'cli-mcp-server',
   'mcp-shell', 'mcp-shell-server', 'shell-mcp-server', 'mcp-server-shell', 'terminal-mcp', 'iterm-mcp'];
-const SHELL_WHY = 'It gives Claude a shell: it can run any command and read or change any file on this PC, so Claude in Zen never switches it on.';
+const SHELL_WHY = 'It gives Claude a shell: it can run any command and read or change any file on this PC, so Claudefox never switches it on.';
 function shellText(...texts) {
   return texts.some(t => {
     const s = String(t || '').toLowerCase().replace(/_/g, '-');
@@ -402,7 +402,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
     const problems = [];
     let changed = false;
     for (const s of servers.slice(0, 200)) {
-      if (!s || typeof s.name !== 'string' || !SAFE_NAME.test(s.name) || s.name === 'claude-in-zen') continue;
+      if (!s || typeof s.name !== 'string' || !SAFE_NAME.test(s.name) || s.name === 'claudefox') continue;
       const status = statusOf(s.status);
       const k = kindOf(s.name);
       const row = c.servers.find(x => x.name === s.name);
@@ -505,12 +505,12 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
         const plain = String(label).replace(/[^\w .()+-]/g, '');
         const script = path.join(P.BASE, 'tool-sign-in.cmd');
         const lines = [
-          '@echo off', 'chcp 65001 >nul', `title Claude in Zen - sign in to ${plain}`,
+          '@echo off', 'chcp 65001 >nul', `title Claudefox - sign in to ${plain}`,
           `set "CLAUDE_CONFIG_DIR=${q(dir)}"`, 'set "ANTHROPIC_API_KEY="', 'set "ANTHROPIC_AUTH_TOKEN="', 'set "CLAUDE_CODE_OAUTH_TOKEN="',
           `echo A browser window opens. Sign in to ${plain} there and allow access.`,
           'echo If the page does not open, copy the link shown below into your browser.', 'echo.',
           `"${q(exe)}" mcp login "${q(name)}"`, 'echo.',
-          'echo The Claude in Zen panel picks this up on its own. You can close this window.', 'timeout /t 20 >nul',
+          'echo The Claudefox panel picks this up on its own. You can close this window.', 'timeout /t 20 >nul',
         ];
         fs.writeFileSync(script, lines.join('\r\n') + '\r\n', 'utf8');
         const child = spawn('cmd.exe', ['/d', '/s', '/c', `"start "" "${script}""`], { windowsVerbatimArguments: true, detached: true, stdio: 'ignore', windowsHide: false });
@@ -556,7 +556,7 @@ function createToolbox({ findClaude, claudeEnv, dirOf, emit, file, confirm }) {
     if (!NEW_NAME.test(name)) return emitResult('add', false, 'Name: up to 40 letters, digits, - or _, starting with a letter or digit.');
     if (shellText(name, target)) return emitResult('add', false, `Not added. ${SHELL_WHY}`);
     const c = cat(key);
-    if (c.servers.some(s => s.name.toLowerCase() === name.toLowerCase()) || name.toLowerCase() === 'claude-in-zen') {
+    if (c.servers.some(s => s.name.toLowerCase() === name.toLowerCase()) || name.toLowerCase() === 'claudefox') {
       return emitResult('add', false, `There is already a tool called ${name}.`);
     }
     let args;

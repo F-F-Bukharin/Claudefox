@@ -23,7 +23,7 @@ const menuItems = [];
 const counts = { opened: 0 };
 let menuClick = null;
 const bg = vm.createContext({
-  CIZ_LOCALES: require('./lib/locales').load(),   // lib/i18n.js reads the texts from here
+  CFX_LOCALES: require('./lib/locales').load(),   // lib/i18n.js reads the texts from here
   console, setTimeout, clearTimeout,
   browser: {
     menus: {
@@ -48,7 +48,7 @@ for (const f of ['lib/i18n.js', 'lib/policy.js', 'lib/state.js', 'lib/siteGate.j
 const g = expr => vm.runInContext(expr, bg);
 const idFor = ctx => (menuItems.find(i => i.contexts.length === 1 && i.contexts[0] === ctx) || {}).id;
 const click = (ctx, info, tab) => menuClick({ menuItemId: idFor(ctx), ...info }, tab);
-const beginSites = id => json(g(`cizSiteGate.begin('${id}', { newChat: true, tabUrl: '', text: '' })`));
+const beginSites = id => json(g(`cfxSiteGate.begin('${id}', { newChat: true, tabUrl: '', text: '' })`));
 
 // ---------------------------------------------------------------- background checks
 
@@ -61,32 +61,32 @@ async function backgroundPart() {
     click('selection', { selectionText: 'first line\nsecond line' }, news);
     ok('a selection click opens the sidebar inside the click', counts.opened === 1, `opened ${counts.opened}`);
     await tick();
-    const d = g('cizState.get().draft');
+    const d = g('cfxState.get().draft');
     ok('a selection drafts its lines quoted, then its page site', !!d && d.text === '> first line\n> second line\n\n(from news.example)\n\n', json(d));
     ok('the draft names the window the click was in', !!d && d.windowId === 2, json(d));
     click('selection', { selectionText: 'x'.repeat(2500) }, news);
     await tick();
-    ok('a selection is cut at 2,000 characters before it is quoted', g('cizState.get().draft').text === '> ' + 'x'.repeat(2000) + '\n\n(from news.example)\n\n');
+    ok('a selection is cut at 2,000 characters before it is quoted', g('cfxState.get().draft').text === '> ' + 'x'.repeat(2000) + '\n\n(from news.example)\n\n');
     ok('a selection adds no site to the next message', beginSites('sel') === '[]');
     click('page', {}, { id: 8, windowId: 2, title: 'Start', url: 'https://start.example/' });
     await tick();
-    ok('a page drafts its title and URL', g('cizState.get().draft').text === 'About this page: Start (https://start.example/)\n\n');
+    ok('a page drafts its title and URL', g('cfxState.get().draft').text === 'About this page: Start (https://start.example/)\n\n');
     ok('a page adds its site to the next message, even a new chat', beginSites('pg') === '["start.example"]');
     ok('and only to that message', beginSites('pg2') === '[]');
     click('page', {}, { id: 9, windowId: 2, title: '', url: 'https://plain.example/' });
     await tick();
-    ok('a page with no title drafts its URL alone', g('cizState.get().draft').text === 'About this page: https://plain.example/\n\n');
+    ok('a page with no title drafts its URL alone', g('cfxState.get().draft').text === 'About this page: https://plain.example/\n\n');
     ok('and still adds its site', beginSites('pl') === '["plain.example"]');
     click('link', { linkText: 'the docs', linkUrl: 'https://docs.example/a' }, news);
     await tick();
-    ok('a link drafts its text and URL', g('cizState.get().draft').text === 'About this link: the docs (https://docs.example/a)\n\n');
+    ok('a link drafts its text and URL', g('cfxState.get().draft').text === 'About this link: the docs (https://docs.example/a)\n\n');
     ok("a link adds its own site, not the page's, to the next message", beginSites('ln') === '["docs.example"]');
     ok('every menu click opened the sidebar', counts.opened === 5, `opened ${counts.opened}`);
     await vm.runInContext(`handlePanel({ type: 'draftTaken' }, { postMessage() {} })`, bg);
-    ok('draftTaken clears the draft', g('cizState.get().draft') === null);
+    ok('draftTaken clears the draft', g('cfxState.get().draft') === null);
     sessionStore.state = { draft: { text: 'left over', windowId: 1 } };
-    await g('cizState.load()');
-    ok('a restart drops a draft left over in the session', g('cizState.get().draft') === null);
+    await g('cfxState.load()');
+    ok('a restart drops a draft left over in the session', g('cfxState.get().draft') === null);
   });
 }
 
@@ -110,7 +110,7 @@ function makePanel(tab, windowId) {
     tabs: { query: async () => [hooks.tab], onActivated: { addListener: f => { hooks.activated = f; } }, onUpdated: { addListener() {} } },
     windows: { getCurrent: async () => ({ id: windowId }) },
   };
-  w.eval(read('lib/markdown.js') + '\n;window.cizMarkdown=cizMarkdown;');
+  w.eval(read('lib/markdown.js') + '\n;window.cfxMarkdown=cfxMarkdown;');
   w.eval(read('lib/wall.js'));
   evalPanel(dom, ext, files);
   return {
@@ -168,7 +168,7 @@ async function panelPart() {
 }
 
 (async () => {
-  await g('cizState.load()');   // what background.js does at startup: the state is read before anything else
+  await g('cfxState.load()');   // what background.js does at startup: the state is read before anything else
   await backgroundPart();
   if (JSDOM) await panelPart(); else console.log('SKIP  panel part: jsdom not installed');
   console.log(`\n${passed} passed, ${failed} failed`);

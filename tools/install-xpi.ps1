@@ -1,4 +1,4 @@
-# Claude in Zen: builds the add-on and opens it in Zen for a permanent install (Zen shows its install prompt).
+# Claudefox: builds the add-on and opens it in Zen for a permanent install (Zen shows its install prompt).
 # Uses a signed .xpi from build\signed when its version matches extension\manifest.json, otherwise the fresh
 # unsigned build (needs about:config -> xpinstall.signatures.required = false).
 # Does nothing while Zen is linked to this folder: then "update" in Settings is a reload.
@@ -9,17 +9,17 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'xpi-tools.ps1')
 
 if (Test-Linked $root) {
-  Write-Host 'Zen loads Claude in Zen straight from this folder (linked), so there is nothing to install.'
+  Write-Host 'Zen loads Claudefox straight from this folder (linked), so there is nothing to install.'
   Write-Host 'Use "update" in the panel Settings to load changes. For a normal install, run zen-profile\link.ps1 -Unlink first.'
   exit 2
 }
 try {
   $version = Get-SourceVersion $root
   & (Join-Path $PSScriptRoot 'build-xpi.ps1') | Out-Host
-  $xpi = Find-SignedXpi $root $version 'Claude in Zen'
+  $xpi = Find-SignedXpi $root $version 'Claudefox'
   if ($xpi) { Write-Host "Using the signed build for v${version}: $(Split-Path $xpi -Leaf)" }
   else {
-    $xpi = Join-Path $root 'build\claude-in-zen.xpi'
+    $xpi = Join-Path $root 'build\claudefox.xpi'
     Write-Host "No signed build for v$version in build\signed, so using the unsigned one (needs xpinstall.signatures.required = false)."
   }
   $zen = Find-Zen

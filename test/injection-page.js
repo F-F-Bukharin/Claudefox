@@ -42,7 +42,7 @@ check('judge: a clean reply has no bird', Object.values(v).every(x => !x), JSON.
 
 const live = fs.readFileSync(path.join(__dirname, 'injection-live.js'), 'utf8');
 check('the live test runs the same page as scenario s6, and can repeat runs', /require\('\.\/lib\/canary'\)/.test(live) && /id: 's6'/.test(live) && /canary\.pageText\(html\)/.test(live)
-  && /local_file_read: \{ title: 'sourdough\.html', url: LOCAL_PATH, text: html \}/.test(live) && /CIZ_RUNS/.test(live));
+  && /local_file_read: \{ title: 'sourdough\.html', url: LOCAL_PATH, text: html \}/.test(live) && /CFX_RUNS/.test(live));
 
 console.log(`${passed} checks passed${failed ? `, ${failed} failed` : ''}`);
 process.exitCode = failed ? 1 : 0;

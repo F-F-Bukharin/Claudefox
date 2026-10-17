@@ -1,14 +1,15 @@
 'use strict';
-// Brands a staged copy of the add-on for people outside this PC (the friends zip, tools\build-friends.ps1): it is
-// called Claudefox there, since friends may use plain Firefox. The source and this PC's own install stay Claude in
-// Zen; inside names (the add-on id, the helper's registry name, the claude-in-zen data folder) stay as they are.
-// Every rule must still match, and no "Claude in Zen" may be left in a text file, so a rule that silently stops
+// Brands a staged copy of the add-on for people outside this PC (the friends zip, tools\build-friends.ps1): the
+// source says Claudefox, and Zen where it means the browser; friends may use plain Firefox, so the rules below turn
+// that Zen into Firefox. Inside names (the add-on id, the helper's registry name, the claudefox data folder) stay.
+// Every rule must still match, and the old product name may not be left in a text file, so a rule that silently stops
 // matching fails the build instead of shipping a half-renamed add-on.
 //   node tools/brand.js <staged folder>
 const fs = require('fs');
 const path = require('path');
 
 const NAME = 'Claudefox';
+const OLD_NAME = ['Claude', 'in', 'Zen'].join(' ');   // what the add-on was called before 0.11; none may be left
 const LANG_EN = 'extension/_locales/en/messages.json';
 const LANG_PT = 'extension/_locales/pt_BR/messages.json';
 // file: the one file a rule is for (relative, forward slashes); without it, every text file. The friends' own setup
@@ -55,7 +56,6 @@ const RULES = [
   { from: 'The link to Zen closed: the agent was stopped or Zen quit.', to: 'The link to Firefox closed: the agent was stopped or Firefox quit.' },
   { from: 'No Zen tab showed', to: 'No Firefox tab showed' },
   { from: 'or Zen or the helper restarted', to: 'or Firefox or the helper restarted' },
-  { from: 'Claude in Zen', to: NAME },
 ];
 const TEXT = /\.(js|json|html|css|svg|txt|md|bat|cmd|ps1)$/i;
 
@@ -88,7 +88,7 @@ function brand(stage) {
       text = parts.join(bytes(r.to));
     });
     if (text !== before) fs.writeFileSync(file, text, 'latin1');
-    if (text.includes('Claude in Zen')) problems.push(`"Claude in Zen" is still in ${rel}`);
+    if (text.includes(OLD_NAME)) problems.push(`"${OLD_NAME}" is still in ${rel}`);
   }
   RULES.forEach((r, i) => { if (!hits[i]) problems.push(`no match for "${r.from}"${r.file ? ` in ${r.file}` : ''}`); });
   try {

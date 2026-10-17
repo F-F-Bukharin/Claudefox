@@ -1,31 +1,31 @@
 'use strict';
 // Checks for the site gate (extension/lib/siteGate.js): the site rules, the lists a chat and a message keep, the card that asks,
 // its timers and queue, the blocked and trusted cases, workers, risky actions and the tab redaction.
-// Plain node + vm; the add-on globals (cizState, browser, setTimeout) are fakes.
+// Plain node + vm; the add-on globals (cfxState, browser, setTimeout) are fakes.
 //   node test/site-gate.js
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-// cizSiteOf and cizSiteMatch live in policy.js (loaded before siteGate.js in the manifest), so the vm gets both.
+// cfxSiteOf and cfxSiteMatch live in policy.js (loaded before siteGate.js in the manifest), so the vm gets both.
 const src = fs.readFileSync(path.join(__dirname, '..', 'extension', 'lib', 'policy.js'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, '..', 'extension', 'lib', 'siteGate.js'), 'utf8');
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) { passed++; console.log(`PASS ${name}`); } else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const tick = async () => { for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r)); };
 
-// A fresh context per scenario: fake cizState (records set() calls), fake timers (advance(ms) runs the due ones).
+// A fresh context per scenario: fake cfxState (records set() calls), fake timers (advance(ms) runs the due ones).
 function mk() {
   const h = { sets: [], ask: null, now: 0, timers: [], nextTimer: 1 };
-  const cizState = { get: () => ({ siteAsk: h.ask }), async set(p) { h.sets.push(p); if ('siteAsk' in p) h.ask = p.siteAsk; } };
+  const cfxState = { get: () => ({ siteAsk: h.ask }), async set(p) { h.sets.push(p); if ('siteAsk' in p) h.ask = p.siteAsk; } };
   const fakeSetTimeout = (fn, ms) => { const t = { id: h.nextTimer++, at: h.now + ms, fn }; h.timers.push(t); return t.id; };
   const fakeClearTimeout = id => { h.timers = h.timers.filter(t => t.id !== id); };
-  const ctx = vm.createContext({ cizState, browser: { storage: { local: { get: async () => ({}) } } }, setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout, console });
+  const ctx = vm.createContext({ cfxState, browser: { storage: { local: { get: async () => ({}) } } }, setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout, console });
   vm.runInContext(src, ctx, { filename: 'siteGate.js' });
-  h.g = vm.runInContext('cizSiteGate', ctx);
-  h.siteOf = vm.runInContext('cizSiteOf', ctx);
-  h.match = vm.runInContext('cizSiteMatch', ctx);
-  h.inText = vm.runInContext('cizSitesInText', ctx);
+  h.g = vm.runInContext('cfxSiteGate', ctx);
+  h.siteOf = vm.runInContext('cfxSiteOf', ctx);
+  h.match = vm.runInContext('cfxSiteMatch', ctx);
+  h.inText = vm.runInContext('cfxSitesInText', ctx);
   h.advance = async ms => {
     const end = h.now + ms;
     for (;;) {

@@ -10,8 +10,8 @@ const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.
 
 // policy.js is a plain script: load it into its own context, as test/dom-page-tools.js does.
 const ctx = vm.createContext({});
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'extension', 'lib', 'policy.js'), 'utf8') + '\nthis.cizSensitiveField = cizSensitiveField;', ctx);
-const refusedAs = desc => ctx.cizSensitiveField(desc);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'extension', 'lib', 'policy.js'), 'utf8') + '\nthis.cfxSensitiveField = cfxSensitiveField;', ctx);
+const refusedAs = desc => ctx.cfxSensitiveField(desc);
 
 // Portuguese and Spanish words, each labelling a field that must be refused. Every spelling counts: as written,
 // in capitals, and without accents.
@@ -33,7 +33,7 @@ check('an ordinary Portuguese "Endereço de entrega" field is not refused', refu
 
 // ---- The file guard (host/lib/guard.js). Its paths are read from the environment when used, and paths.js reads
 // LOCALAPPDATA at load, so the profile variables point into a temp folder before guard is loaded.
-const tmp = fs.realpathSync(fs.mkdtempSync(path.join(require('os').tmpdir(), 'ciz-harden-')));
+const tmp = fs.realpathSync(fs.mkdtempSync(path.join(require('os').tmpdir(), 'cfx-harden-')));
 const home = path.join(tmp, 'home'), appData = path.join(home, 'AppData', 'Roaming');
 Object.assign(process.env, { HOME: home, USERPROFILE: home, APPDATA: appData, LOCALAPPDATA: path.join(home, 'AppData', 'Local') });
 const guard = require('../host/lib/guard');

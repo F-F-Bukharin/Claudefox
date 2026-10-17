@@ -8,7 +8,7 @@ const MODS = require('../lib/mods');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-mods-'));
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-mods-'));
 const modsDir = path.join(root, 'mods');
 const stateFile = path.join(root, 'state', 'mods.json');
 const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(modsDir, rel)), { recursive: true }); fs.writeFileSync(path.join(modsDir, rel), text); };

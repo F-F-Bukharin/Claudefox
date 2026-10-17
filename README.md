@@ -1,15 +1,15 @@
-# Claude in Zen
+# Claudefox
 
 Personal-use Zen Browser add-on: a Claude panel in Zen's sidebar that can read and act on your tabs,
 running on your own Claude plan through Claude Code.
 Not affiliated with or endorsed by Anthropic or Zen.
 
 Plan, decisions and TODO: `claude/zen-addon-plan.md` in the Mod Making project.
-Friends: see `START HERE.txt` (it ships in the friends zip, where the add-on is called **Claudefox**).
+Friends: see `START HERE.txt` (it ships in the friends zip, where Zen is Firefox).
 
 ## Status (v0.10.0)
 - **New in 0.10.0**: the army (the octopus in Quality: Opus 5.5 leads up to five Haiku 5.5 workers in background tabs), local pages (Claude sees and plays `file:` pages in folders you allow), no shell in any mode (Desktop Commander and similar stay off), and the friends zip named **Claudefox**.
-- **Setup in one double-click**: `Set up Claude in Zen.bat` installs the helper, signs Claude Code in and opens Zen's add-ons page with the add-on's path copied. Safe to run again.
+- **Setup in one double-click**: `Set up Claudefox.bat` installs the helper, signs Claude Code in and opens Zen's add-ons page with the add-on's path copied. Safe to run again.
 - **Chat** with Claude in the panel, streamed, with a progress bar and a Cancel link. Follow-ups continue the
   conversation; `/clear` (or **New chat** in the options menu) starts a new one. Long jobs can run up to an hour.
 - On the right, under the message box, one button flips between **Speed** and **Quality**. The **+** on its left, in Speed mode, turns on Speed Plus (Haiku 5.5
@@ -19,8 +19,8 @@ Friends: see `START HERE.txt` (it ships in the friends zip, where the add-on is 
 - **Add files**: the **+** at the left of the message box attaches files (also paste or drag them in). Word,
   PowerPoint, Excel and OpenDocument files are turned into text for Claude; PDFs, images and text files are read as
   they are. The small button beside **+** opens more options: upload, screenshot of this tab, **Caveman mode** (short
-  replies, fewer tokens), Tools and plugins, Improve Claude in Zen, New chat.
-- **Improve Claude in Zen** (the options button beside **+**): Claude edits the add-on's own code on Opus 5.5 at max
+  replies, fewer tokens), Tools and plugins, Improve Claudefox, New chat.
+- **Improve Claudefox** (the options button beside **+**): Claude edits the add-on's own code on Opus 5.5 at max
   effort. It works on a copy, runs the add-on's tests on that copy, and shows the change as a card. **Apply** writes it
   into the add-on and **Discard** drops it; nothing changes until you press Apply. Claude cannot change the safety code,
   the tests, the installers or the manifest, and cannot add cookie access or keys.
@@ -50,10 +50,10 @@ Friends: see `START HERE.txt` (it ships in the friends zip, where the add-on is 
 - **Local pages and files**: Claude can open a page or file from this PC in a tab (`local_page_open`, e.g. a
   downloaded HTML game, then screenshot, click and keys), list a folder (`local_files`) and read a file's text
   (`local_file_read`). The first time in a folder the confirm window (below) asks **Allow this folder** or **Deny**;
-  allowed folders are listed in Profile (Permissions) with **Remove**. Zen also needs about:addons → Claude in Zen → Permissions and data →
+  allowed folders are listed in Profile (Permissions) with **Remove**. Zen also needs about:addons → Claudefox → Permissions and data →
   **Access local files on your computer** turned on (off by default since Firefox 153).
 - **File tools** (Profile, off by default): one folder, Read only or Read and write, after a yes in the confirm window.
-  Never a shell, and never Claude in Zen's own code (Read and write refuses a folder inside it).
+  Never a shell, and never Claudefox's own code (Read and write refuses a folder inside it).
 - **Accounts**: one Claude Code profile per account, switchable in Profile; on a usage limit the panel offers to
   switch.
 - **Sign-in is remembered** across Zen restarts (email, name and account id only, never cookies).
@@ -66,7 +66,7 @@ Friends: see `START HERE.txt` (it ships in the friends zip, where the add-on is 
 panel  <->  background page  <->  helper (native messaging host, started by Zen)
                                      |  runs "claude -p" per message, on its own Claude Code profile
                                      v
-                               Claude Code  ->  Zen tool server (MCP, host/zen-mcp.js)
+                               Claude Code  ->  Zen tool server (MCP, host/claudefox-mcp.js)
                                                    |  named pipe, per-session token
                                                    v
                                                  helper  ->  background page  ->  tab
@@ -118,44 +118,44 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `extension/lib/bg-router.js` | The tool router every call goes through (panel, console and helper), the debug-port warning, the toolbar badge and the console hook. |
 | `extension/panel.html`, `extension/panel.css` | The sidebar's page and its styles. |
 | `extension/panel.js` | Switches the sidebar's three pages (chat, profile, settings), its buttons and the rendering of the agent state. Loads first of the panel scripts. |
-| `extension/panel-chat.js` | The chat composer: Speed or Quality and the army, the current tab, the text bar, attachments, the + menu, slash commands, sending, and Improve Claude in Zen. |
+| `extension/panel-chat.js` | The chat composer: Speed or Quality and the army, the current tab, the text bar, attachments, the + menu, slash commands, sending, and Improve Claudefox. |
 | `extension/panel-stream.js` | The chat stream: answers as they arrive, progress and army trail, file cards, and how each message is drawn. |
 | `extension/panel-history.js` | Chat history: chats kept per account in storage.local, and the drawer that searches, reopens, exports (Markdown) and deletes them. |
 | `extension/panel-settings.js` | The Settings and Profile pages: dark mode and wallpaper, permissions, tools and plugins, accounts, mods and saving files. |
 | `extension/panel-link.js` | Connects the panel to the background page, takes its messages and restores the saved chat. Loads last of the panel scripts. |
-| `host/claude-in-zen-host.js` | The helper: native messaging, pipe server, Claude Code chat turns, accounts, `read_document`. |
+| `host/claudefox-host.js` | The helper: native messaging, pipe server, Claude Code chat turns, accounts, `read_document`. |
 | `host/lib/chatargs.js` | The chat's system prompt and Claude Code flags. |
-| `host/lib/selfimprove.js` | Improve Claude in Zen: the copy, the diff, the checks, the tests on the copy, Apply and Discard. |
+| `host/lib/selfimprove.js` | Improve Claudefox: the copy, the diff, the checks, the tests on the copy, Apply and Discard. |
 | `host/lib/plugins.js` | Tools and plugins: lists them, keeps the switches, sign-in windows, add and remove. |
 | `host/lib/guard.js` | The file guard's deny rules and folder checks. |
 | `host/lib/uploads.js`, `host/lib/doctext.js` | Attached files; text out of Word, PowerPoint, Excel and OpenDocument files. |
-| `host/zen-mcp.js` | The Zen tool server (MCP over stdio). It serves the catalog in `host/lib/toolSchemas.js`. |
+| `host/claudefox-mcp.js` | The Zen tool server (MCP over stdio). It serves the catalog in `host/lib/toolSchemas.js`. |
 | `host/lib/toolSchemas.js` | The Zen tool catalog: each tool's name, description and input schema. The add-on implements each one. |
 | `host/install.ps1` | Registers the helper with Zen for this Windows user (no admin). |
 | `zen-profile/` | `user.js` and `userChrome.css` (sidebar on the right, Claude panel about 660 px wide) and `apply.ps1`, which merges them into the Zen profile. |
 | `test/`, `host/test/` | Tests; `tools\Run tests.bat` or `node test/run-all.js` runs them all. `node test/injection-live.js` is the live prompt-injection test (uses your plan, run it by hand). |
-| `Set up Claude in Zen.bat` (root) | The friends' one-double-click setup. The friends zip ships it with `host\`, `zen-profile\`, `tools\Sign in Claude Code.bat` and `tools\Apply Zen settings.bat`. |
+| `Set up Claudefox.bat` (root) | The friends' one-double-click setup. The friends zip ships it with `host\`, `zen-profile\`, `tools\Sign in Claude Code.bat` and `tools\Apply Zen settings.bat`. |
 | `tools\` | The scripts you run while developing (`.bat` and `.ps1`), listed in the next table. |
 | `tools\menu.ps1` | The menu window (Windows PowerShell 5.1, Windows Forms). It runs the ticked steps in the background, one after another, and writes their output to its log. |
 | `friends\` | What the Claudefox zip ships instead of the Zen setup: `Set up Claudefox.bat` (installs the helper, signs Claude Code in, opens Firefox on about:debugging, or on about:addons when the zip has a `SIGNED` file) and a Firefox `START HERE.txt`. |
-| `build\` | Build output, kept out of git except `build\README.txt`: `claude-in-zen.xpi`, `signed\` (signed builds) and `friends\` (the zip to send). |
+| `build\` | Build output, kept out of git except `build\README.txt`: `claudefox.xpi`, `signed\` (signed builds) and `friends\` (the zip to send). |
 
 | Script | What it does |
 | :- | :- |
-| `tools\Claude in Zen menu.bat` | **Start here** while developing. One window with every step. **Recommended** ticks the set-up steps: the helper, the Claude Code sign-in, a read-only check of the Zen profile, linking and the Zen settings, and the tests. **Custom** starts with nothing ticked, so nothing is installed, changed or created until you tick a step and press **Run**. Ticked steps run in list order; click a step to read what it does and what it makes. |
-| `Set up Claude in Zen.bat` (root) | The friends' one-double-click setup: installs the helper, signs Claude Code in, and opens Zen's add-ons page with the `.xpi` path copied (only when `claude-in-zen.xpi` sits next to it, as in the friends zip). |
+| `tools\Claudefox menu.bat` | **Start here** while developing. One window with every step. **Recommended** ticks the set-up steps: the helper, the Claude Code sign-in, a read-only check of the Zen profile, linking and the Zen settings, and the tests. **Custom** starts with nothing ticked, so nothing is installed, changed or created until you tick a step and press **Run**. Ticked steps run in list order; click a step to read what it does and what it makes. |
+| `Set up Claudefox.bat` (root) | The friends' one-double-click setup: installs the helper, signs Claude Code in, and opens Zen's add-ons page with the `.xpi` path copied (only when `claudefox.xpi` sits next to it, as in the friends zip). |
 | `tools\Install helper.bat` | Installs only the helper. Run it yourself: installs made from the Claude desktop app land in its private copy of AppData, which Zen can't see. |
-| `tools\Sign in Claude Code.bat` | Signs the add-on's Claude Code profile (`%LOCALAPPDATA%\claude-in-zen\claude`) in. Separate from Claude Code in VS Code or a terminal. |
+| `tools\Sign in Claude Code.bat` | Signs the add-on's Claude Code profile (`%LOCALAPPDATA%\claudefox\claude`) in. Separate from Claude Code in VS Code or a terminal. |
 | `tools\Link add-on to Zen.bat` | **Best for development.** Close Zen first. Points Zen at `extension\` in this folder, so **update** in Settings reloads add-on and helper in one click: no `.xpi`, no install prompt, no restart. Undo with `zen-profile\link.ps1 -Unlink`. |
-| `tools\Install in Zen.bat` | Builds `build\claude-in-zen.xpi` (or picks the newest signed one in `build\signed`) and opens it in Zen for a permanent install. Run it again to update. |
-| `tools\Load in Zen.bat` | Builds `build\claude-in-zen.xpi` and opens `about:debugging` with its path copied (temporary install). |
+| `tools\Install in Zen.bat` | Builds `build\claudefox.xpi` (or picks the newest signed one in `build\signed`) and opens it in Zen for a permanent install. Run it again to update. |
+| `tools\Load in Zen.bat` | Builds `build\claudefox.xpi` and opens `about:debugging` with its path copied (temporary install). |
 | `tools\Sign add-on.bat` | Signs the add-on with Mozilla into `build\signed` (needs API keys, see below). |
-| `tools\Build friends zip.bat` | Builds `build\friends\Claudefox-v<version>.zip`: a copy branded Claudefox by `tools\brand.js` (this PC's install stays Claude in Zen), using a signed Claudefox `.xpi` from `build\signed` if there is one. |
+| `tools\Build friends zip.bat` | Builds `build\friends\Claudefox-v<version>.zip`: a copy that `tools\brand.js` turns from Zen to Firefox (the source says Zen where it means the browser; the copy says Firefox), using a signed Claudefox `.xpi` from `build\signed` if there is one. |
 | `tools\Apply Zen settings.bat` | Close Zen first. Merges the `zen-profile` settings into your Zen profile between marker lines; `apply.ps1 -Remove` undoes it. |
 | `tools\Run tests.bat` | Runs all tests. |
 
 ## Try it (temporary install)
-1. Double-click **tools\Load in Zen.bat**. It rebuilds `build\claude-in-zen.xpi` and opens `about:debugging` in Zen.
+1. Double-click **tools\Load in Zen.bat**. It rebuilds `build\claudefox.xpi` and opens `about:debugging` in Zen.
 2. Click **Load Temporary Add-on…**, press **Ctrl+V** in the file name box, then **Enter**.
 3. Open the panel with the toolbar button or **Alt+Shift+C**, and follow the checklist on the chat page.
 
@@ -166,7 +166,7 @@ Helper changes apply the next time Zen starts it: press Stop, then Start.
 Zen's build does not hard-require signed add-ons (`MOZ_REQUIRE_SIGNING` is `false`), so there are two routes:
 
 - **Quick:** `about:config` → `xpinstall.signatures.required` → **false**. Then double-click **tools\Install in Zen.bat**
-  (or `about:addons` → gear icon → **Install Add-on From File…** → `build\claude-in-zen.xpi`). Trade-off: Zen stops checking signatures on add-ons you install
+  (or `about:addons` → gear icon → **Install Add-on From File…** → `build\claudefox.xpi`). Trade-off: Zen stops checking signatures on add-ons you install
   from a file. Store add-ons are unaffected.
 - **Signed:** keeps signature checks on. Get Mozilla API keys (below), run **tools\Sign add-on.bat**, then install the `.xpi`
   it puts in `build\signed\`.
@@ -180,8 +180,12 @@ Zen's build does not hard-require signed add-ons (`MOZ_REQUIRE_SIGNING` is `fals
 
 ## Debugging
 - Settings → Advanced → Action log shows every action, chat turn and error. **check** re-reads the Claude Code account.
-- Helper and tool server logs (metadata only, never page content): `%LOCALAPPDATA%\claude-in-zen\logs\`.
-- `about:debugging` → Claude in Zen → **Inspect** → Console: `await cizDebug.call('tabs_list')`, `cizDebug.state()`.
-- Tool switches and the last list of tools: `%LOCALAPPDATA%\claude-in-zen\tools.json`. Each turn's flags for Claude
-  Code (plugins on and off, deny rules): `%LOCALAPPDATA%\claude-in-zen\chat-settings.json`.
-- Zen finds the helper at `HKCU\Software\Mozilla\NativeMessagingHosts\claude_in_zen`.
+- Helper and tool server logs (metadata only, never page content): `%LOCALAPPDATA%\claudefox\logs\`.
+- `about:debugging` → Claudefox → **Inspect** → Console: `await cfxDebug.call('tabs_list')`, `cfxDebug.state()`.
+- Tool switches and the last list of tools: `%LOCALAPPDATA%\claudefox\tools.json`. Each turn's flags for Claude
+  Code (plugins on and off, deny rules): `%LOCALAPPDATA%\claudefox\chat-settings.json`.
+- Zen finds the helper at `HKCU\Software\Mozilla\NativeMessagingHosts\claudefox`.
+- Updating from before 0.11 (the old names): run `Set up Claudefox.bat` once. It renames `%LOCALAPPDATA%\claude-in-zen` to `claudefox` (when both
+  exist it moves each item the new folder lacks and leaves the rest), registers `claudefox`, and removes the old `claude_in_zen` registration,
+  launcher and manifest. Close Zen first, since the old helper keeps its folder in use. Until then the add-on falls back to the old registration
+  and says "Re-run Set up Claudefox.bat to finish the update."; `host\install.ps1 -Uninstall` removes either registration.

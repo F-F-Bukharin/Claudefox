@@ -8,7 +8,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 const menu = read('tools/menu.ps1');
-const launcher = read('tools/Claude in Zen menu.bat');
+const launcher = read('tools/Claudefox menu.bat');
 const lines = (text) => text.split(/\r?\n/);
 let passed = 0;
 let failed = 0;

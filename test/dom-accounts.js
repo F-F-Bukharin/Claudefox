@@ -13,7 +13,7 @@ const w=dom.window; const sent=[]; let onMsg;
 w.browser={runtime:{connect:()=>({postMessage:m=>sent.push(m),onMessage:{addListener:f=>onMsg=f}}),getManifest:()=>({version:'0.4.0'})},
  storage:{session:{get:async()=>({}),set:async()=>{}}},
  tabs:{query:async()=>[{title:'T',url:'https://x'}],onActivated:{addListener(){}},onUpdated:{addListener(){}}}};
-w.eval(fs.readFileSync(dir+'lib/markdown.js','utf8')+'\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir+'lib/wall.js','utf8')); evalPanel(dom, dir, panelFiles);
+w.eval(fs.readFileSync(dir+'lib/markdown.js','utf8')+'\n;window.cfxMarkdown=cfxMarkdown;'); w.eval(fs.readFileSync(dir+'lib/wall.js','utf8')); evalPanel(dom, dir, panelFiles);
 const $=id=>w.document.getElementById(id);
 let pass=0,fail=0;const ok=(n,c,x)=>{c?pass++:fail++;console.log((c?'PASS ':'FAIL ')+n+(x?'  '+x:''))};
 const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort:'off',pending:0,chatModel:'speed',filesMode:'read',filesFolder:''};

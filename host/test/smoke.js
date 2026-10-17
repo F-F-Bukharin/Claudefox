@@ -8,18 +8,18 @@ const os = require('os');
 const net = require('net');
 const path = require('path');
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-smoke-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-smoke-'));
 const pipe = process.platform === 'win32'
-  ? `\\\\.\\pipe\\claude-in-zen-smoke-${process.pid}`
+  ? `\\\\.\\pipe\\claudefox-smoke-${process.pid}`
   : path.join(tmp, 'smoke.sock');
-const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_TEST: '1' };
+const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDEFOX_PIPE: pipe, CLAUDEFOX_TEST: '1' };
 const { onLines, sendLine } = require('../lib/lines');
 
 const results = [];
 const check = (name, ok, extra) => { results.push([name, !!ok]); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const child = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+const child = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
 
 // Framed reader for the helper's stdout.
 const inbox = [];
@@ -80,7 +80,7 @@ function client(tokenValue, name) {
     const hello = await fromHost(m => m.type === 'hello');
     check('helper answers hello', hello.version, `v${hello.version}`);
 
-    const tokenFile = path.join(tmp, 'claude-in-zen', 'pipe-token');
+    const tokenFile = path.join(tmp, 'claudefox', 'pipe-token');
     for (let i = 0; i < 50 && !fs.existsSync(tokenFile); i++) await sleep(50);
     const token = fs.readFileSync(tokenFile, 'utf8');
     check('token file written', token.length === 64);

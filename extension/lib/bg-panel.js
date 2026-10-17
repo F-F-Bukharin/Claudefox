@@ -1,5 +1,5 @@
 'use strict';
-// Claude in Zen: the background side of the panel. Panels connect by runtime port; handlePanel is the message switch.
+// Claudefox: the background side of the panel. Panels connect by runtime port; handlePanel is the message switch.
 // Also a chat reply's links and files: open a page or tab, download or store a file Claude made, screenshot a tab.
 
 // ---------------------------------------------------------------- panel link
@@ -11,9 +11,9 @@ browser.runtime.onConnect.addListener(port => {
   panelPorts.add(port);
   port.onDisconnect.addListener(() => panelPorts.delete(port));
   port.onMessage.addListener(msg => handlePanel(msg, port).catch(err => {
-    cizState.addLog('error', `${msg && msg.type}: ${err.message || err}`);
+    cfxState.addLog('error', `${msg && msg.type}: ${err.message || err}`);
   }));
-  port.postMessage({ type: 'state', state: cizState.get(), log: cizState.log() });
+  port.postMessage({ type: 'state', state: cfxState.get(), log: cfxState.log() });
   port.postMessage({ type: 'chatRuns', ids: [...chatRuns.keys()], queued: chatQueue.map(q => q.id) });
   // The helper replies with watch_state and asks the first-run question once. With no helper port yet, connectNative sends it (bg-chat.js).
   if (nativePort) sendNative({ type: 'watch_load' }); else watchLoadWanted = true;
@@ -53,16 +53,16 @@ async function handlePanel(msg, port) {
     case 'accountRemove': return accountAction('account_remove', msg.id);
     case 'accountCancel': return sendNative({ type: 'account_cancel' });
     case 'updateAddon':
-      if (cizState.get().linked) {
+      if (cfxState.get().linked) {
         // Linked to the project folder: a reload picks up every change, and reconnecting restarts the helper too.
-        await cizState.addLog('info', 'Reloading from your project folder…');
+        await cfxState.addLog('info', 'Reloading from your project folder…');
         setTimeout(() => browser.runtime.reload(), 300);
         return;
       }
-      if (!sendNative({ type: 'update_addon' })) return cizState.addLog('error', 'Update failed: the helper is not connected.');
-      await cizState.set({ updating: true });
-      return cizState.addLog('info', 'Building the add-on from your project folder…');
-    case 'clearLog':   return cizState.clearLog();
+      if (!sendNative({ type: 'update_addon' })) return cfxState.addLog('error', 'Update failed: the helper is not connected.');
+      await cfxState.set({ updating: true });
+      return cfxState.addLog('info', 'Building the add-on from your project folder…');
+    case 'clearLog':   return cfxState.clearLog();
     case 'openLink':   return openLink(String(msg.url || ''));
     case 'openTab':    return openTab(Number(msg.id));
     case 'openFile':   return openFile(String(msg.id || ''));
@@ -71,13 +71,13 @@ async function handlePanel(msg, port) {
     case 'setOutput': {
       const value = msg.value === 'store' ? 'store' : 'download';
       try { await browser.storage.local.set({ outputMode: value }); } catch {}
-      await cizState.set({ outputMode: value });
-      return cizState.addLog('info', value === 'store' ? 'Files: stored in the output folder' : 'Files: downloaded, as before');
+      await cfxState.set({ outputMode: value });
+      return cfxState.addLog('info', value === 'store' ? 'Files: stored in the output folder' : 'Files: downloaded, as before');
     }
     case 'setCaveman':
       try { await browser.storage.local.set({ caveman: !!msg.value }); } catch {}
-      await cizState.set({ caveman: !!msg.value });
-      return cizState.addLog('info', msg.value ? 'Caveman mode on: short replies' : 'Caveman mode off');
+      await cfxState.set({ caveman: !!msg.value });
+      return cfxState.addLog('info', msg.value ? 'Caveman mode on: short replies' : 'Caveman mode off');
     // Settings > Tools and plugins: the helper does the work (host/lib/plugins.js)
     case 'tools':       return sendNative({ type: 'tools' });
     case 'toolsCheck':  return toolsSend({ type: 'tools_check' }, 'Checking every tool server…');
@@ -91,7 +91,7 @@ async function handlePanel(msg, port) {
     case 'pluginInstall': return toolsSend({ type: 'plugin_install', spec: String(msg.spec || '').slice(0, 200), source: String(msg.source || '').slice(0, 600) },
       `Installing ${String(msg.spec || '').slice(0, 60)}…`);
     case 'pluginUninstall': return toolsSend({ type: 'plugin_uninstall', id: String(msg.id || '') });
-    case 'openClaude': return browser.tabs.create({ url: CIZ.CLAUDE_ORIGIN + '/' });
+    case 'openClaude': return browser.tabs.create({ url: CFX.CLAUDE_ORIGIN + '/' });
     case 'devCall':    return devCall(msg.tool);
     case 'call':       return panelCall(msg, port);
     case 'chat':       return startChat(msg);
@@ -99,11 +99,11 @@ async function handlePanel(msg, port) {
     case 'chatUnqueue': return chatUnqueue(String(msg.id || ''));
     case 'selfApply':   return sendNative({ type: 'self_apply', id: String(msg.id || '') });
     case 'selfDiscard': return sendNative({ type: 'self_discard', id: String(msg.id || '') });
-    case 'newChat':    if (typeof msg.windowId === 'number') winSessions.delete(msg.windowId); return cizState.set({ chatSession: '' });
-    case 'histLog':    return cizState.addLog('info', String(msg.text || '').slice(0, 200));
-    case 'draftTaken': return cizState.set({ draft: null });
+    case 'newChat':    if (typeof msg.windowId === 'number') winSessions.delete(msg.windowId); return cfxState.set({ chatSession: '' });
+    case 'histLog':    return cfxState.addLog('info', String(msg.text || '').slice(0, 200));
+    case 'draftTaken': return cfxState.set({ draft: null });
     case 'setModel':   return setModel(msg.value === 'quality' ? 'quality' : 'speed');
-    case 'setPlus':    return cizState.set({ chatPlus: !!msg.value });
+    case 'setPlus':    return cfxState.set({ chatPlus: !!msg.value });
     case 'setArmy':    return setArmy(!!msg.value);
     case 'setUnsafe': return setUnsafe(!!msg.value);
     case 'setWatch':       return setWatch(!!msg.value);
@@ -112,25 +112,25 @@ async function handlePanel(msg, port) {
     case 'watchAnswer':    return sendNative({ type: 'watch_answer', id: String(msg.id || '').slice(0, 40), allow: !!msg.allow });
     case 'downloadShown':  return sendNative({ type: 'download_shown', id: String(msg.id || '').slice(0, 40) });
     case 'downloadAnswer': return sendNative({ type: 'download_answer', id: String(msg.id || '').slice(0, 40), allow: !!msg.allow });
-    case 'siteShown':      if (typeof cizSiteGate !== 'undefined') cizSiteGate.shown(String(msg.id || '').slice(0, 40)); return;
+    case 'siteShown':      if (typeof cfxSiteGate !== 'undefined') cfxSiteGate.shown(String(msg.id || '').slice(0, 40)); return;
     case 'siteAnswer':
-      if (typeof cizSiteGate !== 'undefined' && ['message', 'chat', 'deny', 'allow'].includes(msg.choice)) cizSiteGate.answer(String(msg.id || '').slice(0, 40), msg.choice);
+      if (typeof cfxSiteGate !== 'undefined' && ['message', 'chat', 'deny', 'allow'].includes(msg.choice)) cfxSiteGate.answer(String(msg.id || '').slice(0, 40), msg.choice);
       return;
-    case 'fillShown':      if (typeof cizFillShown === 'function') cizFillShown(String(msg.id || '').slice(0, 40)); return;
-    case 'fillAnswer':     if (typeof cizFillAnswer === 'function') cizFillAnswer(String(msg.id || '').slice(0, 40), !!msg.allow); return;
-    case 'uploadShown':    if (typeof cizUploadGate !== 'undefined') cizUploadGate.shown(String(msg.id || '').slice(0, 40)); return;
-    case 'uploadAnswer':   if (typeof cizUploadGate !== 'undefined') cizUploadGate.answer(String(msg.id || '').slice(0, 40), msg.allow === true); return;
+    case 'fillShown':      if (typeof cfxFillShown === 'function') cfxFillShown(String(msg.id || '').slice(0, 40)); return;
+    case 'fillAnswer':     if (typeof cfxFillAnswer === 'function') cfxFillAnswer(String(msg.id || '').slice(0, 40), !!msg.allow); return;
+    case 'uploadShown':    if (typeof cfxUploadGate !== 'undefined') cfxUploadGate.shown(String(msg.id || '').slice(0, 40)); return;
+    case 'uploadAnswer':   if (typeof cfxUploadGate !== 'undefined') cfxUploadGate.answer(String(msg.id || '').slice(0, 40), msg.allow === true); return;
     case 'setTrusted':     return setTrusted(!!msg.on);
     case 'siteListSet':    return siteListSet(msg.site, msg.value);
-    case 'localGrantRemove': return cizLocal.remove(String(msg.folder || '').slice(0, 1000));
+    case 'localGrantRemove': return cfxLocal.remove(String(msg.folder || '').slice(0, 1000));
     case 'modUpdate':
-      if (!sendNative({ type: 'mod_update', id: String(msg.id || ''), enabled: msg.enabled, broken: msg.broken })) return cizState.addLog('error', 'Mods: the helper is not connected, so the change was not saved.');
+      if (!sendNative({ type: 'mod_update', id: String(msg.id || ''), enabled: msg.enabled, broken: msg.broken })) return cfxState.addLog('error', 'Mods: the helper is not connected, so the change was not saved.');
       return;
     case 'modsAllOff':
-      if (!sendNative({ type: 'mods_all_off' })) return cizState.addLog('error', 'Mods: the helper is not connected, so nothing was turned off.');
+      if (!sendNative({ type: 'mods_all_off' })) return cfxState.addLog('error', 'Mods: the helper is not connected, so nothing was turned off.');
       return;
     case 'modsRefresh':
-      if (!sendNative({ type: 'mods' })) return cizState.addLog('error', 'Mods: the helper is not connected, so the folder was not checked.');
+      if (!sendNative({ type: 'mods' })) return cfxState.addLog('error', 'Mods: the helper is not connected, so the folder was not checked.');
       return;
   }
 }
@@ -149,11 +149,11 @@ async function panelCall(msg, port) {
 async function devCall(tool) {
   if (!['ping', 'tabs_list'].includes(tool)) return;
   const out = await dispatch(tool, {}, 'panel');
-  if (!out.ok) return cizState.addLog('error', `${tool}: ${out.error}`);
-  if (tool === 'ping') return cizState.addLog('info', `ping → pong (v${out.result.version})`);
+  if (!out.ok) return cfxState.addLog('error', `${tool}: ${out.error}`);
+  if (tool === 'ping') return cfxState.addLog('info', `ping → pong (v${out.result.version})`);
   const n = out.result.length;
   const active = out.result.find(t => t.active);
-  return cizState.addLog('info', `tabs_list → ${n} tab${n === 1 ? '' : 's'}${active ? `; active: "${(active.title || active.url || '').slice(0, 60)}"` : ''}`);
+  return cfxState.addLog('info', `tabs_list → ${n} tab${n === 1 ? '' : 's'}${active ? `; active: "${(active.title || active.url || '').slice(0, 60)}"` : ''}`);
 }
 
 // ---------------------------------------------------------------- links and files from the chat
@@ -167,10 +167,10 @@ async function openLink(url) {
 async function openTab(id) {
   try {
     const t = await browser.tabs.get(id);
-    cizArmy.show(id);   // Show on a worker's row: the user's own switch, which the army must not undo
+    cfxArmy.show(id);   // Show on a worker's row: the user's own switch, which the army must not undo
     await browser.tabs.update(id, { active: true });
     try { await browser.windows.update(t.windowId, { focused: true }); } catch {}
-  } catch { await cizState.addLog('error', `Tab ${id} is not open any more.`); }
+  } catch { await cfxState.addLog('error', `Tab ${id} is not open any more.`); }
 }
 
 async function openFile(id, pdf) {
@@ -181,36 +181,36 @@ async function openFile(id, pdf) {
 // format: '' (the file's own format), or docx, xlsx, html, md, txt, csv, pdf. Word and Excel files are built here
 // from what Claude wrote (lib/docx.js); a PDF opens the file viewer, which saves the page as PDF.
 async function downloadFile(id, saveAs, format) {
-  const f = await cizFiles.get(id);
-  if (!f) return cizState.addLog('error', 'That file is gone (deleted, or pushed out by newer files).');
+  const f = await cfxFiles.get(id);
+  if (!f) return cfxState.addLog('error', 'That file is gone (deleted, or pushed out by newer files).');
   const ext = ((/\.([a-z0-9]{1,8})$/i.exec(f.name) || [])[1] || '').toLowerCase();
   const want = String(format || ext).toLowerCase();
   if (want === 'pdf') return openFile(id, true);
   let out;
-  try { out = cizExport(f, want); } catch (e) {
-    return cizState.addLog('error', `Could not make ${f.name}${want !== ext ? ` as .${want}` : ''}: ${e.message}`);
+  try { out = cfxExport(f, want); } catch (e) {
+    return cfxState.addLog('error', `Could not make ${f.name}${want !== ext ? ` as .${want}` : ''}: ${e.message}`);
   }
-  // Settings > Saving files: "Store in output folder" keeps a made file in Claude in Zen's data folder (…\claude-in-zen\output); Save as always asks.
-  if (!saveAs && cizState.get().outputMode === 'store') {
+  // Settings > Saving files: "Store in output folder" keeps a made file in Claudefox's data folder (…\claudefox\output); Save as always asks.
+  if (!saveAs && cfxState.get().outputMode === 'store') {
     const r = await storeOutput(out);
     if (r.ok) {
-      await cizState.addLog('action', `Stored ${r.name} in the output folder`);
+      await cfxState.addLog('action', `Stored ${r.name} in the output folder`);
       return postToPanels({ type: 'outputSaved', id, name: r.name, path: r.path });
     }
-    await cizState.addLog('warn', `Could not store ${out.name} (${r.error}), so it was downloaded instead`);
+    await cfxState.addLog('warn', `Could not store ${out.name} (${r.error}), so it was downloaded instead`);
   }
   const blob = typeof out.data === 'string' ? new Blob([out.data], { type: `${out.mime};charset=utf-8` }) : new Blob([out.data], { type: out.mime });
   const url = URL.createObjectURL(blob);
   try {
-    const dl = await browser.downloads.download({ url, filename: `Claude in Zen/${cizSafeFileName(out.name)}`, conflictAction: 'uniquify', saveAs });
-    await cizState.addLog('info', `Saved ${out.name} to Downloads\\Claude in Zen`);
+    const dl = await browser.downloads.download({ url, filename: `Claudefox/${cfxSafeFileName(out.name)}`, conflictAction: 'uniquify', saveAs });
+    await cfxState.addLog('info', `Saved ${out.name} to Downloads\\Claudefox`);
     postToPanels({ type: 'downloaded', id, downloadId: dl });
   } catch (e) {
-    if (!/cancel/i.test(e.message)) await cizState.addLog('error', `Download failed: ${e.message}`);
+    if (!/cancel/i.test(e.message)) await cfxState.addLog('error', `Download failed: ${e.message}`);
   } finally { setTimeout(() => URL.revokeObjectURL(url), 60000); }
 }
 
-// Settings > Saving files: the helper writes the file into the output folder in Claude in Zen's data folder (…\claude-in-zen\output). Resolves
+// Settings > Saving files: the helper writes the file into the output folder in Claudefox's data folder (…\claudefox\output). Resolves
 // { ok: true, name, path } or { ok: false, error }; a helper that is missing, stops or is slow means a download instead.
 function storeOutput(out) {
   if (!nativePort) connectNative();
@@ -237,7 +237,7 @@ async function snapTab(port, req, windowId) {
   try {
     const [tab] = await browser.tabs.query(typeof windowId === 'number' ? { active: true, windowId } : { active: true, lastFocusedWindow: true });
     if (!tab) return reply({ error: t('bg_snapNoTab') });
-    const gate = cizUrlBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
+    const gate = cfxUrlBlocked(tab.url || '', { unsafe: !!cfxState.get().unsafe });
     if (gate.blocked) return reply({ error: t('bg_snapBlocked', gate.reason) });
     const data = await browser.tabs.captureTab(tab.id, { format: 'png' });
     let host = 'tab';
@@ -247,14 +247,14 @@ async function snapTab(port, req, windowId) {
 }
 
 function toolsSend(msg, note) {
-  if (!sendNative(msg)) return cizState.addLog('error', 'Tools: the helper is not connected.');
-  if (note) return cizState.addLog('info', note);
+  if (!sendNative(msg)) return cfxState.addLog('error', 'Tools: the helper is not connected.');
+  if (note) return cfxState.addLog('info', note);
 }
 
 // create_file (lib/pageTools.js) asks which chat turn a new file belongs to, then tells the panels about it.
-function cizFileContext() { const [id] = chatRuns.keys(); return { msg: id || '' }; }
-function cizOnFileCreated(file) {
-  cizState.addLog('action', `Claude made ${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`);
+function cfxFileContext() { const [id] = chatRuns.keys(); return { msg: id || '' }; }
+function cfxOnFileCreated(file) {
+  cfxState.addLog('action', `Claude made ${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`);
   postToPanels({ type: 'fileCreated', file });
 }
 

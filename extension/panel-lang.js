@@ -4,10 +4,10 @@
 (function () {
   'use strict';
   // The reload sits in one small function so a test can replace it (jsdom has no location.reload).
-  window.cizLang = { reload: function () { location.reload(); } };
+  window.cfxLang = { reload: function () { location.reload(); } };
   var sel = document.getElementById('langSelect');
-  if (!sel || !window.cizI18n) return;
-  sel.value = cizI18n.setting();
-  sel.addEventListener('change', function () { cizI18n.set(sel.value); });
-  cizI18n.onChange(function () { window.cizLang.reload(); });
+  if (!sel || !window.cfxI18n) return;
+  sel.value = cfxI18n.setting();
+  sel.addEventListener('change', function () { cfxI18n.set(sel.value); });
+  cfxI18n.onChange(function () { window.cfxLang.reload(); });
 })();

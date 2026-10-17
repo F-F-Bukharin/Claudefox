@@ -1,5 +1,5 @@
 'use strict';
-// Claude in Zen: chat runs and native messaging. A chat turn runs in the helper, one at a time; the helper link
+// Claudefox: chat runs and native messaging. A chat turn runs in the helper, one at a time; the helper link
 // carries its stream. onNativeMessage is the switch for the helper's messages.
 
 // ---------------------------------------------------------------- chat
@@ -35,12 +35,12 @@ function drainChatQueue() {
 const ARMY_LABEL = { army: 'army (Opus 5.5 at high effort, with Haiku workers)', armymax: 'army (Opus 5.5 at max effort, with Haiku workers)' };
 
 // The chat turn that is running (one at a time), or '' between turns: the message id the site gate and the helper share.
-function cizChatId() { return chatRuns.size ? [...chatRuns.keys()][0] : ''; }
+function cfxChatId() { return chatRuns.size ? [...chatRuns.keys()][0] : ''; }
 
 // Whenever the chat's site list changes during a turn (a card answered), the helper hears the new list.
-cizSiteGate.onChange = list => {
-  const id = cizChatId();
-  if (id) sendNative({ type: 'scope', id, sites: list, trusted: cizAutomatic() });   // Unsafe includes Automatic
+cfxSiteGate.onChange = list => {
+  const id = cfxChatId();
+  if (id) sendNative({ type: 'scope', id, sites: list, trusted: cfxAutomatic() });   // Unsafe includes Automatic
 };
 
 const CHAT_ATTACH_MAX = 12;
@@ -55,7 +55,7 @@ function cleanAttachments(list) {
     if (!a || typeof a.data !== 'string' || !a.data || /[^A-Za-z0-9+/=]/.test(a.data.slice(0, 200))) continue;
     total += a.data.length * 0.75;
     if (total > CHAT_ATTACH_BYTES) break;
-    out.push({ name: cizSafeFileName(a.name, 'file.bin').slice(0, 120), type: String(a.type || '').slice(0, 100), data: a.data });
+    out.push({ name: cfxSafeFileName(a.name, 'file.bin').slice(0, 120), type: String(a.type || '').slice(0, 100), data: a.data });
   }
   return out;
 }
@@ -68,17 +68,17 @@ async function armyMaxOn() {
 async function startChat(msg) {
   const id = String(msg.id || '').slice(0, 64);
   const text = String(msg.text || '');
-  const improve = msg.improve === true;   // Improve Claude in Zen: no tab, no files, no attachments; Opus at max effort
+  const improve = msg.improve === true;   // Improve Claudefox: no tab, no files, no attachments; Opus at max effort
   const attachments = improve ? [] : cleanAttachments(msg.attachments);
   const fail = error => {
     postToPanels({ type: 'chatDone', id, ok: false, error });
-    if (msg.scheduled) cizMacros.skipped(msg.scheduled.macro, error);   // a scheduled run that could not start is a skipped run
+    if (msg.scheduled) cfxMacros.skipped(msg.scheduled.macro, error);   // a scheduled run that could not start is a skipped run
   };
   if (!id || (!text.trim() && !attachments.length && !improve)) return;
   if (chatRuns.size || chatReserved) {
     if (chatQueue.length >= CHAT_QUEUE_MAX) return fail(t('bg_queueFull'));
     chatQueue.push({ id, msg });
-    if (msg.scheduled) cizMacros.waitOrSkip(id, msg.scheduled.macro);   // a scheduled run waits up to 30 minutes
+    if (msg.scheduled) cfxMacros.waitOrSkip(id, msg.scheduled.macro);   // a scheduled run waits up to 30 minutes
     postToPanels({ type: 'chatQueued', id });
     return chatBusyPush();
   }
@@ -87,7 +87,7 @@ async function startChat(msg) {
 }
 
 async function startChatNow(msg, id, text, improve, attachments, fail) {
-  const s = cizState.get();
+  const s = cfxState.get();
   // A scheduled macro (E8) only reads: Speed, no tab, no files, no Unsafe, no Automatic, no army, and its own sites. A saved macro with
   // army tasks (E7) sends in Quality with the army on, whatever the switches say.
   const sched = msg.scheduled && typeof msg.scheduled === 'object' && msg.scheduled.macro ? { macro: String(msg.scheduled.macro).slice(0, 40), sites: (Array.isArray(msg.scheduled.sites) ? msg.scheduled.sites : []).map(String) } : null;
@@ -116,19 +116,19 @@ async function startChatNow(msg, id, text, improve, attachments, fail) {
   const resume = improve || sched ? '' : typeof msg.resume === 'string' ? msg.resume.slice(0, 100) : winId != null ? (winSessions.get(winId) || '') : (s.chatSession || '');
   if (!improve && !sched && winId != null) winSessions.set(winId, resume);
   let sites = [];
-  if (sched) sites = cizSiteGate.begin(id, { scheduled: sched.sites });
+  if (sched) sites = cfxSiteGate.begin(id, { scheduled: sched.sites });
   else if (!improve) {
     let blocks = {};
     try { blocks = (await browser.storage.local.get('sites')).sites || {}; } catch {}
     const allow = Object.keys(blocks).filter(k => blocks[k] === 'allow');
-    const extra = (Array.isArray(msg.tabSites) ? msg.tabSites : []).slice(0, 20).map(s => cizSiteOf('http://' + s)).filter(Boolean);   // the tabs the text mentions with @
-    sites = cizSiteGate.begin(id, { tabUrl: tab && tab.url, windowId, text, newChat: !resume, allow, extra });
+    const extra = (Array.isArray(msg.tabSites) ? msg.tabSites : []).slice(0, 20).map(s => cfxSiteOf('http://' + s)).filter(Boolean);   // the tabs the text mentions with @
+    sites = cfxSiteGate.begin(id, { tabUrl: tab && tab.url, windowId, text, newChat: !resume, allow, extra });
   }
   const sent = sendNative({ type: 'chat', id, text, model, tab, resume, files, folder: files ? s.filesFolder : '',
     unsafe: !improve && !sched && !!s.unsafe, caveman: !improve && !sched && !!s.caveman, attachments, improve,
-    sites, trusted: !improve && !sched && cizAutomatic(), scheduled: !!sched });
-  if (!sent) { chatRuns.delete(id); chatBusyPush(); cizSiteGate.end(id); return fail(t('bg_helperUnreachable')); }
-  await cizState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
+    sites, trusted: !improve && !sched && cfxAutomatic(), scheduled: !!sched });
+  if (!sent) { chatRuns.delete(id); chatBusyPush(); cfxSiteGate.end(id); return fail(t('bg_helperUnreachable')); }
+  await cfxState.addLog('action', improve ? 'improve → Claude Code, Opus 5.5 at max effort'
     : sched ? `scheduled macro ${sched.macro} → Claude Code, Speed, reading ${sched.sites.join(', ')}`
     : `chat → Claude Code, ${ARMY_LABEL[model] || model}${files ? `, file tools: ${files}` : ''}${attachments.length ? `, ${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : ''}${s.caveman ? ', caveman' : ''}`);
 }
@@ -140,10 +140,10 @@ function cancelChat(id) {
 
 // Ends every open turn in the panel (Stop, or the helper went away).
 function failChats(error) {
-  cizSiteGate.cancel();   // a card that waits for an answer nobody can give now
-  for (const [id, run] of chatRuns) { postToPanels({ type: 'chatDone', id, ok: false, error }); cizSiteGate.end(id); if (run.scheduled) cizMacros.finished(run, { ok: false, error }); }
+  cfxSiteGate.cancel();   // a card that waits for an answer nobody can give now
+  for (const [id, run] of chatRuns) { postToPanels({ type: 'chatDone', id, ok: false, error }); cfxSiteGate.end(id); if (run.scheduled) cfxMacros.finished(run, { ok: false, error }); }
   chatRuns.clear();
-  for (const q of chatQueue.splice(0)) { postToPanels({ type: 'chatDone', id: q.id, ok: false, error }); if (q.msg.scheduled) cizMacros.skipped(q.msg.scheduled.macro, error); }   // Stop clears every waiting message
+  for (const q of chatQueue.splice(0)) { postToPanels({ type: 'chatDone', id: q.id, ok: false, error }); if (q.msg.scheduled) cfxMacros.skipped(q.msg.scheduled.macro, error); }   // Stop clears every waiting message
   chatBusyPush();
 }
 
@@ -151,7 +151,7 @@ async function onChatDone(msg) {
   const id = String(msg.id || '');
   const run = chatRuns.get(id);
   chatRuns.delete(id);
-  cizSiteGate.end(id);
+  cfxSiteGate.end(id);
   const err = String(msg.error || '');
   if (msg.limit) await browser.storage.local.set({ limitHitAt: Date.now() });   // scheduled macros stay away for 2 hours (lib/bg-macros.js)
   if (run && run.windowId != null) {
@@ -159,12 +159,12 @@ async function onChatDone(msg) {
     if (!msg.ok && /No conversation found/i.test(err)) winSessions.set(run.windowId, '');
   }
   const own = !(run && run.scheduled);   // a scheduled run never touches the chat's own session
-  if (own && msg.sessionId) await cizState.set({ chatSession: String(msg.sessionId) });
-  if (own && !msg.ok && /No conversation found/i.test(err)) await cizState.set({ chatSession: '' });
-  if (!msg.ok) await cizState.addLog(msg.limit ? 'warn' : 'error', `Chat: ${err.split('\n')[0].slice(0, 200)}`);
+  if (own && msg.sessionId) await cfxState.set({ chatSession: String(msg.sessionId) });
+  if (own && !msg.ok && /No conversation found/i.test(err)) await cfxState.set({ chatSession: '' });
+  if (!msg.ok) await cfxState.addLog(msg.limit ? 'warn' : 'error', `Chat: ${err.split('\n')[0].slice(0, 200)}`);
   postToPanels({ type: 'chatDone', id, ok: !!msg.ok, error: err, limit: !!msg.limit, auth: !msg.ok && !!msg.auth,
     account: String(msg.account || '').slice(0, 64), sessionId: String(msg.sessionId || '') });
-  if (run && run.scheduled) await cizMacros.finished(run, msg);
+  if (run && run.scheduled) await cfxMacros.finished(run, msg);
   chatBusyPush();
   drainChatQueue();
 }
@@ -175,50 +175,69 @@ async function onChatDone(msg) {
 
 let nativeRetries = 0;
 let nativeRetryTimer = null;
+let nativeHost = '';   // the registration the current port was opened with: CFX.NATIVE_HOST, or CFX.NATIVE_HOST_OLD while claudefox is not registered
 // A panel that connects with no helper port waits here; connectNative sends its watch_load after hello.
 let watchLoadWanted = false;
 
-function connectNative() {
+// Firefox closes the port at once, with this error, for a helper it cannot find.
+const HOST_MISSING = /No such native application|not found/i;
+
+// The helper was renamed in 0.11 (CFX.NATIVE_HOST_OLD -> CFX.NATIVE_HOST). Until Set up Claudefox.bat has run, only the old
+// registration exists: the add-on then tries it once, and says to re-run the setup. A connection always starts with
+// the new name, so re-running the setup is enough; nothing is remembered.
+function fallBackToOldHost(failedHost) {
+  if (failedHost !== CFX.NATIVE_HOST) return false;
+  const notice = t('bg_nativeRerun');
+  cfxState.set({ nativeNotice: notice });
+  cfxState.addLog('warn', notice);
+  connectNative(CFX.NATIVE_HOST_OLD);
+  return true;
+}
+
+function connectNative(host = CFX.NATIVE_HOST) {
   if (nativePort) return;
-  if (cizState.get().agent !== 'active') return;
+  if (cfxState.get().agent !== 'active') return;
   clearTimeout(nativeRetryTimer);
   let port;
   try {
-    port = browser.runtime.connectNative(CIZ.NATIVE_HOST);
+    port = browser.runtime.connectNative(host);
   } catch (e) {
-    cizState.set({ native: 'error', nativeDetail: e.message });
+    if (fallBackToOldHost(host)) return;
+    cfxState.set({ native: 'error', nativeDetail: e.message });
     return;
   }
   nativePort = port;
-  cizState.set({ native: 'unknown', nativeDetail: t('bg_nativeConnecting') });
+  nativeHost = host;
+  cfxState.set({ native: 'unknown', nativeDetail: t('bg_nativeConnecting') });
 
   port.onMessage.addListener(msg => {
-    onNativeMessage(msg).catch(e => cizState.addLog('error', `Helper message failed: ${e.message}`));
+    onNativeMessage(msg).catch(e => cfxState.addLog('error', `Helper message failed: ${e.message}`));
   });
   port.onDisconnect.addListener(p => {
     const err = (p && p.error) || browser.runtime.lastError;
     nativePort = null;
-    if (cizState.get().accountLogin) cizState.set({ accountLogin: null });
-    if (cizState.get().accountBusy) cizState.set({ accountBusy: '' });
-    if (cizState.get().folderPicking) cizState.set({ folderPicking: false });
+    if (cfxState.get().accountLogin) cfxState.set({ accountLogin: null });
+    if (cfxState.get().accountBusy) cfxState.set({ accountBusy: '' });
+    if (cfxState.get().folderPicking) cfxState.set({ folderPicking: false });
     for (const done of [...outputWaiters.values()]) done({ ok: false, error: 'the helper stopped' });
     failChats(t('bg_helperCutOff'));
-    cizArmy.closeAll().catch(() => {});   // its workers are gone, so their tabs go too
-    cizLocal.cancelAll().catch(() => {});  // and nobody can answer a folder question now
-    cizSiteGate.cancel();                  // nor a site question
+    cfxArmy.closeAll().catch(() => {});   // its workers are gone, so their tabs go too
+    cfxLocal.cancelAll().catch(() => {});  // and nobody can answer a folder question now
+    cfxSiteGate.cancel();                  // nor a site question
     endConfirms('The helper stopped.');
-    if (err && /No such native application/i.test(err.message)) {
-      cizState.set({ native: 'missing', nativeDetail: t('bg_nativeMissing'), clients: [] });
+    if (err && HOST_MISSING.test(err.message)) {
+      if (fallBackToOldHost(host)) return;
+      cfxState.set({ native: 'missing', nativeDetail: t('bg_nativeMissing'), clients: [] });
       return;
     }
-    cizState.set({ native: 'error', nativeDetail: err ? err.message : t('bg_nativeStopped'), clients: [] });
+    cfxState.set({ native: 'error', nativeDetail: err ? err.message : t('bg_nativeStopped'), clients: [] });
     // The helper dropped on its own (not via Stop): try again a few times.
-    if (cizState.get().agent === 'active' && nativeRetries < 3) {
+    if (cfxState.get().agent === 'active' && nativeRetries < 3) {
       nativeRetries++;
-      nativeRetryTimer = setTimeout(connectNative, 1500 * nativeRetries);
+      nativeRetryTimer = setTimeout(() => connectNative(), 1500 * nativeRetries);
     }
   });
-  sendNative({ type: 'hello', version: browser.runtime.getManifest().version, lang: cizI18n.lang() });   // the helper's confirm windows speak it
+  sendNative({ type: 'hello', version: browser.runtime.getManifest().version, lang: cfxI18n.lang() });   // the helper's confirm windows speak it
   if (watchLoadWanted) { watchLoadWanted = false; sendNative({ type: 'watch_load' }); }   // a panel opened before the helper was connected
 }
 
@@ -228,13 +247,13 @@ function disconnectNative(reason) {
     try { nativePort.disconnect(); } catch {}
     nativePort = null;
   }
-  cizState.set({ native: 'unknown', nativeDetail: reason || t('bg_nativeDisconnected'), clients: [] });
+  cfxState.set({ native: 'unknown', nativeDetail: reason || t('bg_nativeDisconnected'), clients: [] });
 }
 
 function sendNative(msg) {
   if (!nativePort) return false;
   try { nativePort.postMessage(msg); return true; } catch (e) {
-    cizState.addLog('error', `Could not reach the helper: ${e.message}`);
+    cfxState.addLog('error', `Could not reach the helper: ${e.message}`);
     return false;
   }
 }
@@ -251,7 +270,7 @@ async function downloadAskFromHelper(msg) {
   const id = msg.id ? String(msg.id).slice(0, 40) : '';
   const host = String(msg.host || '').slice(0, 253);
   if (id && await pictureSiteBlocked(host)) return sendNative({ type: 'download_answer', id, allow: false });
-  return cizState.set({ downloadAsk: id ? { id, host, name: String(msg.name || '').slice(0, 200), folder: String(msg.folder || '').slice(0, 500) } : null });
+  return cfxState.set({ downloadAsk: id ? { id, host, name: String(msg.name || '').slice(0, 200), folder: String(msg.folder || '').slice(0, 500) } : null });
 }
 async function onNativeMessage(msg) {
   if (!msg || typeof msg !== 'object') return;
@@ -261,38 +280,39 @@ async function onNativeMessage(msg) {
       if (done) done(msg.ok ? { ok: true, name: String(msg.name || ''), path: String(msg.path || '') } : { ok: false, error: String(msg.error || 'unknown error') });
       return;
     }
-    case 'mods': return cizState.set({ mods: Array.isArray(msg.mods) ? msg.mods : [], modsKnown: true });
+    case 'mods': return cfxState.set({ mods: Array.isArray(msg.mods) ? msg.mods : [], modsKnown: true });
     case 'hello':
       nativeRetries = 0;
-      await cizState.set({
+      await cfxState.set({
         native: 'connected', nativeDetail: `helper ${msg.version}`, hostVersion: String(msg.version || ''),
         sourceVersion: String(msg.sourceVersion || ''), canUpdate: !!msg.canUpdate, linked: !!msg.linked,
         clients: Array.isArray(msg.clients) ? msg.clients.slice(0, 10) : [],
+        nativeNotice: nativeHost === CFX.NATIVE_HOST_OLD ? t('bg_nativeRerun') : '',   // only the old helper answered: setup has not run since the rename
       });
-      await cizState.addLog('info', `Helper ${msg.version} connected`);
+      await cfxState.addLog('info', `Helper ${msg.version} connected`);
       requestClaudeStatus();
       sendNative({ type: 'accounts' });
       return;
 
     case 'clients':
-      await cizState.set({ clients: Array.isArray(msg.clients) ? msg.clients.slice(0, 10) : [] });
+      await cfxState.set({ clients: Array.isArray(msg.clients) ? msg.clients.slice(0, 10) : [] });
       return;
 
     case 'pick_folder_result': {
-      await cizState.set({ folderPicking: false });
-      if (!msg.ok) return cizState.addLog('error', msg.error || 'The folder window did not finish. Type the path instead.');
+      await cfxState.set({ folderPicking: false });
+      if (!msg.ok) return cfxState.addLog('error', msg.error || 'The folder window did not finish. Type the path instead.');
       if (msg.cancelled || !msg.path) return;
       // With file tools on, the new folder is asked in the helper's confirm window; a no keeps the old folder (setFiles logs it).
-      const r = await setFiles(!!cizState.get().filesEnabled, cizState.get().filesMode, msg.path, { keepOldOnNo: true });
+      const r = await setFiles(!!cfxState.get().filesEnabled, cfxState.get().filesMode, msg.path, { keepOldOnNo: true });
       if (r && r.kept) return;
-      return cizState.addLog('info', `Folder chosen: ${msg.path}`);
+      return cfxState.addLog('info', `Folder chosen: ${msg.path}`);
     }
 
     // What the helper holds as allowed (sent after hello and after every change). The switches follow it: a helper that
     // restarted has forgotten what was allowed, and the add-on must not keep showing it on. Off keeps the remembered mode and
     // folder: they are the user's choice, only the permission is gone.
     case 'confirmed_state': {
-      const s = cizState.get();
+      const s = cfxState.get();
       const f = msg.files;
       const patch = { unsafe: msg.unsafe === true, trusted: msg.trusted === true };
       if (f && typeof f === 'object' && (f.mode === 'read' || f.mode === 'write') && typeof f.folder === 'string' && f.folder) {
@@ -300,19 +320,19 @@ async function onNativeMessage(msg) {
       } else {
         patch.filesEnabled = false;
       }
-      await cizState.set(patch);
+      await cfxState.set(patch);
       if (s.trusted && !patch.trusted) {   // the helper forgot it: the turn that runs hears it too
-        const running = cizChatId();
-        if (running) sendNative({ type: 'scope', id: running, sites: cizSiteGate.list(), trusted: false });
-        await cizState.addLog('warn', 'Automatic mode is off: the helper restarted and did not keep it.');
+        const running = cfxChatId();
+        if (running) sendNative({ type: 'scope', id: running, sites: cfxSiteGate.list(), trusted: false });
+        await cfxState.addLog('warn', 'Automatic mode is off: the helper restarted and did not keep it.');
       }
-      if (s.unsafe && !patch.unsafe) await cizState.addLog('warn', 'Unsafe mode is off: the helper restarted and did not keep it. Turn it on again to be asked.');
-      if (s.filesEnabled && !patch.filesEnabled) await cizState.addLog('warn', 'File tools are off: the helper restarted and did not keep them. Turn them on again to be asked.');
+      if (s.unsafe && !patch.unsafe) await cfxState.addLog('warn', 'Unsafe mode is off: the helper restarted and did not keep it. Turn it on again to be asked.');
+      if (s.filesEnabled && !patch.filesEnabled) await cfxState.addLog('warn', 'File tools are off: the helper restarted and did not keep them. Turn them on again to be asked.');
       return;
     }
-    case 'page_read': return cizSiteGate.markRead();   // the helper's own tools (documents, attachments) showed Claude page content
+    case 'page_read': return cfxSiteGate.markRead();   // the helper's own tools (documents, attachments) showed Claude page content
     case 'claude_status':
-      await cizState.set({
+      await cfxState.set({
         claude: {
           installed: !!msg.installed,
           loggedIn: !!msg.loggedIn,
@@ -326,7 +346,7 @@ async function onNativeMessage(msg) {
         claudeCheckAsked = false;
         const who = msg.email || msg.emailAddress;
         const dir = msg.configDirectory ? ` (profile: ${msg.configDirectory})` : '';
-        await cizState.addLog('info', !msg.installed ? 'Claude Code: not installed on this PC.'
+        await cfxState.addLog('info', !msg.installed ? 'Claude Code: not installed on this PC.'
           : !msg.loggedIn ? `Claude Code: not signed in${dir}.`
           : `Claude Code: signed in as ${who || 'unknown account'}${dir}.`);
       }
@@ -341,23 +361,23 @@ async function onNativeMessage(msg) {
         return;
       }
       const army = a != null ? { run: a.run.slice(0, 40), worker: a.worker.slice(0, 40) } : null;
-      const turn = chatRuns.get(cizChatId());
+      const turn = chatRuns.get(cfxChatId());
       const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'), army, !army && !!(turn && turn.scheduled));
       sendNative({ type: 'result', id: msg.id, ...out });
       return;
     }
 
     // Local pages (lib/local.js): the helper keeps the allowed folders and asks about new ones in its confirm window.
-    case 'local_grants':     return cizLocal.setGrants(msg.folders);
-    case 'local_question':   return cizLocal.setQuestion(String(msg.folder || ''));
-    case 'local_ask_result': return cizLocal.answer(String(msg.id || ''), msg);
+    case 'local_grants':     return cfxLocal.setGrants(msg.folders);
+    case 'local_question':   return cfxLocal.setQuestion(String(msg.folder || ''));
+    case 'local_ask_result': return cfxLocal.answer(String(msg.id || ''), msg);
     case 'watch_state':   // the helper's switch and saved option: after a panel load, a confirm answer or a card's Yes
-      return cizState.set({ watch: msg.watch === true, watchOnLoad: msg.watchOnLoad === true ? true : msg.watchOnLoad === false ? false : null });
-    case 'watch_ask':     return cizState.set({ watchAsk: { id: String(msg.id || '').slice(0, 40), source: String(msg.source || '').slice(0, 500) } });
+      return cfxState.set({ watch: msg.watch === true, watchOnLoad: msg.watchOnLoad === true ? true : msg.watchOnLoad === false ? false : null });
+    case 'watch_ask':     return cfxState.set({ watchAsk: { id: String(msg.id || '').slice(0, 40), source: String(msg.source || '').slice(0, 500) } });
     case 'download_ask':  return downloadAskFromHelper(msg);   // the helper's picture card (download_image)
     case 'watch_ask_done': {
-      const cur = cizState.get().watchAsk;
-      return cur && cur.id === String(msg.id || '').slice(0, 40) ? cizState.set({ watchAsk: null }) : undefined;
+      const cur = cfxState.get().watchAsk;
+      return cur && cur.id === String(msg.id || '').slice(0, 40) ? cfxState.set({ watchAsk: null }) : undefined;
     }
     case 'confirm_result': { // the user's answer in the helper's confirm window (askConfirm)
       const done = confirmWaiters.get(String(msg.id || ''));
@@ -365,26 +385,26 @@ async function onNativeMessage(msg) {
       return;
     }
     case 'local_tab': {     // the helper opened a file in Zen: which tab shows it
-      const r = await cizLocal.findTab(String(msg.url || ''));
+      const r = await cfxLocal.findTab(String(msg.url || ''));
       sendNative({ type: 'local_tab_result', id: msg.id, ok: !!r.ok, tab_id: r.tab_id == null ? null : r.tab_id, title: r.title || '', error: r.error || '' });
       return;
     }
 
     case 'army_end':   // a worker finished (or, without worker, the whole run): close its tabs
-      if (msg.run) await cizArmy.closeRun(String(msg.run), msg.worker ? String(msg.worker) : null);
+      if (msg.run) await cfxArmy.closeRun(String(msg.run), msg.worker ? String(msg.worker) : null);
       return;
 
     case 'update_result':
-      await cizState.set({ updating: false, updateNote: msg.ok
+      await cfxState.set({ updating: false, updateNote: msg.ok
         ? `v${msg.version} sent to Zen. If no install prompt shows up, run "Install in Zen.bat" (tools folder) yourself, or link Zen once for one-click updates.`
         : `Update: ${msg.error}` });
-      await cizState.addLog(msg.ok ? 'info' : 'error', msg.ok
+      await cfxState.addLog(msg.ok ? 'info' : 'error', msg.ok
         ? `v${msg.version} handed to Zen${msg.note ? ` (${msg.note.replace(/\.$/, '')})` : ''}. Click Add, then Okay, in Zen's prompt. The panel reloads after.`
         : `Update: ${msg.error}`);
       return;
 
     case 'accounts':
-      await cizState.set({
+      await cfxState.set({
         accounts: (Array.isArray(msg.accounts) ? msg.accounts : []).slice(0, 20).map(a => ({
           id: String(a.id || ''), email: String(a.email || ''), plan: String(a.plan || ''), org: String(a.org || ''),
           loggedIn: !!a.loggedIn, active: !!a.active, lastUsed: Number(a.lastUsed) || 0,
@@ -409,7 +429,7 @@ async function onNativeMessage(msg) {
     }
 
     case 'tools':
-      await cizState.set({ tools: cleanTools(msg), toolLogin: msg.login ? { name: String(msg.login.name || ''), label: String(msg.login.label || '') } : null });
+      await cfxState.set({ tools: cleanTools(msg), toolLogin: msg.login ? { name: String(msg.login.name || ''), label: String(msg.login.label || '') } : null });
       return;
 
     case 'tool_result':
@@ -424,7 +444,7 @@ async function onNativeMessage(msg) {
 
     case 'host_error':
     case 'error':   // a reply that was too large to send, or another problem the helper reports
-      await cizState.addLog('error', `Helper: ${msg.error}`);
+      await cfxState.addLog('error', `Helper: ${msg.error}`);
       return;
   }
 }
@@ -452,13 +472,13 @@ async function onToolResult(msg) {
   const err = String(msg.error || '').slice(0, 300);
   postToPanels({ type: 'toolResult', action: String(msg.action || ''), ok, error: err, name: String(msg.name || ''), label: name });
   switch (msg.action) {
-    case 'signin_started': return cizState.addLog('info', `A sign-in window is open for ${name}. Sign in there; the panel notices when you are done.`);
-    case 'signin': return cizState.addLog(ok ? 'info' : /Cancelled/.test(err) ? 'info' : 'error', ok ? `${name} is signed in. Claude can use it now.` : `${name}: ${err}`);
-    case 'add': return cizState.addLog(ok ? 'info' : 'error', ok ? `Added ${name}.` : `Add: ${err}`);
-    case 'remove': return cizState.addLog(ok ? 'info' : 'error', ok ? `Removed ${name}.` : `Remove: ${err}`);
-    case 'install': return cizState.addLog(ok ? 'info' : 'error', ok ? `Installed ${name}. Switch it on below to use it in the chat.` : `Install: ${err}`);
-    case 'uninstall': return cizState.addLog(ok ? 'info' : 'error', ok ? `Removed plugin ${name}.` : `Remove plugin: ${err}`);
-    case 'set': return ok ? undefined : cizState.addLog('error', err);
-    default: if (!ok && err) return cizState.addLog('error', `Tools: ${err}`);
+    case 'signin_started': return cfxState.addLog('info', `A sign-in window is open for ${name}. Sign in there; the panel notices when you are done.`);
+    case 'signin': return cfxState.addLog(ok ? 'info' : /Cancelled/.test(err) ? 'info' : 'error', ok ? `${name} is signed in. Claude can use it now.` : `${name}: ${err}`);
+    case 'add': return cfxState.addLog(ok ? 'info' : 'error', ok ? `Added ${name}.` : `Add: ${err}`);
+    case 'remove': return cfxState.addLog(ok ? 'info' : 'error', ok ? `Removed ${name}.` : `Remove: ${err}`);
+    case 'install': return cfxState.addLog(ok ? 'info' : 'error', ok ? `Installed ${name}. Switch it on below to use it in the chat.` : `Install: ${err}`);
+    case 'uninstall': return cfxState.addLog(ok ? 'info' : 'error', ok ? `Removed plugin ${name}.` : `Remove plugin: ${err}`);
+    case 'set': return ok ? undefined : cfxState.addLog('error', err);
+    default: if (!ok && err) return cfxState.addLog('error', `Tools: ${err}`);
   }
 }

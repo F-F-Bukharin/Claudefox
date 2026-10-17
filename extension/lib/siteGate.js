@@ -2,16 +2,16 @@
 // outside them. Plain browser script (no modules); loaded in the background scripts before lib/pageTools.js.
 // This file is the logic only; pageTools.js, bg-router.js, bg-chat.js and army.js call it.
 //
-// Sites (cizSiteOf and cizSiteMatch are defined in lib/policy.js, loaded first)
-//   cizSiteOf(url)            -> lowercase host of an http(s) URL without one leading "www." and one trailing dot; IPv4, [IPv6] and
+// Sites (cfxSiteOf and cfxSiteMatch are defined in lib/policy.js, loaded first)
+//   cfxSiteOf(url)            -> lowercase host of an http(s) URL without one leading "www." and one trailing dot; IPv4, [IPv6] and
 //                                localhost as they are; '' for anything else.
-//   cizSiteMatch(list, site)  -> true when an entry equals site or site ends with "." + entry. IPs, [IPv6] and localhost: exact only.
-//   cizSitesInText(text)      -> sites of http(s) URLs in the text plus bare domains (.com .net .org ... .br); no email domains,
+//   cfxSiteMatch(list, site)  -> true when an entry equals site or site ends with "." + entry. IPs, [IPv6] and localhost: exact only.
+//   cfxSitesInText(text)      -> sites of http(s) URLs in the text plus bare domains (.com .net .org ... .br); no email domains,
 //                                lowercase, no www., no duplicates.
 //
-// cizSiteGate (one object; a message is one chat turn)
+// cfxSiteGate (one object; a message is one chat turn)
 //   begin(id, { tabUrl, windowId, text, newChat, allow, extra }) -> string[]   starts a message. newChat clears the chat list. The message
-//        list is the site of tabUrl plus cizSitesInText(text) plus extra (the sites of the tabs the text mentions with @); allow is the sites marked "allow" in storage `sites`.
+//        list is the site of tabUrl plus cfxSitesInText(text) plus extra (the sites of the tabs the text mentions with @); allow is the sites marked "allow" in storage `sites`.
 //        Returns the effective list (allow + chat + message, no duplicates).
 //   end(id)            ends the message: its list, its denials and the page-read flag go. An end() for another id than the
 //                      running message is ignored. Outside a turn the message scope lives until the next begin().
@@ -29,27 +29,27 @@
 //   scheduled() -> boolean   true while a scheduled macro's turn runs (Automatic mode never answers for one).
 //   tabView(tab, { trusted, blocks }) -> { id, site, active } for a blocked site or (not trusted) a site outside the list,
 //        else { id, windowId, active, title, url, audible }.
-//   The card: cizState.set({ siteAsk: { id, site, action, kind } }), kind 'site' (answers message|chat|deny) or 'risky'
+//   The card: cfxState.set({ siteAsk: { id, site, action, kind } }), kind 'site' (answers message|chat|deny) or 'risky'
 //        (allow|deny). The panel calls shown(id) when the card is on screen (waits SHOWN_MS), then answer(id, choice) (ANSWER_MS);
 //        no shown or no answer -> refused (and remembered like a Deny). One card at a time; a call for the same site and kind
 //        joins the open card; others queue and are re-checked when their turn comes. siteAsk goes back to null when a card ends.
 //   shown(id), answer(id, choice), cancel()   cancel refuses the open card and everything queued (Stop, helper gone).
 //   SHOWN_MS = 5000, ANSWER_MS = 120000   setTimeout/clearTimeout are looked up at call time.
 
-const CIZ_BARE_DOMAIN = /(^|[^\w@.\-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|net|org|edu|gov|io|dev|app|ai|co|me|tv|info|br|pt|uk|us|de|fr|es|it))(?![\w@-]|\.\w)/gi;
+const CFX_BARE_DOMAIN = /(^|[^\w@.\-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|net|org|edu|gov|io|dev|app|ai|co|me|tv|info|br|pt|uk|us|de|fr|es|it))(?![\w@-]|\.\w)/gi;
 
-function cizSitesInText(text) {
+function cfxSitesInText(text) {
   let s = String(text == null ? '' : text);
   const out = [];
   const add = site => { if (site && out.indexOf(site) < 0) out.push(site); };
-  s = s.replace(/(https?:\/\/(?:\[[^\]\s]*\]|[\w.\-@:]+))[^\s]*/gi, (all, head) => { add(cizSiteOf(head)); return ' '; });
+  s = s.replace(/(https?:\/\/(?:\[[^\]\s]*\]|[\w.\-@:]+))[^\s]*/gi, (all, head) => { add(cfxSiteOf(head)); return ' '; });
   let m;
-  CIZ_BARE_DOMAIN.lastIndex = 0;
-  while ((m = CIZ_BARE_DOMAIN.exec(s))) add(cizSiteOf('http://' + m[2]));
+  CFX_BARE_DOMAIN.lastIndex = 0;
+  while ((m = CFX_BARE_DOMAIN.exec(s))) add(cfxSiteOf('http://' + m[2]));
   return out;
 }
 
-const cizSiteGate = (() => {
+const cfxSiteGate = (() => {
   const SHOWN_MS = 5000, ANSWER_MS = 120000;
   let allowed = [], chat = [], msg = [], denied = {}, pageRead = false, winId = null, curId = null;
   let sched = null;   // a scheduled macro's turn (E8): only these sites, no cards
@@ -61,9 +61,9 @@ const cizSiteGate = (() => {
   const refusedText = site => `The user did not allow ${site}. Do not try it again in this message.`;
   const dedupe = arr => { const out = []; arr.forEach(s => push(out, s)); return out; };
   const list = () => (sched ? sched.slice() : dedupe(allowed.concat(chat, msg)));
-  const entryOf = (blocks, value, site) => !!blocks && Object.keys(blocks).some(k => blocks[k] === value && cizSiteMatch([k], site));
+  const entryOf = (blocks, value, site) => !!blocks && Object.keys(blocks).some(k => blocks[k] === value && cfxSiteMatch([k], site));
   const isBlocked = (blocks, site) => entryOf(blocks, 'block', site);
-  const setState = patch => { try { Promise.resolve(cizState.set(patch)).catch(() => {}); } catch (e) { /* the state is gone with the page */ } };
+  const setState = patch => { try { Promise.resolve(cfxState.set(patch)).catch(() => {}); } catch (e) { /* the state is gone with the page */ } };
   const changed = () => { if (typeof gate.onChange === 'function') { try { gate.onChange(list()); } catch (e) { /* the wiring's problem */ } } };
   const startTimer = (fn, ms) => setTimeout(fn, ms);
   const stopTimer = t => { if (t != null && typeof clearTimeout === 'function') clearTimeout(t); };
@@ -73,17 +73,17 @@ const cizSiteGate = (() => {
     const o = opts || {};
     if (isBlocked(o.blocks, site)) throw new Error(`${site} is blocked in your site list.`);
     if (sched) {   // a scheduled macro: its own sites only, never a card, Automatic does not widen it
-      if (cizSiteMatch(sched, site)) return 'ok';
+      if (cfxSiteMatch(sched, site)) return 'ok';
       throw new Error(`Outside this scheduled macro's sites: ${site}.`);
     }
     if (o.trusted) return 'ok';
     if (o.army) {
       const run = String(o.army.run);
       if (!runs[run]) runs[run] = list();
-      if (cizSiteMatch(runs[run], site)) return 'ok';
+      if (cfxSiteMatch(runs[run], site)) return 'ok';
       throw new Error(`Outside the sites the lead may use: ${site}.`);
     }
-    if (cizSiteMatch(list(), site) || entryOf(o.blocks, 'allow', site)) return 'ok';
+    if (cfxSiteMatch(list(), site) || entryOf(o.blocks, 'allow', site)) return 'ok';
     if (denied['site:' + site]) throw new Error(refusedText(site));
     return 'ask';
   }
@@ -165,8 +165,8 @@ const cizSiteGate = (() => {
       allowed = dedupe((x.allow || []).map(s => String(s).toLowerCase()));
       msg = []; denied = {}; pageRead = false;
       winId = typeof x.windowId === 'number' ? x.windowId : null;
-      push(msg, cizSiteOf(x.tabUrl));
-      cizSitesInText(x.text).forEach(s => push(msg, s));
+      push(msg, cfxSiteOf(x.tabUrl));
+      cfxSitesInText(x.text).forEach(s => push(msg, s));
       (x.extra || []).forEach(s => push(msg, String(s).toLowerCase()));   // the sites of the tabs the text mentions with @
       return list();
     },
@@ -182,8 +182,8 @@ const cizSiteGate = (() => {
     scheduled: () => !!sched,
     tabView(tab, opts) {
       const o = opts || {};
-      const site = cizSiteOf(tab.url);
-      const seen = isBlocked(o.blocks, site) ? false : (o.trusted || cizSiteMatch(list(), site) || entryOf(o.blocks, 'allow', site));
+      const site = cfxSiteOf(tab.url);
+      const seen = isBlocked(o.blocks, site) ? false : (o.trusted || cfxSiteMatch(list(), site) || entryOf(o.blocks, 'allow', site));
       if (!seen) return { id: tab.id, site, active: tab.active };
       return { id: tab.id, windowId: tab.windowId, active: tab.active, title: tab.title, url: tab.url, audible: tab.audible };
     },

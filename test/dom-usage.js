@@ -17,7 +17,7 @@ w.browser = {
   storage: { session: { get: async () => ({}), set: async () => {} },
     local: { get: async k => (k in local ? { [k]: local[k] } : {}), set: async o => { Object.assign(local, o); } } },
   tabs: { query: async () => [{ title: 'T', url: 'https://x' }], onActivated: { addListener() {} }, onUpdated: { addListener() {} } } };
-w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8')); evalPanel(dom, dir, panelFiles);
+w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;'); w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8')); evalPanel(dom, dir, panelFiles);
 const $ = id => w.document.getElementById(id);
 const base = { agent: 'active', signedIn: true, account: { email: 'f.work@example.com', name: 'F', uuid: 'u' }, native: 'connected', hostVersion: '0.4.0', claude: { installed: true, loggedIn: true, email: 'f.work@example.com', plan: 'pro' }, pending: 0, chatModel: 'speed', chatArmy: false, filesMode: 'read', filesFolder: '' };
 const tick = (ms = 60) => new Promise(r => setTimeout(r, ms));
@@ -125,7 +125,7 @@ const netCounts = a => ({ wr: WR.reduce((n, k) => n + a.b.webRequest[k].fns.leng
 const armyOn = { signedIn: true, native: 'connected', chatModel: 'quality', chatArmy: true };
 // One chat turn from the panel's side: the send with a state, the helper's events, then the end. Returns the chat message sent.
 async function turn(a, id, state = armyOn, events = []) {
-  await a.g('cizState').set(state);
+  await a.g('cfxState').set(state);
   await a.call('startChat', { id, text: 'hi' });
   const sent = a.b.port.sent.filter(m => m.type === 'chat').pop();
   for (const event of events) await a.call('onNativeMessage', { type: 'chat_event', id, event });
@@ -136,7 +136,7 @@ async function turn(a, id, state = armyOn, events = []) {
 // The checks of the add-on: each one of its own, so a failure names the behaviour it broke.
 async function addonChecks() {
   const check = async (name, fn) => { try { const [good, detail] = await fn(); ok(name, good, detail); } catch (e) { ok(name, false, e.message); } };
-  const says = a => a.g('cizState').log().map(e => e.text);
+  const says = a => a.g('cfxState').log().map(e => e.text);
   const maxLine = 'chat → Claude Code, army (Opus 5.5 at max effort, with Haiku workers)';
   const highLine = 'chat → Claude Code, army (Opus 5.5 at high effort, with Haiku workers)';
   // C1: the Max effort switch (storage.local armyMax) makes the army send armymax; the log names the effort
@@ -158,7 +158,7 @@ async function addonChecks() {
   await check('army tokens: a new day starts the count, and an army stats event adds input and output', async () => {
     const a = await boot({}, { armyTokens: { date: '2000-01-01', tokens: 999999 } });
     await turn(a, 't1', armyOn, [{ kind: 'stats', ms: 1000, turns: 1, tokensIn: 1000, tokensCached: 900, tokensOut: 200, costUsd: 0.01 }]);
-    const got = a.local.armyTokens, shown = a.g('cizState').get().armyTokensToday;
+    const got = a.local.armyTokens, shown = a.g('cfxState').get().armyTokensToday;
     return [got.date === today() && got.tokens === 1200 && shown === 1200, `${JSON.stringify(got)}, state ${shown}`];
   });
   await check('army tokens: the same day adds on, and a speed turn does not count', async () => {
@@ -166,13 +166,13 @@ async function addonChecks() {
     await turn(a, 't2', armyOn, [{ kind: 'stats', ms: 1000, turns: 1, tokensIn: 100, tokensOut: 50 }]);
     const first = a.local.armyTokens.tokens;
     await turn(a, 't3', { ...armyOn, chatModel: 'speed' }, [{ kind: 'stats', ms: 1000, turns: 1, tokensIn: 5000, tokensOut: 5000 }]);
-    const last = a.local.armyTokens.tokens, shown = a.g('cizState').get().armyTokensToday;
+    const last = a.local.armyTokens.tokens, shown = a.g('cfxState').get().armyTokensToday;
     return [first === 1350 && last === 1350 && shown === 1350, `${first}, then ${last}, state ${shown}`];
   });
   await check("army tokens: at startup today's count is read, as the runs count is", async () => {
     const now = await boot({}, { armyTokens: { date: today(), tokens: 4200 } });
     const old = await boot({}, { armyTokens: { date: '2000-01-01', tokens: 4200 } });
-    const n = now.g('cizState').get().armyTokensToday, o = old.g('cizState').get().armyTokensToday;
+    const n = now.g('cfxState').get().armyTokensToday, o = old.g('cfxState').get().armyTokensToday;
     return [n === 4200 && o === 0, `today ${n}, old day ${o}`];
   });
   // C16: the network log's listeners run only while the agent is active
@@ -186,8 +186,8 @@ async function addonChecks() {
     const seen = { on: netCounts(a) };
     await a.call('stopAll', 'check'); seen.stop = netCounts(a);
     await a.call('startAgent'); seen.start = netCounts(a);
-    await a.call('cizNetLogStart'); seen.again = netCounts(a);
-    a.call('cizNetLogStop'); a.call('cizNetLogStop'); seen.stopTwice = netCounts(a);
+    await a.call('cfxNetLogStart'); seen.again = netCounts(a);
+    a.call('cfxNetLogStop'); a.call('cfxNetLogStop'); seen.stopTwice = netCounts(a);
     const good = seen.on.wr === WR.length && seen.stop.wr === 0 && seen.stop.removed === base.removed && seen.start.wr === WR.length && seen.start.removed === base.removed + 1 && seen.again.wr === WR.length && seen.again.removed === base.removed + 1 && seen.stopTwice.wr === 0 && seen.stopTwice.removed === base.removed;
     return [good, JSON.stringify(seen)];
   });
@@ -196,7 +196,7 @@ async function addonChecks() {
     const before = netCounts(a).wr;
     for (const f of a.b.windows.onCreated.fns) f({ type: 'normal' });
     await new Promise(r => setTimeout(r, 30));
-    return [before === 0 && netCounts(a).wr === WR.length && a.g('cizState').get().agent === 'active', `before ${before}, after ${netCounts(a).wr}`];
+    return [before === 0 && netCounts(a).wr === WR.length && a.g('cfxState').get().agent === 'active', `before ${before}, after ${netCounts(a).wr}`];
   });
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """/watch entry point: download video, extract frames, parse captions.
 
-Vendored copy of claude-video v0.3.2 (MIT, Bradley Bonanno), trimmed for Claude in Zen:
+Vendored copy of claude-video v0.3.2 (MIT, Bradley Bonanno), trimmed for Claudefox:
 captions and frames only, run locally. See NOTICE.md in this folder.
 
 Prints a markdown report to stdout listing frame paths + captions. Claude

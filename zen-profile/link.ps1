@@ -1,4 +1,4 @@
-# Claude in Zen: links Zen straight to this project's extension\ folder (developer install).
+# Claudefox: links Zen straight to this project's extension\ folder (developer install).
 # Zen then loads the add-on from the folder, so "update" in Settings is just a reload: no .xpi, no install prompt,
 # no restart. Needs xpinstall.signatures.required = false. Close Zen first.
 #   Link:    powershell -NoProfile -ExecutionPolicy Bypass -File zen-profile\link.ps1
@@ -40,6 +40,6 @@ foreach ($d in $dirs) {
 }
 if (-not $Unlink) {
   Write-Host ''
-  Write-Host 'Start Zen. If it says a new add-on was added, enable it (or about:addons -> Claude in Zen -> Enable).'
+  Write-Host 'Start Zen. If it says a new add-on was added, enable it (or about:addons -> Claudefox -> Enable).'
   Write-Host 'After that, use "update" in the panel Settings to load changes.'
 }

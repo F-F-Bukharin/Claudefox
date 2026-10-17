@@ -94,7 +94,7 @@ if (data) {
 
   // The friends build: contract C5, through the real brand step on a copy of extension\.
   const brand = require(path.join(root, 'tools', 'brand.js'));
-  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-i18n-brand-'));
+  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-i18n-brand-'));
   try {
     fs.cpSync(path.join(root, 'extension'), path.join(stage, 'extension'), { recursive: true });
     for (const sub of ['mods', 'output']) {
@@ -145,7 +145,7 @@ const FAKE = {
 };
 // A page-like global with the pieces a test gives it; anything it does not give, the file must live without.
 function boot(g = {}, { fake = FAKE } = {}) {
-  const ctx = vm.createContext(Object.assign({ console }, fake ? { CIZ_LOCALES: fake } : {}, g));
+  const ctx = vm.createContext(Object.assign({ console }, fake ? { CFX_LOCALES: fake } : {}, g));
   vm.runInContext(src, ctx, { filename: 'lib/i18n.js' });
   return ctx;
 }
@@ -174,19 +174,19 @@ function pageGlobals({ ui, nav, local, stored } = {}) {
   {
     const c = boot({});
     ok('t(): the English message, with $1 and $2', run(c, "t('hello', 'F')") === 'Hello F' && run(c, "t('money', 'a', 'b')") === 'Costs $5 for a and b');
-    run(c, "cizI18n.use('pt_BR')");
+    run(c, "cfxI18n.use('pt_BR')");
     ok('t(): after use(pt_BR) the Portuguese message, and $n in the order Portuguese needs', run(c, "t('hello', 'F')") === 'Olá F' && run(c, "t('money', 'a', 'b')") === 'Custa $5 por b e a');
     ok('t(): a key missing in Portuguese falls back to English', run(c, "t('onlyEn')") === 'Only English');
     ok('t(): an unknown key returns itself', run(c, "t('no_such_key')") === 'no_such_key');
     ok('t(): a substitution is taken as plain text ($& and $$ in it stay as they are)', run(c, "t('hello', '$& $$')") === 'Olá $& $$');
     ok('t(): a missing substitution leaves nothing odd behind', run(c, "t('hello')") === 'Olá ');
-    ok('cizI18n: LANGS, has(), and use() with an unknown language falls back to en', run(c, 'JSON.stringify(cizI18n.LANGS)') === '["en","pt_BR"]'
-      && run(c, "cizI18n.has('hello') && !cizI18n.has('nope')") === true && (run(c, "cizI18n.use('xx'); cizI18n.lang()") === 'en'));
+    ok('cfxI18n: LANGS, has(), and use() with an unknown language falls back to en', run(c, 'JSON.stringify(cfxI18n.LANGS)') === '["en","pt_BR"]'
+      && run(c, "cfxI18n.has('hello') && !cfxI18n.has('nope')") === true && (run(c, "cfxI18n.use('xx'); cfxI18n.lang()") === 'en'));
   }
   {
     const c = boot({}, { fake: null });
-    ok('with no texts at all (no CIZ_LOCALES, no XMLHttpRequest, nothing) it loads and t() returns the key', run(c, "t('ui_x')") === 'ui_x' && run(c, 'cizI18n.lang()') === 'en'
-      && run(c, 'cizI18n.setting()') === 'auto' && run(c, "cizI18n.has('ui_x')") === false);
+    ok('with no texts at all (no CFX_LOCALES, no XMLHttpRequest, nothing) it loads and t() returns the key', run(c, "t('ui_x')") === 'ui_x' && run(c, 'cfxI18n.lang()') === 'en'
+      && run(c, 'cfxI18n.setting()') === 'auto' && run(c, "cfxI18n.has('ui_x')") === false);
     {
       const d = new JSDOM('<p data-i18n="ui_x" data-i18n-title="ui_y" title="Tip">English text</p>', { runScripts: 'outside-only' });
       new vm.Script(src, { filename: 'lib/i18n.js' }).runInContext(d.getInternalVMContext());
@@ -202,77 +202,77 @@ function pageGlobals({ ui, nav, local, stored } = {}) {
     XHR.prototype.send = function () { const k = this.u.replace('moz-extension://x/', ''); this.status = files2[k] ? 200 : 404; this.responseText = files2[k] || ''; };
     const { g } = pageGlobals({ ui: 'pt-BR' });
     const c = boot(Object.assign(g, { XMLHttpRequest: XHR }), { fake: null });
-    ok('without CIZ_LOCALES the texts come from a synchronous read of both files through browser.runtime.getURL',
+    ok('without CFX_LOCALES the texts come from a synchronous read of both files through browser.runtime.getURL',
       urls.length === 2 && urls.every(u => /^moz-extension:\/\/x\/_locales\/(en|pt_BR)\/messages\.json$/.test(u)) && run(c, "t('hello', 'F')") === 'Olá F');
   }
   for (const [ui, expect] of [['pt-BR', 'pt_BR'], ['pt-PT', 'pt_BR'], ['pt', 'pt_BR'], ['en-US', 'en'], ['es', 'en']]) {
     const { g } = pageGlobals({ ui });
     const c = boot(g);
-    ok(`auto: browser language ${ui} gives ${expect}`, run(c, 'cizI18n.lang()') === expect && run(c, 'cizI18n.setting()') === 'auto');
+    ok(`auto: browser language ${ui} gives ${expect}`, run(c, 'cfxI18n.lang()') === expect && run(c, 'cfxI18n.setting()') === 'auto');
   }
   {
     const { g } = pageGlobals({ nav: 'pt-BR' });
     delete g.browser.i18n;
-    ok('auto: navigator.language is used when browser.i18n is missing', run(boot(g), 'cizI18n.lang()') === 'pt_BR');
+    ok('auto: navigator.language is used when browser.i18n is missing', run(boot(g), 'cfxI18n.lang()') === 'pt_BR');
     const h = pageGlobals({ nav: 'en-GB' }).g; delete h.browser;
-    ok('auto: and with no browser at all', run(boot(h), 'cizI18n.lang()') === 'en');
+    ok('auto: and with no browser at all', run(boot(h), 'cfxI18n.lang()') === 'en');
   }
   {
     const { g } = pageGlobals({ ui: 'en-US', local: 'pt_BR' });
     const c = boot(g);
-    ok("localStorage 'ciz-lang' at load decides, before storage.local answers", run(c, 'cizI18n.lang()') === 'pt_BR' && run(c, 'cizI18n.setting()') === 'pt_BR');
+    ok("localStorage 'ciz-lang' at load decides, before storage.local answers", run(c, 'cfxI18n.lang()') === 'pt_BR' && run(c, 'cfxI18n.setting()') === 'pt_BR');
     const e = pageGlobals({ ui: 'pt-BR', local: 'en' }).g;
-    ok('a saved en wins over a Portuguese browser', run(boot(e), 'cizI18n.lang()') === 'en' && run(boot(e), 'cizI18n.setting()') === 'en');
+    ok('a saved en wins over a Portuguese browser', run(boot(e), 'cfxI18n.lang()') === 'en' && run(boot(e), 'cfxI18n.setting()') === 'en');
     const u = pageGlobals({ ui: 'pt-BR', local: 'klingon' }).g;
-    ok('an unknown saved value counts as auto', run(boot(u), 'cizI18n.setting()') === 'auto' && run(boot(u), 'cizI18n.lang()') === 'pt_BR');
+    ok('an unknown saved value counts as auto', run(boot(u), 'cfxI18n.setting()') === 'auto' && run(boot(u), 'cfxI18n.lang()') === 'pt_BR');
   }
   {
     const { g, st } = pageGlobals({ ui: 'en-US', local: 'en', stored: 'pt_BR' });
     const c = boot(g);
-    const seen = []; c.__cb = l => seen.push(l); run(c, 'cizI18n.onChange(__cb)');
+    const seen = []; c.__cb = l => seen.push(l); run(c, 'cfxI18n.onChange(__cb)');
     await tick();
-    ok('storage.local lang that differs from the localStorage one switches the language and fires onChange', run(c, 'cizI18n.lang()') === 'pt_BR'
-      && run(c, 'cizI18n.setting()') === 'pt_BR' && seen.join() === 'pt_BR', seen.join());
+    ok('storage.local lang that differs from the localStorage one switches the language and fires onChange', run(c, 'cfxI18n.lang()') === 'pt_BR'
+      && run(c, 'cfxI18n.setting()') === 'pt_BR' && seen.join() === 'pt_BR', seen.join());
     ok('and keeps it in localStorage for the next synchronous start', g.localStorage.map.get('ciz-lang') === 'pt_BR');
     void st;
   }
   {
     const { g } = pageGlobals({ ui: 'en-US', local: 'pt_BR', stored: 'pt_BR' });
-    const c = boot(g); const seen = []; c.__cb = l => seen.push(l); run(c, 'cizI18n.onChange(__cb)');
+    const c = boot(g); const seen = []; c.__cb = l => seen.push(l); run(c, 'cfxI18n.onChange(__cb)');
     await tick();
-    ok('equal saved values change nothing and fire nothing', seen.length === 0 && run(c, 'cizI18n.lang()') === 'pt_BR');
+    ok('equal saved values change nothing and fire nothing', seen.length === 0 && run(c, 'cfxI18n.lang()') === 'pt_BR');
     const n = pageGlobals({ ui: 'en-US' }).g;
-    const d = boot(n); d.__cb = () => { throw new Error('should not fire'); }; run(d, 'cizI18n.onChange(__cb)'); run(d, "cizI18n.use('pt_BR')");
+    const d = boot(n); d.__cb = () => { throw new Error('should not fire'); }; run(d, 'cfxI18n.onChange(__cb)'); run(d, "cfxI18n.use('pt_BR')");
     await tick();
-    ok('when neither is saved, a language a test chose with use() stays', run(d, 'cizI18n.lang()') === 'pt_BR');
+    ok('when neither is saved, a language a test chose with use() stays', run(d, 'cfxI18n.lang()') === 'pt_BR');
   }
   {
     const { g, st } = pageGlobals({ ui: 'en-US' });
-    const c = boot(g); const seen = []; c.__cb = l => seen.push(l); run(c, 'cizI18n.onChange(__cb)');
-    const p = run(c, "cizI18n.set('pt_BR')");
+    const c = boot(g); const seen = []; c.__cb = l => seen.push(l); run(c, 'cfxI18n.onChange(__cb)');
+    const p = run(c, "cfxI18n.set('pt_BR')");
     ok('set() returns a promise', p && typeof p.then === 'function');
     await p; await tick();
     ok('set() saves storage.local lang and localStorage ciz-lang, switches, and calls onChange once', st.sets.some(o => o.lang === 'pt_BR') && g.localStorage.map.get('ciz-lang') === 'pt_BR'
-      && run(c, 'cizI18n.lang()') === 'pt_BR' && run(c, 'cizI18n.setting()') === 'pt_BR' && seen.join() === 'pt_BR', seen.join());
+      && run(c, 'cfxI18n.lang()') === 'pt_BR' && run(c, 'cfxI18n.setting()') === 'pt_BR' && seen.join() === 'pt_BR', seen.join());
     for (const f of st.listeners) f({ lang: { newValue: 'pt_BR' } }, 'local');
     ok("the page's own save coming back through storage.onChanged does not fire onChange twice", seen.length === 1, seen.join());
     for (const f of st.listeners) f({ lang: { newValue: 'en' } }, 'local');
-    ok('storage.onChanged from another page switches the language and fires onChange', run(c, 'cizI18n.lang()') === 'en' && seen.join() === 'pt_BR,en', seen.join());
+    ok('storage.onChanged from another page switches the language and fires onChange', run(c, 'cfxI18n.lang()') === 'en' && seen.join() === 'pt_BR,en', seen.join());
     for (const f of st.listeners) { f({ lang: { newValue: 'pt_BR' } }, 'sync'); f({ other: { newValue: 'x' } }, 'local'); }
-    ok('another storage area or another key is ignored', seen.length === 2 && run(c, 'cizI18n.lang()') === 'en');
-    await run(c, "cizI18n.set('auto')");
-    ok("set('auto') follows the browser language again", run(c, 'cizI18n.setting()') === 'auto' && run(c, 'cizI18n.lang()') === 'en');
+    ok('another storage area or another key is ignored', seen.length === 2 && run(c, 'cfxI18n.lang()') === 'en');
+    await run(c, "cfxI18n.set('auto')");
+    ok("set('auto') follows the browser language again", run(c, 'cfxI18n.setting()') === 'auto' && run(c, 'cfxI18n.lang()') === 'en');
   }
   {
     // Nothing at all: no browser, no localStorage, no navigator, no XMLHttpRequest, no document.
     let threw = null, c = null;
     try { c = vm.createContext({}); vm.runInContext(src, c, { filename: 'lib/i18n.js' }); } catch (e) { threw = e; }
     ok('with an empty global object (no browser, localStorage, navigator, XMLHttpRequest or document) it loads', !threw, threw && threw.message);
-    ok('and t() returns keys, set() still works', c && run(c, "t('ui_a', 1)") === 'ui_a' && typeof run(c, "cizI18n.set('pt_BR')").then === 'function');
+    ok('and t() returns keys, set() still works', c && run(c, "t('ui_a', 1)") === 'ui_a' && typeof run(c, "cfxI18n.set('pt_BR')").then === 'function');
     ok('and a throwing localStorage / storage does not stop it', (() => {
       const g = { localStorage: { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } },
         browser: { storage: { local: { get() { throw new Error('no'); }, set() { throw new Error('no'); } }, onChanged: { addListener() { throw new Error('no'); } } } } };
-      const x = boot(g); return run(x, "t('hello', 'F')") === 'Hello F' && typeof run(x, "cizI18n.set('pt_BR')").then === 'function';
+      const x = boot(g); return run(x, "t('hello', 'F')") === 'Hello F' && typeof run(x, "cfxI18n.set('pt_BR')").then === 'function';
     })());
   }
 
@@ -354,7 +354,7 @@ function pageGlobals({ ui, nav, local, stored } = {}) {
     w.browser = { runtime: { connect: () => ({ postMessage: m => sent.push(m), onMessage: { addListener() { } } }), getManifest: () => ({ version: '0.11.0' }) },
       storage: { session: { get: async () => ({}), set: async () => { } }, local: { get: async () => ({}), set: async o => { sets.push(o); } }, onChanged: { addListener: f => changed.push(f) } },
       tabs: { query: async () => [{ title: 'T', url: 'https://x' }], onActivated: { addListener() { } }, onUpdated: { addListener() { } } } };
-    w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(EXT + 'lib/wall.js', 'utf8'));
+    w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;'); w.eval(fs.readFileSync(EXT + 'lib/wall.js', 'utf8'));
     evalPanel(d, EXT, panelFiles);
     await tick(50);
     const sel = w.document.getElementById('langSelect');
@@ -362,12 +362,12 @@ function pageGlobals({ ui, nav, local, stored } = {}) {
       && sel.closest('.card').textContent.indexOf('Dark mode') < sel.closest('.card').textContent.indexOf('Language')
       && [...sel.options].map(o => o.value + ':' + o.textContent).join() === 'auto:Auto,en:English,pt_BR:Português (Brasil)');
     ok('Language row: it shows the saved setting (auto)', sel.value === 'auto' && !!w.document.querySelector('label[for="langSelect"]'));
-    let reloads = 0; w.cizLang.reload = () => { reloads++; };
+    let reloads = 0; w.cfxLang.reload = () => { reloads++; };
     sel.value = 'pt_BR'; sel.dispatchEvent(new w.Event('change', { bubbles: true }));
     await tick(30);
     ok('Language row: choosing Português (Brasil) saves storage.local lang pt_BR and asks for a reload', sets.some(o => o.lang === 'pt_BR') && reloads === 1, JSON.stringify([sets, reloads]));
     for (const f of changed) f({ lang: { newValue: 'en' } }, 'local');
-    ok('Language row: a change from another page asks for a reload too', reloads === 2 && w.cizI18n.lang() === 'en', String(reloads));
+    ok('Language row: a change from another page asks for a reload too', reloads === 2 && w.cfxI18n.lang() === 'en', String(reloads));
     void sent;
   }
 

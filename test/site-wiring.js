@@ -1,7 +1,7 @@
 'use strict';
 // The site gate wired into the add-on (page safety, A1): page tools, navigate, tab_open, tabs_list, the chat messages and the
 // helper's page_read / confirmed_state. Runs the real background scripts against a mocked browser; the page operations are
-// stubbed (cizInPage), the card is answered through the gate like the panel does.   node test/site-wiring.js
+// stubbed (cfxInPage), the card is answered through the gate like the panel does.   node test/site-wiring.js
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -70,20 +70,20 @@ const ctx = vm.createContext({ browser, fetch, console, URL, URLSearchParams, Ab
 ctx.window = ctx;
 for (const f of JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')).background.scripts) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx, { filename: f });
 // The page operations: recorded, and classify answers what the scenario says.
-ctx.cizInPage = async (tab, op) => {
+ctx.cfxInPage = async (tab, op) => {
   ops.push(op + ':' + tab.id);
   if (op === 'classify') { if (classifyAnswer instanceof Error) throw classifyAnswer; return classifyAnswer; }
   if (op === 'ctype') return 'text/html';
   return { ok: true, op };
 };
 const g = name => vm.runInContext(name, ctx);
-const gate = g('cizSiteGate'), state = g('cizState');
+const gate = g('cfxSiteGate'), state = g('cfxState');
 
 // ---- helpers
 const panel = { name: 'panel', onMessage: ev(), onDisconnect: ev(), postMessage() {} };
 const fromPanel = async m => { panel.onMessage.fire(m); await tick(); };
 const helperSays = async m => { native.onMessage.fire(m); await tick(); };
-const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
+const call = (tool, args) => ctx.cfxDebug.call(tool, args || {});
 let seq = 0, mseq = 0;
 async function armyCall(tool, args, worker, run) {
   const id = `c${++seq}`;
@@ -185,8 +185,8 @@ const refused = (res, re) => !res.ok && re.test(res.error);
     begin(); clear();
     c = await cards(call('read_page', { tab_id: 2 }), ['deny']);
     check('Automatic off: a site outside the list asks the site card', c.seen.length === 1 && c.seen[0].kind === 'site' && !c.res.ok, JSON.stringify([c.seen, c.res]));
-    // One rule for "is Automatic on": cizAutomatic() in lib/pageTools.js (Automatic or Unsafe; never a scheduled macro's turn).
-    const auto = () => g('cizAutomatic')();
+    // One rule for "is Automatic on": cfxAutomatic() in lib/pageTools.js (Automatic or Unsafe; never a scheduled macro's turn).
+    const auto = () => g('cfxAutomatic')();
     await state.set({ trusted: false, unsafe: false });
     const off = auto();
     await state.set({ trusted: true });
@@ -197,7 +197,7 @@ const refused = (res, re) => !res.ok && re.test(res.error);
     const inSched = auto();
     gate.end('sched1');
     await state.set({ trusted: false, unsafe: false });
-    check('cizAutomatic: off when neither switch is on, on for Automatic and for Unsafe, off in a scheduled macro\'s turn', off === false && onA === true && onU === true && inSched === false, JSON.stringify([off, onA, onU, inSched]));
+    check('cfxAutomatic: off when neither switch is on, on for Automatic and for Unsafe, off in a scheduled macro\'s turn', off === false && onA === true && onU === true && inSched === false, JSON.stringify([off, onA, onU, inSched]));
 
     clear(); classifyAnswer = { found: true };
 
@@ -272,13 +272,13 @@ const refused = (res, re) => !res.ok && re.test(res.error);
 
     // 9. tabs_list: the chat window only, outside sites redacted
     begin({ text: '' }); clear(); local.sites = { 'blocked.example': 'block' };
-    await g('cizArmy').register(1, { run: 'rt', worker: 'w9' }, 0);
+    await g('cfxArmy').register(1, { run: 'rt', worker: 'w9' }, 0);
     r = await call('tabs_list');
     const byId = Object.fromEntries((r.result || []).map(t => [t.id, t]));
     check('tabs_list lists only the chat window\'s tabs', r.ok && [1, 2, 4, 5].every(i => byId[i]) && !byId[3] && r.result.length === 4, JSON.stringify(r.result && r.result.map(t => t.id)));
     check('tabs_list shows a listed site in full (with the army owner) and redacts outside and blocked sites',
       byId[1].url === 'https://start.example/' && byId[1].army === 'w9' && byId[2].url === undefined && byId[2].title === undefined && byId[2].site === 'other.example' && byId[5].url === undefined && byId[5].site === 'blocked.example', JSON.stringify(r.result));
-    delete local.sites; g('cizArmy').unregister(1);
+    delete local.sites; g('cfxArmy').unregister(1);
     await state.set({ trusted: true });
     r = await call('tabs_list');
     check('trusted shows the window\'s tabs in full', r.ok && r.result.length === 4 && r.result.every(t => t.url), JSON.stringify(r.result));

@@ -89,11 +89,11 @@ function createSignIn({ acc, accountIds, accountDir, activeId, removeAccountDir,
       const q = v => String(v).replace(/%/g, '%%');
       const script = path.join(P.BASE, 'sign-in.cmd');
       const lines = [
-        '@echo off', 'chcp 65001 >nul', 'title Claude in Zen - add a Claude account',
+        '@echo off', 'chcp 65001 >nul', 'title Claudefox - add a Claude account',
         `set "CLAUDE_CONFIG_DIR=${q(dir)}"`, 'set "ANTHROPIC_API_KEY="', 'set "ANTHROPIC_AUTH_TOKEN="', 'set "CLAUDE_CODE_OAUTH_TOKEN="',
         'echo A browser window opens. Sign in to the Claude account you want, then click Authorize.', 'echo.',
         `"${q(exe)}" auth login`, 'echo.', `"${q(exe)}" auth status --text`, 'echo.',
-        'echo The Claude in Zen panel picks this up on its own. You can close this window.', 'timeout /t 15 >nul',
+        'echo The Claudefox panel picks this up on its own. You can close this window.', 'timeout /t 15 >nul',
       ];
       fs.writeFileSync(script, lines.join('\r\n') + '\r\n', 'utf8');
       const child = spawn('cmd.exe', ['/d', '/s', '/c', `"start "" "${script}""`],

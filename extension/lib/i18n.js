@@ -1,15 +1,15 @@
-// The add-on's texts in English and Portuguese (Brazil): t(key, ...subs) and the cizI18n helper. Loaded first in the
+// The add-on's texts in English and Portuguese (Brazil): t(key, ...subs) and the cfxI18n helper. Loaded first in the
 // background (manifest) and before panel.js in panel.html. The texts live in _locales/<lang>/messages.json.
 //   t('key', a, b)       the message in the language in use ($1, $2 ... become a, b; $$ is a dollar sign). A key missing in
 //                        Portuguese shows the English message, and an unknown key shows the key itself. It never throws.
-//   cizI18n.setting()    the saved choice: 'auto' | 'en' | 'pt_BR'  ('auto' follows the browser's language)
-//   cizI18n.lang()       the language in use: 'en' | 'pt_BR'
-//   cizI18n.set(value)   saves the choice (storage.local `lang` and localStorage 'ciz-lang'), switches, then calls onChange
-//   cizI18n.use(lang)    switches in memory only, saving nothing and calling nobody (tests)
-//   cizI18n.onChange(fn) fn(lang) after the language changed, here or in another page of the add-on
-//   cizI18n.apply(root)  fills every [data-i18n] (text), [data-i18n-title], [data-i18n-placeholder] and
+//   cfxI18n.setting()    the saved choice: 'auto' | 'en' | 'pt_BR'  ('auto' follows the browser's language)
+//   cfxI18n.lang()       the language in use: 'en' | 'pt_BR'
+//   cfxI18n.set(value)   saves the choice (storage.local `lang` and localStorage 'ciz-lang'), switches, then calls onChange
+//   cfxI18n.use(lang)    switches in memory only, saving nothing and calling nobody (tests)
+//   cfxI18n.onChange(fn) fn(lang) after the language changed, here or in another page of the add-on
+//   cfxI18n.apply(root)  fills every [data-i18n] (text), [data-i18n-title], [data-i18n-placeholder] and
 //                        [data-i18n-aria-label] under root
-//   cizI18n.has(key)     true when the English file has the key
+//   cfxI18n.has(key)     true when the English file has the key
 // The texts are read synchronously, at load, for the same reason theme.js reads the theme synchronously: the panel's
 // scripts and the background show texts the moment they start, so t() must already have them. The panel reloads itself
 // when the language changes (panel-lang.js) instead of re-rendering: a text a script worked out once at load is then
@@ -62,7 +62,7 @@
     return null;
   }
   function loadTexts() {
-    var given = G.CIZ_LOCALES;
+    var given = G.CFX_LOCALES;
     LANGS.forEach(function (l) { texts[l] = flatten(given && typeof given === 'object' ? given[l] : readFile(l)); });
   }
 
@@ -167,7 +167,7 @@
   } catch (e) {}
 
   G.t = t;
-  G.cizI18n = api;
+  G.cfxI18n = api;
 
   // The panel's own scripts start from translated static texts and then overwrite their dynamic ones with t().
   try { if (G.document) apply(G.document); } catch (e) {}

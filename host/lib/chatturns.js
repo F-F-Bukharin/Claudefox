@@ -19,8 +19,8 @@ const children = require('./children');
 const selfimprove = require('./selfimprove');
 
 const CHAT_TIMEOUT_MS = 60 * 60 * 1000;   // long jobs (a whole course's homework) take a while; Cancel is always there
-// An idle chat process is stopped after this long (CLAUDE_IN_ZEN_IDLE_MS shortens it, only with CLAUDE_IN_ZEN_TEST=1).
-const IDLE_MS = process.env.CLAUDE_IN_ZEN_TEST === '1' && Number(process.env.CLAUDE_IN_ZEN_IDLE_MS) > 0 ? Number(process.env.CLAUDE_IN_ZEN_IDLE_MS) : 10 * 60 * 1000;
+// An idle chat process is stopped after this long (CLAUDEFOX_IDLE_MS shortens it, only with CLAUDEFOX_TEST=1).
+const IDLE_MS = process.env.CLAUDEFOX_TEST === '1' && Number(process.env.CLAUDEFOX_IDLE_MS) > 0 ? Number(process.env.CLAUDEFOX_IDLE_MS) : 10 * 60 * 1000;
 const STREAM_PROBE_MS = 5000;   // a new process that stops this soon, with an error and no output, did not take --input-format
 const LIMIT_RE = /usage limit|limit reached|rate.?limit|reached your|limit will reset|out of (extra )?usage|hit your (?:\w+ )?limit|(?:weekly|session|daily) limit/i;
 // Claude Code's sign-in for this account is gone or expired: the panel offers to sign in again.
@@ -58,7 +58,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
   // Army mode (lib/army.js): the workers of the running turn.
   const army = require('./army').createArmy({
     callAddon, sendAddon, emit: (run, event) => emitChat(run, event), currentChat: () => chat, findClaude,
-    envFor: key => claudeEnv(accountDir(key)), mcpServer: path.join(__dirname, '..', 'zen-mcp.js'), limitRe: LIMIT_RE,
+    envFor: key => claudeEnv(accountDir(key)), mcpServer: path.join(__dirname, '..', 'claudefox-mcp.js'), limitRe: LIMIT_RE,
     // Workers get none of the account's plugins or connectors (their hooks would run shell commands in every worker).
     workerSettings: key => strictToolbox(key).settings,
   });
@@ -75,11 +75,11 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     sendAddon({ type: 'chat_event', id: run.id, event });
   }
 
-  // mcp__claude-in-zen__click -> { name: 'click' }; mcp__plugin_vidiq_vidiq__vidiq_video_transcript -> { name: 'vidiq_video_transcript', server: 'vidIQ' }.
+  // mcp__claudefox__click -> { name: 'click' }; mcp__plugin_vidiq_vidiq__vidiq_video_transcript -> { name: 'vidiq_video_transcript', server: 'vidIQ' }.
   function toolName(run, raw) {
     const m = /^mcp__(.+?)__(.+)$/.exec(String(raw || ''));
     if (!m) return { name: String(raw || '') };
-    if (m[1] === 'claude-in-zen') return { name: m[2] };
+    if (m[1] === 'claudefox') return { name: m[2] };
     return { name: m[2], server: toolbox.labelFor(run.key, m[1]) };
   }
 
@@ -192,7 +192,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
   function startChat(msg) {
     const id = String(msg.id || '').slice(0, 64);
     const refuse = error => sendAddon({ type: 'chat_done', id, ok: false, error, limit: false, sessionId: '' });
-    // Improve Claude in Zen: Claude edits a copy of the add-on and the user approves the change (lib/selfimprove.js).
+    // Improve Claudefox: Claude edits a copy of the add-on and the user approves the change (lib/selfimprove.js).
     const improve = msg.improve === true;
     // A scheduled macro's turn (E8): it only reads pages. No file tools, no attachments, no plugin or connector tools, no helper tools.
     const scheduled = !improve && msg.scheduled === true;
@@ -200,15 +200,15 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
     const text = typeof msg.text === 'string' ? msg.text : '';
     const attached = Array.isArray(msg.attachments) && msg.attachments.length > 0;
     if (!improve && !text.trim() && !attached) return refuse('The message is empty.');
-    if (improve && attached) return refuse('Attachments are not used when improving Claude in Zen. Send the message without files.');
+    if (improve && attached) return refuse('Attachments are not used when improving Claudefox. Send the message without files.');
     if (text.length > 50000) return refuse('The message is too long.');
     const exe = findClaude();
-    if (!exe) return refuse('Claude Code is not installed on this PC. Install it, then double-click "Set up Claude in Zen.bat".');
+    if (!exe) return refuse('Claude Code is not installed on this PC. Install it, then double-click "Set up Claudefox.bat".');
 
     const files = { mode: null, folder: '' };
     let sandbox = null;
     if (improve) {
-      try { sandbox = selfimprove.prepare(ROOT); } catch (e) { return refuse(`Could not make a copy of Claude in Zen to change: ${e.message}`); }
+      try { sandbox = selfimprove.prepare(ROOT); } catch (e) { return refuse(`Could not make a copy of Claudefox to change: ${e.message}`); }
     } else if (!scheduled && (msg.files === 'read' || msg.files === 'write')) {
       const folder = String(msg.folder || '').trim();
       if (!folder || !path.isAbsolute(folder) || !isDir(folder)) {
@@ -217,7 +217,7 @@ function createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv, accountD
       const why = guard.folderProblem(folder, msg.files);
       if (why) return refuse(`File tools can't use ${folder}: ${why}. Pick another folder in Settings.`);
       const ok = confirmed.files && sameDir(confirmed.files.folder, path.resolve(folder)) && (msg.files === 'read' || confirmed.files.mode === 'write');
-      if (!ok) return refuse(`File tools for ${folder} were not allowed in the Claude in Zen confirm window. Turn file tools off and on again in Profile, Permissions.`);
+      if (!ok) return refuse(`File tools for ${folder} were not allowed in the Claudefox confirm window. Turn file tools off and on again in Profile, Permissions.`);
       files.mode = msg.files;
       files.folder = path.resolve(folder);
     }

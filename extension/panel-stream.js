@@ -17,7 +17,7 @@ function onChatEvent(id, ev) {
   }
   else if (ev.kind === 'army') onArmyEvent(m, ev);
   else if (ev.kind === 'notice') {
-    const said = ev.key && /^stream_\w+$/.test(ev.key) && cizI18n.has(ev.key) ? t(ev.key) : String(ev.text || '');   // a notice the helper names by key is in the panel's language
+    const said = ev.key && /^stream_\w+$/.test(ev.key) && cfxI18n.has(ev.key) ? t(ev.key) : String(ev.text || '');   // a notice the helper names by key is in the panel's language
     m.notices = (m.notices || []).concat([{ text: said.slice(0, 300), action: ev.action && typeof ev.action === 'object' ? ev.action : null }]).slice(-5);
   }
   else if (ev.kind === 'tool') {
@@ -179,7 +179,7 @@ function scheduleRender() {
   requestAnimationFrame(() => { renderQueued = false; renderChat(); saveChat(); });
 }
 
-const WHO = { user: t('stream_you'), assistant: 'Claude', system: 'Claude in Zen', error: 'Claude in Zen' };
+const WHO = { user: t('stream_you'), assistant: 'Claude', system: 'Claudefox', error: 'Claudefox' };
 const STEP_MARK = { run: '…', ok: '✓', bad: '✕' };
 const VERB = {
   get_page_text: t('stream_verbGetPageText'),
@@ -481,7 +481,7 @@ function buildMsg(m) {
   if (m.text || !m.pending) {
     const body = document.createElement('div');
     body.className = 'body';
-    if (m.role === 'assistant') { body.classList.add('md'); cizMarkdown(body, m.text, onLink); } else body.textContent = m.text;
+    if (m.role === 'assistant') { body.classList.add('md'); cfxMarkdown(body, m.text, onLink); } else body.textContent = m.text;
     if (m.text) div.appendChild(body);
     if (m.role === 'user' && Array.isArray(m.files) && m.files.length) {
       const sf = el('div', 'sentfiles');

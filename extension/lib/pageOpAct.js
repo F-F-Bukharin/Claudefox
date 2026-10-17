@@ -1,8 +1,8 @@
 'use strict';
 // The page operations that act on the page: click, hover, type, media, fill, press, scroll, scrollto. classify (last) only reads.
-// Same shape as pageOpRead.js: declarations joined into the injected script by cizPageCode (pageOp.js).
+// Same shape as pageOpRead.js: declarations joined into the injected script by cfxPageCode (pageOp.js).
 
-function cizOpClick(env, args) {
+function cfxOpClick(env, args) {
   const { squash, realClick, labelOf, roleOf, targetOrPoint, focusDesc, page } = env;
   const t = targetOrPoint();
   if (t.el.disabled) throw new Error('That element is disabled.');
@@ -11,14 +11,14 @@ function cizOpClick(env, args) {
   return { clicked: `${roleOf(t.el)} "${labelOf(t.el).slice(0, 120)}"`, at: [t.x, t.y], now_shows: after, focused: focusDesc() };
 }
 
-function cizOpHover(env, args) {
+function cfxOpHover(env, args) {
   const { hoverEvents, labelOf, roleOf, targetOrPoint } = env;
   const t = targetOrPoint();
   hoverEvents(t.el, t.x, t.y);
   return { hovered: `${roleOf(t.el)} "${labelOf(t.el).slice(0, 120)}"`, at: [t.x, t.y] };
 }
 
-function cizOpType(env, args) {
+function cfxOpType(env, args) {
   const { squash, target, refuseSensitive, isTextField, setValue } = env;
   const el = (args.ref || args.selector) ? target() : document.activeElement;
   if (!el || el === document.body || el === document.documentElement) throw new Error('No field has focus. Give the ref of the field to type into (or click it first).');
@@ -60,7 +60,7 @@ function cizOpType(env, args) {
   return { typed: `${[...text].length} characters`, submitted: !!args.submit, field_now: now.slice(0, 200) };
 }
 
-function cizOpMedia(env, args) {
+function cfxOpMedia(env, args) {
   const { isVisible, boxOf, target, page } = env;
   const all = Array.from(document.querySelectorAll('video, audio'));
   let m = args.ref || args.selector ? target() : null;
@@ -85,7 +85,7 @@ function cizOpMedia(env, args) {
   };
 }
 
-function cizOpFill(env, args) {
+function cfxOpFill(env, args) {
   const { squash, target, refuseSensitive, setValue } = env;
   const el = target();
   refuseSensitive(el);
@@ -116,7 +116,7 @@ function cizOpFill(env, args) {
   return { filled: `${value.length} characters`, field_now: String(el.value).slice(0, 200) };
 }
 
-function cizOpPress(env, args) {
+function cfxOpPress(env, args) {
   const { INTERACTIVE, isVisible, target, focusDesc, refuseSensitive, isTextField, setValue } = env;
   const key = String(args.key || '');
   const KEYS = {
@@ -164,7 +164,7 @@ function cizOpPress(env, args) {
   return { pressed: key, focused: focusDesc() };
 }
 
-function cizOpScroll(env, args) {
+function cfxOpScroll(env, args) {
   const { clamp, labelOf, roleOf, target } = env;
   if (args.ref || args.selector) {
     const el = target();
@@ -180,7 +180,7 @@ function cizOpScroll(env, args) {
   return { y: Math.round(window.scrollY), max_y: Math.max(0, Math.round(doc.scrollHeight - window.innerHeight)) };
 }
 
-function cizOpScrollto(env, args) {
+function cfxOpScrollto(env, args) {
   const { clamp } = env;
   window.scrollTo(0, clamp(args.y, 0, 1e9, 0));
   return { y: Math.round(window.scrollY) };
@@ -188,7 +188,7 @@ function cizOpScrollto(env, args) {
 
 // What a click, an Enter or a submitting type_text on the target would do: post a form, or leave the site. The target is
 // found as click, type and press find theirs. Read only: no click, focus, scroll or change, and no field values back.
-function cizOpClassify(env, args) {
+function cfxOpClassify(env, args) {
   const { target } = env;
   let el = null;
   if (args.x != null && args.y != null && !args.ref && !args.selector) {
@@ -207,11 +207,11 @@ function cizOpClassify(env, args) {
   // A click often lands on text or an icon inside the button, so the button around the target counts too.
   const ctl = el.tagName === 'INPUT' ? el : el.closest('button');
   const submitControl = !!ctl && ((ctl.tagName === 'BUTTON' && ctl.type === 'submit') || (ctl.tagName === 'INPUT' && (ctl.type === 'submit' || ctl.type === 'image')));
-  // Enter in a field, or type_text with submit, sends the field's form with the form's own method (cizOpPress and cizOpType do that).
+  // Enter in a field, or type_text with submit, sends the field's form with the form's own method (cfxOpPress and cfxOpType do that).
   const fieldPosts = (args.key === 'Enter' || !!args.submit) && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && formPosts(el.form);
   const submitsPost = (submitControl && controlPosts(ctl)) || fieldPosts;
   // The site of an http(s) URL: lowercase host, one leading www. dropped; '' for any other. The page cannot call the add-on's
-  // cizSiteOf, so the same rule is repeated here.
+  // cfxSiteOf, so the same rule is repeated here.
   const siteOf = s => {
     let u;
     try { u = new URL(String(s), document.baseURI); } catch (e) { return ''; }
@@ -224,7 +224,7 @@ function cizOpClassify(env, args) {
 
 // fill_form's list: each field's label (its <label>, else aria-label, else placeholder, else '(no label)') and the reason the
 // page gives for a sensitive field (null when it is not). Changes nothing on the page: no value, focus or scroll.
-function cizOpFormLabels(env, args) {
+function cfxOpFormLabels(env, args) {
   const { target, squash, fieldDesc, sensitiveField } = env;
   const labelOf = el => {
     const native = el.labels && el.labels.length ? squash(Array.from(el.labels).map(l => l.textContent).join(' ')) : '';
@@ -241,7 +241,7 @@ function cizOpFormLabels(env, args) {
 // upload_file, the page side. attachpart keeps one part of the file's base64 under the upload id (the add-on sends the parts
 // one by one: a call carries at most about 700 KB); attach puts the file on a file field with a DataTransfer, the way a
 // person's pick would, and fires input and change. With an id the bytes are the stored parts, joined; without, args.data.
-function cizOpAttachPart(env, args) {
+function cfxOpAttachPart(env, args) {
   const { st } = env;
   const id = String(args.id || '');
   const index = Number(args.index);
@@ -252,7 +252,7 @@ function cizOpAttachPart(env, args) {
   return { stored: index };
 }
 
-function cizOpAttach(env, args) {
+function cfxOpAttach(env, args) {
   const { st, target, labelOf } = env;
   const id = String(args.id || '');
   const parts = id && st.uploads ? st.uploads.get(id) : null;
@@ -281,13 +281,13 @@ function cizOpAttach(env, args) {
 // Page dialogs. A click, a key press or typing by Claude (and 1 s after) replaces alert, confirm and prompt in the page: an
 // alert is dismissed, a confirm answers args.accept_dialog === true, a prompt answers null (or args.dialog_text when
 // accepted, else the prompt's default). What the page showed goes in the result as dialog: { kind, text, answered }.
-// State on window.__cizDialogs: the originals are kept at the first arm, a new arm clears the restore timer, the restore
+// State on window.__cfxDialogs: the originals are kept at the first arm, a new arm clears the restore timer, the restore
 // runs 1 s after the last arm. In Firefox the page's own window is window.wrappedJSObject and the replacements are exported to it.
-function cizDialogGuard(args, run) {
+function cfxDialogGuard(args, run) {
   const NAMES = ['alert', 'confirm', 'prompt'];
   const hook = window.wrappedJSObject || null;
   const page = hook || window;
-  const g = window.__cizDialogs || (window.__cizDialogs = { orig: null, timer: 0, accept: false, text: null, seen: [] });
+  const g = window.__cfxDialogs || (window.__cfxDialogs = { orig: null, timer: 0, accept: false, text: null, seen: [] });
   g.accept = !!args && args.accept_dialog === true;
   g.text = args && args.dialog_text != null ? String(args.dialog_text) : null;
   g.seen = [];

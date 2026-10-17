@@ -1,30 +1,30 @@
 'use strict';
-// Claude in Zen: real Office files from what Claude writes. create_file stores text (Markdown, HTML or CSV). When the
+// Claudefox: real Office files from what Claude writes. create_file stores text (Markdown, HTML or CSV). When the
 // user downloads a .docx or .xlsx, this builds the file: Markdown (rendered by lib/markdown.js) or HTML is walked into
 // WordprocessingML with headings, lists, tables, code, quotes, links and page numbers; CSV (or Markdown tables) goes
 // into a spreadsheet. The parts are zipped without compression, which Word and Excel open like any other file.
 
-const CIZ_MIME = {
+const CFX_MIME = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
 // ---------------------------------------------------------------- zip (stored, UTF-8 names)
 
-const cizCrcTable = (() => {
+const cfxCrcTable = (() => {
   const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
   return t;
 })();
 
-function cizCrc32(bytes) {
+function cfxCrc32(bytes) {
   let c = 0xffffffff;
-  for (let i = 0; i < bytes.length; i++) c = cizCrcTable[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  for (let i = 0; i < bytes.length; i++) c = cfxCrcTable[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
 
 // files: [{ name, data: string | Uint8Array }] -> Uint8Array of the zip.
-function cizZip(files) {
+function cfxZip(files) {
   const enc = new TextEncoder();
   const now = new Date();
   const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
@@ -34,7 +34,7 @@ function cizZip(files) {
   for (const f of files) {
     const name = enc.encode(f.name);
     const data = typeof f.data === 'string' ? enc.encode(f.data) : f.data;
-    const crc = cizCrc32(data);
+    const crc = cfxCrc32(data);
     const lh = new DataView(new ArrayBuffer(30));
     lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
     lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true);
@@ -61,18 +61,18 @@ function cizZip(files) {
 
 // ---------------------------------------------------------------- shared helpers
 
-function cizXml(s) {
+function cfxXml(s) {
   return String(s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]/g, '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function cizLooksHtml(text) { return /^\s*</.test(String(text)) && /<\/?(p|div|h[1-6]|ul|ol|table|body|html|section|article|span|br|b|strong|em|a)\b/i.test(String(text)); }
+function cfxLooksHtml(text) { return /^\s*</.test(String(text)) && /<\/?(p|div|h[1-6]|ul|ol|table|body|html|section|article|span|br|b|strong|em|a)\b/i.test(String(text)); }
 
-function cizBaseName(name) { return String(name || 'document').replace(/\.[A-Za-z0-9]{1,8}$/, '') || 'document'; }
+function cfxBaseName(name) { return String(name || 'document').replace(/\.[A-Za-z0-9]{1,8}$/, '') || 'document'; }
 
 // The content as a detached DOM tree: Markdown through the panel's renderer, HTML through DOMParser (inert: no
 // scripts run and nothing loads).
-function cizSourceDom(content, isHtml) {
+function cfxSourceDom(content, isHtml) {
   if (isHtml) {
     const doc = new DOMParser().parseFromString(String(content), 'text/html');
     for (const el of doc.querySelectorAll('script, style, noscript, template, iframe, object, embed')) el.remove();
@@ -80,19 +80,19 @@ function cizSourceDom(content, isHtml) {
   }
   const box = document.createElement('div');
   // \pagebreak (or \newpage) on a line of its own starts a new page in Word and in print.
-  cizMarkdown(box, String(content).replace(/^[ \t]*\\(pagebreak|newpage)[ \t]*$/gm, '⁣PAGEBREAK⁣'), null);
+  cfxMarkdown(box, String(content).replace(/^[ \t]*\\(pagebreak|newpage)[ \t]*$/gm, '⁣PAGEBREAK⁣'), null);
   return box;
 }
 
 // ---------------------------------------------------------------- Word
 
-const CIZ_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const CIZ_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const CIZ_INLINE = new Set(['a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'del', 'dfn', 'em', 'i', 'img', 'ins', 'kbd', 'mark',
+const CFX_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const CFX_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const CFX_INLINE = new Set(['a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'del', 'dfn', 'em', 'i', 'img', 'ins', 'kbd', 'mark',
   'q', 's', 'samp', 'small', 'span', 'strike', 'strong', 'sub', 'sup', 'time', 'tt', 'u', 'var', 'label', 'font']);
-const CIZ_SKIP = /^(script|style|template|button|svg|canvas|input|select|textarea|noscript|iframe|video|audio|form)$/;
+const CFX_SKIP = /^(script|style|template|button|svg|canvas|input|select|textarea|noscript|iframe|video|audio|form)$/;
 
-function cizDocxBody(root) {
+function cfxDocxBody(root) {
   const rels = [];          // hyperlinks: { id, url }
   const nums = [];          // ordered list instances: { id, start, depth }
   let numSeq = 2;           // numId 1 = bullets
@@ -122,7 +122,7 @@ function cizDocxBody(root) {
       if (i) x += `<w:r>${pr}<w:br/></w:r>`;
       line.split('\t').forEach((seg, j) => {
         if (j) x += `<w:r>${pr}<w:tab/></w:r>`;
-        if (seg) x += `<w:r>${pr}<w:t xml:space="preserve">${cizXml(seg)}</w:t></w:r>`;
+        if (seg) x += `<w:r>${pr}<w:t xml:space="preserve">${cfxXml(seg)}</w:t></w:r>`;
       });
     });
     return x;
@@ -134,7 +134,7 @@ function cizDocxBody(root) {
       if (n.nodeType === 3) { x += runs(n.nodeValue.replace(/[ \t\r\n\f]+/g, ' '), f); continue; }
       if (n.nodeType !== 1) continue;
       const tag = n.tagName.toLowerCase();
-      if (CIZ_SKIP.test(tag) || (n.classList && n.classList.contains('codehead'))) continue;
+      if (CFX_SKIP.test(tag) || (n.classList && n.classList.contains('codehead'))) continue;
       if (tag === 'br') { x += '<w:r><w:br/></w:r>'; continue; }
       if (tag === 'img') { const alt = n.getAttribute('alt'); if (alt) x += runs(`[${alt}]`, Object.assign({}, f, { i: true })); continue; }
       const g = Object.assign({}, f);
@@ -256,8 +256,8 @@ function cizDocxBody(root) {
       if (n.nodeType === 3) { if (n.nodeValue.trim()) buf.push(n); continue; }
       if (n.nodeType !== 1) continue;
       const tag = n.tagName.toLowerCase();
-      if (CIZ_SKIP.test(tag)) continue;
-      if (CIZ_INLINE.has(tag) && !(n.classList && n.classList.contains('codeblock'))) { buf.push(n); continue; }
+      if (CFX_SKIP.test(tag)) continue;
+      if (CFX_INLINE.has(tag) && !(n.classList && n.classList.contains('codeblock'))) { buf.push(n); continue; }
       flush();
       if (/^h[1-6]$/.test(tag)) heading(n);
       else if (tag === 'p') { const c = inline(n.childNodes, {}); if (textOf(c).trim() || /<w:br\/>/.test(c)) push(para(c, quote ? '<w:pStyle w:val="Quote"/>' : '')); }
@@ -279,14 +279,14 @@ function cizDocxBody(root) {
   return { body: out.join(''), rels, nums };
 }
 
-function cizDocxStyles(lang) {
+function cfxDocxStyles(lang) {
   const font = '<w:rFonts w:ascii="Calibri" w:eastAsia="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>';
   const head = (id, name, level, size, color, before) => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/>`
     + '<w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/>'
     + `<w:pPr><w:keepNext/><w:keepLines/><w:spacing w:before="${before}" w:after="120"/><w:outlineLvl w:val="${level - 1}"/></w:pPr>`
     + `<w:rPr><w:b/><w:bCs/><w:color w:val="${color}"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr></w:style>`;
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:styles xmlns:w="${CIZ_W}">`
-    + `<w:docDefaults><w:rPrDefault><w:rPr>${font}<w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="${cizXml(lang)}"/></w:rPr></w:rPrDefault>`
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:styles xmlns:w="${CFX_W}">`
+    + `<w:docDefaults><w:rPrDefault><w:rPr>${font}<w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="${cfxXml(lang)}"/></w:rPr></w:rPrDefault>`
     + '<w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
     + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
     + '<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont"><w:name w:val="Default Paragraph Font"/><w:uiPriority w:val="1"/><w:semiHidden/></w:style>'
@@ -312,12 +312,12 @@ function cizDocxStyles(lang) {
     + '</w:tblBorders></w:tblPr></w:style></w:styles>';
 }
 
-function cizDocxNumbering(nums) {
+function cfxDocxNumbering(nums) {
   const bullets = ['•', '◦', '▪'];
   const fmts = [['decimal', '%1.'], ['lowerLetter', '%2.'], ['lowerRoman', '%3.']];
   const lvl = (i, fmt, text) => `<w:lvl w:ilvl="${i}"><w:start w:val="1"/><w:numFmt w:val="${fmt}"/><w:lvlText w:val="${text}"/><w:lvlJc w:val="left"/>`
     + `<w:pPr><w:ind w:left="${720 * (i + 1)}" w:hanging="360"/></w:pPr></w:lvl>`;
-  let x = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:numbering xmlns:w="${CIZ_W}">`;
+  let x = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:numbering xmlns:w="${CFX_W}">`;
   x += '<w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="hybridMultilevel"/>';
   for (let i = 0; i < 9; i++) x += lvl(i, 'bullet', bullets[i % 3]);
   x += '</w:abstractNum><w:abstractNum w:abstractNumId="1"><w:multiLevelType w:val="hybridMultilevel"/>';
@@ -328,19 +328,19 @@ function cizDocxNumbering(nums) {
 }
 
 // Markdown or HTML -> a .docx file (Uint8Array).
-function cizDocx(content, opts) {
+function cfxDocx(content, opts) {
   const o = opts || {};
   const title = String(o.title || 'Document');
   const lang = o.lang || (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
-  const { body, rels, nums } = cizDocxBody(cizSourceDom(content, o.html != null ? o.html : cizLooksHtml(content)));
+  const { body, rels, nums } = cfxDocxBody(cfxSourceDom(content, o.html != null ? o.html : cfxLooksHtml(content)));
   const stamp = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
-  const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document xmlns:w="${CIZ_W}" xmlns:r="${CIZ_R}"><w:body>${body || '<w:p/>'}`
+  const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document xmlns:w="${CFX_W}" xmlns:r="${CFX_R}"><w:body>${body || '<w:p/>'}`
     + '<w:sectPr><w:footerReference w:type="default" r:id="rIdFooter"/><w:pgSz w:w="11906" w:h="16838"/>'
     + '<w:pgMar w:top="1418" w:right="1418" w:bottom="1418" w:left="1418" w:header="709" w:footer="709" w:gutter="0"/></w:sectPr></w:body></w:document>';
-  const footer = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr xmlns:w="${CIZ_W}" xmlns:r="${CIZ_R}"><w:p><w:pPr><w:jc w:val="center"/></w:pPr>`
+  const footer = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:ftr xmlns:w="${CFX_W}" xmlns:r="${CFX_R}"><w:p><w:pPr><w:jc w:val="center"/></w:pPr>`
     + '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>'
     + '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:ftr>';
-  const rel = (id, type, target, ext) => `<Relationship Id="${id}" Type="${type}" Target="${cizXml(target)}"${ext ? ' TargetMode="External"' : ''}/>`;
+  const rel = (id, type, target, ext) => `<Relationship Id="${id}" Type="${type}" Target="${cfxXml(target)}"${ext ? ' TargetMode="External"' : ''}/>`;
   const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
   const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
     + rel('rIdStyles', OD + 'styles', 'styles.xml') + rel('rIdNumbering', OD + 'numbering', 'numbering.xml')
@@ -360,23 +360,23 @@ function cizDocx(content, opts) {
       + rel('rId3', OD + 'extended-properties', 'docProps/app.xml') + '</Relationships>' },
     { name: 'docProps/core.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
       + 'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
-      + `<dc:title>${cizXml(title)}</dc:title><dc:creator>Claude in Zen</dc:creator>`
+      + `<dc:title>${cfxXml(title)}</dc:title><dc:creator>Claudefox</dc:creator>`
       + `<dcterms:created xsi:type="dcterms:W3CDTF">${stamp}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${stamp}</dcterms:modified></cp:coreProperties>` },
-    { name: 'docProps/app.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Claude in Zen</Application></Properties>' },
+    { name: 'docProps/app.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Claudefox</Application></Properties>' },
     { name: 'word/document.xml', data: document },
-    { name: 'word/styles.xml', data: cizDocxStyles(lang) },
-    { name: 'word/numbering.xml', data: cizDocxNumbering(nums) },
-    { name: 'word/settings.xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:settings xmlns:w="${CIZ_W}"><w:defaultTabStop w:val="708"/>`
+    { name: 'word/styles.xml', data: cfxDocxStyles(lang) },
+    { name: 'word/numbering.xml', data: cfxDocxNumbering(nums) },
+    { name: 'word/settings.xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:settings xmlns:w="${CFX_W}"><w:defaultTabStop w:val="708"/>`
       + '<w:characterSpacingControl w:val="doNotCompress"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>' },
     { name: 'word/_rels/document.xml.rels', data: docRels },
     { name: 'word/footer1.xml', data: footer },
   ];
-  return cizZip(files);
+  return cfxZip(files);
 }
 
 // ---------------------------------------------------------------- Excel
 
-function cizCsvRows(text, sep) {
+function cfxCsvRows(text, sep) {
   const rows = []; let row = [], cell = '', q = false;
   const s = String(text);
   for (let i = 0; i < s.length; i++) {
@@ -390,7 +390,7 @@ function cizCsvRows(text, sep) {
 }
 
 // Sheets from what Claude wrote: Markdown tables (one sheet each, named by the heading above) or CSV / TSV.
-function cizSheets(text) {
+function cfxSheets(text) {
   const lines = String(text).replace(/\r\n?/g, '\n').split('\n');
   const sheets = [];
   let title = '';
@@ -410,14 +410,14 @@ function cizSheets(text) {
   const first = lines.find(l => l.trim()) || '';
   const sep = (first.match(/\t/g) || []).length > (first.match(/,/g) || []).length ? '\t'
     : (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ';' : ',';
-  return [{ name: 'Sheet1', rows: cizCsvRows(text, sep).filter(r => r.some(c => String(c).trim())) }];
+  return [{ name: 'Sheet1', rows: cfxCsvRows(text, sep).filter(r => r.some(c => String(c).trim())) }];
 }
 
-function cizColName(i) { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+function cfxColName(i) { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
 
-function cizXlsx(content) {
+function cfxXlsx(content) {
   const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
-  const sheets = cizSheets(content).slice(0, 50);
+  const sheets = cfxSheets(content).slice(0, 50);
   const used = new Set();
   const names = sheets.map((s, i) => {
     let n = String(s.name || `Sheet${i + 1}`).replace(/[\\/?*[\]:]/g, ' ').trim().slice(0, 31) || `Sheet${i + 1}`;
@@ -436,10 +436,10 @@ function cizXlsx(content) {
         const val = String(v == null ? '' : v);
         widths[ci] = Math.max(widths[ci] || 0, Math.min(60, val.length));
         if (val === '') return;
-        const ref = `${cizColName(ci)}${ri + 1}`;
+        const ref = `${cfxColName(ci)}${ri + 1}`;
         const style = ri === 0 ? ' s="1"' : '';
         if (ri > 0 && /^-?(\d+|\d*\.\d+)(e[+-]?\d+)?$/i.test(val) && val.length < 16) data += `<c r="${ref}"${style}><v>${val}</v></c>`;
-        else data += `<c r="${ref}" t="inlineStr"${style}><is><t xml:space="preserve">${cizXml(val)}</t></is></c>`;
+        else data += `<c r="${ref}" t="inlineStr"${style}><is><t xml:space="preserve">${cfxXml(val)}</t></is></c>`;
       });
       data += '</row>';
     });
@@ -451,14 +451,14 @@ function cizXlsx(content) {
   const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
   const R = 'http://schemas.openxmlformats.org/package/2006/relationships';
   const CT = 'application/vnd.openxmlformats-officedocument.spreadsheetml.';
-  return cizZip([
+  return cfxZip([
     { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
       + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
       + `<Override PartName="/xl/workbook.xml" ContentType="${CT}sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="${CT}styles+xml"/>`
       + sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="${CT}worksheet+xml"/>`).join('') + '</Types>' },
     { name: '_rels/.rels', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${R}"><Relationship Id="rId1" Type="${OD}officeDocument" Target="xl/workbook.xml"/></Relationships>` },
-    { name: 'xl/workbook.xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="${NS}" xmlns:r="${CIZ_R}"><sheets>`
-      + names.map((n, i) => `<sheet name="${cizXml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>' },
+    { name: 'xl/workbook.xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="${NS}" xmlns:r="${CFX_R}"><sheets>`
+      + names.map((n, i) => `<sheet name="${cfxXml(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>' },
     { name: 'xl/_rels/workbook.xml.rels', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${R}">`
       + sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="${OD}worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')
       + `<Relationship Id="rId${sheets.length + 1}" Type="${OD}styles" Target="styles.xml"/></Relationships>` },
@@ -475,7 +475,7 @@ function cizXlsx(content) {
 
 // ---------------------------------------------------------------- HTML page
 
-const CIZ_PAGE_CSS = 'body{margin:0;background:#fff;color:#1f1e1c;font:16px/1.6 system-ui,"Segoe UI",sans-serif}'
+const CFX_PAGE_CSS = 'body{margin:0;background:#fff;color:#1f1e1c;font:16px/1.6 system-ui,"Segoe UI",sans-serif}'
   + 'main{max-width:820px;margin:40px auto;padding:0 24px}h1,h2,h3,h4,h5,h6{font-family:Georgia,"Iowan Old Style",serif;line-height:1.25;margin:1.3em 0 .4em}'
   + 'code{font-family:ui-monospace,Consolas,monospace;font-size:.9em;background:#f2efe8;border-radius:4px;padding:0 4px}'
   + 'pre{background:#f2efe8;padding:12px 14px;border-radius:8px;overflow:auto}pre code{background:none;padding:0}'
@@ -484,12 +484,12 @@ const CIZ_PAGE_CSS = 'body{margin:0;background:#fff;color:#1f1e1c;font:16px/1.6 
   + '.page-break{break-after:page}@media print{main{margin:0;max-width:none}}';
 
 // A complete web page from Markdown (rendered) or from HTML (kept as written).
-function cizHtmlPage(content, title) {
-  if (cizLooksHtml(content) && /<html[\s>]/i.test(content)) return String(content);
+function cfxHtmlPage(content, title) {
+  if (cfxLooksHtml(content) && /<html[\s>]/i.test(content)) return String(content);
   let body;
-  if (cizLooksHtml(content)) body = String(content);
+  if (cfxLooksHtml(content)) body = String(content);
   else {
-    const box = cizSourceDom(content, false);
+    const box = cfxSourceDom(content, false);
     for (const el of box.querySelectorAll('.codehead')) el.remove();
     for (const p of box.querySelectorAll('p')) if (p.textContent === '⁣PAGEBREAK⁣') { p.className = 'page-break'; p.textContent = ''; }
     for (const h of box.querySelectorAll('[class*="mdh"]')) {   // the panel renders # as h3: put real heading levels back
@@ -501,21 +501,21 @@ function cizHtmlPage(content, title) {
     }
     body = box.innerHTML;
   }
-  return `<!doctype html>\n<html lang="${cizXml((typeof navigator !== 'undefined' && navigator.language) || 'en')}"><head><meta charset="utf-8">`
-    + `<meta name="viewport" content="width=device-width, initial-scale=1"><title>${cizXml(title)}</title><style>${CIZ_PAGE_CSS}</style></head>`
+  return `<!doctype html>\n<html lang="${cfxXml((typeof navigator !== 'undefined' && navigator.language) || 'en')}"><head><meta charset="utf-8">`
+    + `<meta name="viewport" content="width=device-width, initial-scale=1"><title>${cfxXml(title)}</title><style>${CFX_PAGE_CSS}</style></head>`
     + `<body><main>${body}</main></body></html>\n`;
 }
 
 // What a file becomes for a download in one format: { data: Uint8Array | string, mime, name }.
 // format: 'docx' | 'xlsx' | 'html' | 'md' | 'txt' | 'csv' | '' (the file's own format).
-function cizExport(file, format) {
+function cfxExport(file, format) {
   const ext = ((/\.([a-z0-9]{1,8})$/i.exec(file.name) || [])[1] || '').toLowerCase();
   const want = String(format || ext).toLowerCase();
-  const base = cizBaseName(file.name);
+  const base = cfxBaseName(file.name);
   const title = String(file.title || base);
-  if (want === 'docx') return { data: cizDocx(file.content, { title }), mime: CIZ_MIME.docx, name: `${base}.docx` };
-  if (want === 'xlsx') return { data: cizXlsx(file.content), mime: CIZ_MIME.xlsx, name: `${base}.xlsx` };
-  if (want === 'html' && ext !== 'html' && ext !== 'htm') return { data: cizHtmlPage(file.content, title), mime: 'text/html', name: `${base}.html` };
+  if (want === 'docx') return { data: cfxDocx(file.content, { title }), mime: CFX_MIME.docx, name: `${base}.docx` };
+  if (want === 'xlsx') return { data: cfxXlsx(file.content), mime: CFX_MIME.xlsx, name: `${base}.xlsx` };
+  if (want === 'html' && ext !== 'html' && ext !== 'htm') return { data: cfxHtmlPage(file.content, title), mime: 'text/html', name: `${base}.html` };
   if (want === ext || !want) return { data: file.content, mime: file.mime || 'text/plain', name: file.name };
   const mime = { md: 'text/markdown', txt: 'text/plain', csv: 'text/csv', html: 'text/html', htm: 'text/html' }[want] || 'text/plain';
   return { data: file.content, mime, name: `${base}.${want}` };

@@ -127,7 +127,7 @@ async function folderSection() {
   check('folder: a folder the user did not allow is refused', pictureFolder({ folder: '/home/u/Other' }, ctx).error === NOT_ALLOWED);
   check('folder: a relative folder is refused', pictureFolder({ folder: 'Art' }, ctx).error === NOT_ALLOWED);
   const asked = [];
-  const guarded = Object.assign({}, ctx, { folderProblem: (f, mode) => { asked.push([f, mode]); return "it holds Claude in Zen's own code"; } });
+  const guarded = Object.assign({}, ctx, { folderProblem: (f, mode) => { asked.push([f, mode]); return "it holds Claudefox's own code"; } });
   check('folder: a folder the guard refuses is refused', pictureFolder({ folder: '/home/u/Art' }, guarded).error === NOT_ALLOWED);
   check('folder: the guard is asked about it for writing', asked.length === 1 && asked[0][0] === path.resolve('/home/u/Art') && asked[0][1] === 'write', JSON.stringify(asked));
 }

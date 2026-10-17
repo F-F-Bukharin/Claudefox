@@ -141,7 +141,7 @@ function render(s, log) {
   $('nativeDot').className = 'dot ' + cls;
   $('nativeVal').textContent = s.native === 'connected' && s.hostVersion ? `${text} · v${s.hostVersion}` : text;
   $('nativeVal').title = s.nativeDetail || '';
-  $('nativeDetail').textContent = s.native === 'connected' ? '' : (s.nativeDetail || '');
+  $('nativeDetail').textContent = [s.native === 'connected' ? '' : s.nativeDetail, s.nativeNotice].filter(Boolean).join(' ');   // the notice: re-run the setup after the rename
   const installed = browser.runtime.getManifest().version;
   const src = s.native === 'connected' ? s.sourceVersion : '';
   const newer = src && cmpVersion(src, installed) > 0;

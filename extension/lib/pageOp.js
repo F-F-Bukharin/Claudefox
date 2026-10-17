@@ -1,15 +1,15 @@
 'use strict';
-// Claude in Zen: the page side of the page tools. The code in this file and in pageOpRead.js and pageOpAct.js runs
-// inside the tab. cizPageCode joins the text of these functions into the script that cizInPage (pageTools.js) injects,
+// Claudefox: the page side of the page tools. The code in this file and in pageOpRead.js and pageOpAct.js runs
+// inside the tab. cfxPageCode joins the text of these functions into the script that cfxInPage (pageTools.js) injects,
 // so each one may use only the page's own globals and the other injected functions, never anything from the add-on.
 
 // ---------------------------------------------------------------- page side
 // Injected into the tab with sensitiveField (from policy.js) passed in. Must stay self-contained.
-// The helpers and constants are in cizPageEnv; the operations are in pageOpRead.js and pageOpAct.js.
+// The helpers and constants are in cfxPageEnv; the operations are in pageOpRead.js and pageOpAct.js.
 
-function cizPageEnv(args, sensitiveField) {
+function cfxPageEnv(args, sensitiveField) {
   const MAX_REFS = 3000;
-  const st = window.__cizSt || (window.__cizSt = { seq: 0, refs: new Map() });
+  const st = window.__cfxSt || (window.__cfxSt = { seq: 0, refs: new Map() });
   const INTERACTIVE = 'a[href], button, input:not([type=hidden]), select, textarea, summary, '
     + '[role=button], [role=link], [role=checkbox], [role=radio], [role=tab], [role=menuitem], '
     + '[role=option], [role=switch], [role=textbox], [role=combobox], [role=searchbox], '
@@ -108,10 +108,10 @@ function cizPageEnv(args, sensitiveField) {
     return tag;
   }
   function refOf(el) {
-    if (el.__cizRef && st.refs.get(el.__cizRef) === el) return el.__cizRef;
+    if (el.__cfxRef && st.refs.get(el.__cfxRef) === el) return el.__cfxRef;
     if (st.refs.size >= MAX_REFS) st.refs.clear();
     const id = 'ref_' + (++st.seq);
-    el.__cizRef = id;
+    el.__cfxRef = id;
     st.refs.set(id, el);
     return id;
   }
@@ -435,66 +435,66 @@ function cizPageEnv(args, sensitiveField) {
       metaInfo, words, structuredData, notices, selectionText };
 }
 
-function cizPageOp(op, args, sensitiveField) {
-  const env = cizPageEnv(args, sensitiveField);
+function cfxPageOp(op, args, sensitiveField) {
+  const env = cfxPageEnv(args, sensitiveField);
   switch (op) {
-    case 'read': return cizOpRead(env, args);
-    case 'text': return cizOpText(env, args);
-    case 'analyze': return cizOpAnalyze(env, args);
-    case 'selection': return cizOpSelection(env, args);
-    case 'find': return cizOpFind(env, args);
-    case 'click': return cizDialogGuard(args, () => cizOpClick(env, args));
-    case 'hover': return cizOpHover(env, args);
-    case 'type': return cizDialogGuard(args, () => cizOpType(env, args));
-    case 'media': return cizOpMedia(env, args);
-    case 'viewport': return cizOpViewport(env, args);
-    case 'fill': return cizOpFill(env, args);
-    case 'press': return cizDialogGuard(args, () => cizOpPress(env, args));
-    case 'scroll': return cizOpScroll(env, args);
-    case 'scrollto': return cizOpScrollto(env, args);
-    case 'exists': return cizOpExists(env, args);
-    case 'ctype': return cizOpCtype(env, args);
-    case 'classify': return cizOpClassify(env, args);
-    case 'formlabels': return cizOpFormLabels(env, args);
-    case 'attach': return cizOpAttach(env, args);
-    case 'attachpart': return cizOpAttachPart(env, args);
+    case 'read': return cfxOpRead(env, args);
+    case 'text': return cfxOpText(env, args);
+    case 'analyze': return cfxOpAnalyze(env, args);
+    case 'selection': return cfxOpSelection(env, args);
+    case 'find': return cfxOpFind(env, args);
+    case 'click': return cfxDialogGuard(args, () => cfxOpClick(env, args));
+    case 'hover': return cfxOpHover(env, args);
+    case 'type': return cfxDialogGuard(args, () => cfxOpType(env, args));
+    case 'media': return cfxOpMedia(env, args);
+    case 'viewport': return cfxOpViewport(env, args);
+    case 'fill': return cfxOpFill(env, args);
+    case 'press': return cfxDialogGuard(args, () => cfxOpPress(env, args));
+    case 'scroll': return cfxOpScroll(env, args);
+    case 'scrollto': return cfxOpScrollto(env, args);
+    case 'exists': return cfxOpExists(env, args);
+    case 'ctype': return cfxOpCtype(env, args);
+    case 'classify': return cfxOpClassify(env, args);
+    case 'formlabels': return cfxOpFormLabels(env, args);
+    case 'attach': return cfxOpAttach(env, args);
+    case 'attachpart': return cfxOpAttachPart(env, args);
   }
   throw new Error('Unknown page operation: ' + op);
 }
 
 // The page code, the same for every call: sensitiveField (from policy.js), then the page-side functions. Built once.
-function cizPageBody() {
-  if (cizPageBody.text) return cizPageBody.text;
-  const parts = [ cizPageEnv, cizPageOp, cizOpRead, cizOpText, cizOpAnalyze, cizOpSelection,
-      cizOpFind, cizOpClick, cizOpHover, cizOpType, cizOpMedia, cizOpViewport, cizOpFill,
-      cizOpPress, cizOpScroll, cizOpScrollto, cizOpExists, cizOpCtype, cizOpClassify, cizOpFormLabels,
-      cizOpAttach, cizOpAttachPart, cizDialogGuard ];
-  return (cizPageBody.text = 'var sensitiveField = ' + cizSensitiveField.toString() + ';\n' + parts.map(f => f.toString() + '\n').join(''));
+function cfxPageBody() {
+  if (cfxPageBody.text) return cfxPageBody.text;
+  const parts = [ cfxPageEnv, cfxPageOp, cfxOpRead, cfxOpText, cfxOpAnalyze, cfxOpSelection,
+      cfxOpFind, cfxOpClick, cfxOpHover, cfxOpType, cfxOpMedia, cfxOpViewport, cfxOpFill,
+      cfxOpPress, cfxOpScroll, cfxOpScrollto, cfxOpExists, cfxOpCtype, cfxOpClassify, cfxOpFormLabels,
+      cfxOpAttach, cfxOpAttachPart, cfxDialogGuard ];
+  return (cfxPageBody.text = 'var sensitiveField = ' + cfxSensitiveField.toString() + ';\n' + parts.map(f => f.toString() + '\n').join(''));
 }
 
 // The version of the page code: a hash of its source (FNV-1a), computed once. A page that holds another version is
 // given the new code.
-function cizPageVersion() {
-  if (cizPageVersion.v) return cizPageVersion.v;
+function cfxPageVersion() {
+  if (cfxPageVersion.v) return cfxPageVersion.v;
   let h = 0x811c9dc5;
-  const b = cizPageBody();
+  const b = cfxPageBody();
   for (let i = 0; i < b.length; i++) { h ^= b.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-  return (cizPageVersion.v = h.toString(36) + '.' + b.length.toString(36));
+  return (cfxPageVersion.v = h.toString(36) + '.' + b.length.toString(36));
 }
 
-// The script cizInPage runs in the tab the first time: installs the page operation as window.__cizOp with its version in
-// window.__cizOpV, then runs the operation. Self-contained: it works on a fresh page. The tab's isolated content-script
-// world holds window.__cizOp, so page scripts cannot see or replace it.
-function cizPageCode(op, args) {
-  return '(function () {\n' + cizPageBody()
-    + 'window.__cizOp = function (op, args) { return cizPageOp(op, args, sensitiveField); };\n'
-    + 'window.__cizOpV = ' + JSON.stringify(cizPageVersion()) + ';\n'
-    + 'return window.__cizOp(' + JSON.stringify(op) + ', ' + JSON.stringify(args) + ');\n})();';
+// The script cfxInPage runs in the tab the first time: installs the page operation as window.__cfxOp with its version in
+// window.__cfxOpV, then runs the operation. Self-contained: it works on a fresh page. The tab's isolated content-script
+// world holds window.__cfxOp, so page scripts cannot see or replace it.
+function cfxPageCode(op, args) {
+  return '(function () {\n' + cfxPageBody()
+    + 'window.__cfxOp = function (op, args) { return cfxPageOp(op, args, sensitiveField); };\n'
+    + 'window.__cfxOpV = ' + JSON.stringify(cfxPageVersion()) + ';\n'
+    + 'return window.__cfxOp(' + JSON.stringify(op) + ', ' + JSON.stringify(args) + ');\n})();';
 }
 
 // The small script every later call sends: runs the installed operation when it is this version, else answers with
-// the marker that tells cizInPage to send cizPageCode.
-function cizPageProbe(op, args) {
-  return '(function () { return window.__cizOpV === ' + JSON.stringify(cizPageVersion()) + ' && typeof window.__cizOp === "function"'
-    + ' ? window.__cizOp(' + JSON.stringify(op) + ', ' + JSON.stringify(args) + ') : { __cizNeedInstall: true }; })();';
+// the marker that tells cfxInPage to send cfxPageCode.
+function cfxPageProbe(op, args) {
+  return '(function () { return window.__cfxOpV === ' + JSON.stringify(cfxPageVersion()) + ' && typeof window.__cfxOp === "function"'
+    + ' ? window.__cfxOp(' + JSON.stringify(op) + ', ' + JSON.stringify(args) + ') : { __cfxNeedInstall: true }; })();';
 }

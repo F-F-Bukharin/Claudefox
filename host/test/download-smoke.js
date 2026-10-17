@@ -86,7 +86,7 @@ const server = http.createServer((req, res) => {
 let lib = {};
 try { lib = require('../lib/download.js'); } catch (e) { failed.push(`module loads (${e.code || e.message})`); }
 const made = [];
-const freshFolder = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-download-')); made.push(d); return d; };
+const freshFolder = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-download-')); made.push(d); return d; };
 const listing = dir => fs.readdirSync(dir).sort();
 const url = (p, host = 'pics.test') => `http://${host}:${server.address().port}${p}`;
 const downloader = (over = {}) => lib.createDownloader({ lookup, connectTo, ...over });

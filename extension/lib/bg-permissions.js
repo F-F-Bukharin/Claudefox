@@ -1,5 +1,5 @@
 'use strict';
-// Claude in Zen: Stop and Start, the helper's confirm window, and the permission switches: file tools, unsafe mode,
+// Claudefox: Stop and Start, the helper's confirm window, and the permission switches: file tools, unsafe mode,
 // watch, Automatic (the state key `trusted`), the Sites list and the army. A question left open in the confirm window counts as no.
 
 // ---------------------------------------------------------------- Stop
@@ -10,8 +10,8 @@ async function stopAll(source) {
   // Everything is cut in this first step, before any await: a tool call, a worker's call or a folder question that
   // arrives while the tabs close below already finds the agent stopped and the helper gone. (set() changes the state
   // at once; only saving it waits.)
-  if (typeof cizFillCancel === 'function') cizFillCancel();
-  const stopped = cizState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, downloadAsk: null, trusted: false, siteAsk: null, fillAsk: null, uploadAsk: null, pending: 0 });
+  if (typeof cfxFillCancel === 'function') cfxFillCancel();
+  const stopped = cfxState.set({ agent: 'stopped', filesEnabled: false, unsafe: false, watch: false, watchAsk: null, downloadAsk: null, trusted: false, siteAsk: null, fillAsk: null, uploadAsk: null, pending: 0 });
   for (const [id, a] of pendingActions) {
     try { a.controller.abort(new Error('Stopped')); } catch {}
     pendingActions.delete(id);
@@ -21,28 +21,28 @@ async function stopAll(source) {
   sendNative({ type: 'trusted_off' });   // Automatic goes off with the other switches
   disconnectNative(t('bg_nativeUserStopped'));   // the helper exits, which kills any running Claude Code turn and its tool server
   endConfirms('Stopped.');       // an open confirm window counts as no (the helper closes it)
-  if (typeof cizSiteGate !== 'undefined') cizSiteGate.cancel();   // an open site card counts as no
-  if (typeof cizUploadGate !== 'undefined') cizUploadGate.cancel();   // an open upload card counts as no
+  if (typeof cfxSiteGate !== 'undefined') cfxSiteGate.cancel();   // an open site card counts as no
+  if (typeof cfxUploadGate !== 'undefined') cfxUploadGate.cancel();   // an open upload card counts as no
   failChats(t('bg_stoppedShort'));
-  cizNetReset();                 // forget recorded requests, stop watching consoles, the network log's listeners go
+  cfxNetReset();                 // forget recorded requests, stop watching consoles, the network log's listeners go
   await stopped;
-  await cizLocal.cancelAll();    // an open folder question counts as no
-  await cizArmy.closeAll();      // every army worker's tab goes too
-  await cizState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, army tabs closed, folder questions answered no, helper disconnected, file tools off, Unsafe mode off, network log cleared.`);
+  await cfxLocal.cancelAll();    // an open folder question counts as no
+  await cfxArmy.closeAll();      // every army worker's tab goes too
+  await cfxState.addLog('stop', `Stopped (${source}). Pending actions and chat cancelled, army tabs closed, folder questions answered no, helper disconnected, file tools off, Unsafe mode off, network log cleared.`);
 }
 
 async function startAgent() {
-  await cizState.set({ agent: 'active' });
-  cizNetLogStart();
-  await cizState.addLog('info', 'Agent resumed');
+  await cfxState.set({ agent: 'active' });
+  cfxNetLogStart();
+  await cfxState.addLog('info', 'Agent resumed');
   connectNative();
 }
 
 // "Choose folder…": the helper opens a folder window and answers with pick_folder_result.
 async function pickFolder() {
-  if (cizState.get().folderPicking) return;
-  if (!sendNative({ type: 'pick_folder' })) return cizState.addLog('error', 'Choosing a folder needs the helper. Type the path instead.');
-  await cizState.set({ folderPicking: true });
+  if (cfxState.get().folderPicking) return;
+  if (!sendNative({ type: 'pick_folder' })) return cfxState.addLog('error', 'Choosing a folder needs the helper. Type the path instead.');
+  await cfxState.set({ folderPicking: true });
 }
 
 // The helper's confirm window (host/lib/confirm.js): a Windows window outside Zen that nothing here can answer for
@@ -56,13 +56,13 @@ function askConfirm(payload) {
     const done = r => {
       clearTimeout(timer);
       confirmWaiters.delete(id);
-      if (!confirmWaiters.size) cizState.set({ confirmPending: null }).catch(() => {});
+      if (!confirmWaiters.size) cfxState.set({ confirmPending: null }).catch(() => {});
       resolve(r);
     };
     const timer = setTimeout(() => done({ ok: false, error: 'No answer from the confirm window.' }), 150000);
     confirmWaiters.set(id, done);
     if (!sendNative(Object.assign({ type: 'confirm', id }, payload))) return done({ ok: false, error: 'The helper is not connected, and it shows the confirm window. Press Start first.' });
-    cizState.set({ confirmPending: { kind: String(payload.kind) } }).catch(() => {});
+    cfxState.set({ confirmPending: { kind: String(payload.kind) } }).catch(() => {});
   });
 }
 // Stop, or the helper went away: open questions count as no.
@@ -72,30 +72,30 @@ function endConfirms(why) { for (const done of [...confirmWaiters.values()]) don
 // they had, because the helper still has that one allowed. Returns { kept: true } then.
 async function setFiles(value, mode, folder, { keepOldOnNo = false } = {}) {
   const m = mode === 'write' ? 'write' : 'read';
-  const f = String(folder == null ? cizState.get().filesFolder : folder).trim().slice(0, 1000);
+  const f = String(folder == null ? cfxState.get().filesFolder : folder).trim().slice(0, 1000);
   if (!value) {
-    const was = cizState.get().filesEnabled;
-    await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    const was = cfxState.get().filesEnabled;
+    await cfxState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
     sendNative({ type: 'files_off' });
-    if (was) await cizState.addLog('info', 'File tools off');
+    if (was) await cfxState.addLog('info', 'File tools off');
     return;
   }
-  if (cizState.get().agent !== 'active') return;
+  if (cfxState.get().agent !== 'active') return;
   if (!/^([A-Za-z]:[\\/]|\\\\|\/)/.test(f)) {
-    await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
-    return cizState.addLog('error', 'File tools need a full folder path, like C:\\Users\\you\\Documents\\notes. Left off.');
+    await cfxState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    return cfxState.addLog('error', 'File tools need a full folder path, like C:\\Users\\you\\Documents\\notes. Left off.');
   }
   const r = await askConfirm({ kind: 'files', mode: m, folder: f });
-  if (!r.ok && keepOldOnNo && cizState.get().filesEnabled) {
-    await cizState.addLog('info', `Kept ${cizState.get().filesFolder}: ${f} was not allowed (${r.error || 'not allowed in the confirm window.'})`);
+  if (!r.ok && keepOldOnNo && cfxState.get().filesEnabled) {
+    await cfxState.addLog('info', `Kept ${cfxState.get().filesFolder}: ${f} was not allowed (${r.error || 'not allowed in the confirm window.'})`);
     return { kept: true };
   }
   if (!r.ok) {
-    await cizState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
-    return cizState.addLog('error', `File tools stay off: ${r.error || 'not allowed in the confirm window.'}`);
+    await cfxState.set({ filesEnabled: false, filesMode: m, filesFolder: f });
+    return cfxState.addLog('error', `File tools stay off: ${r.error || 'not allowed in the confirm window.'}`);
   }
-  await cizState.set({ filesEnabled: true, filesMode: m, filesFolder: f });
-  await cizState.addLog('info', `File tools on (${m === 'write' ? 'read and write' : 'read only'}) for ${f}`);
+  await cfxState.set({ filesEnabled: true, filesMode: m, filesFolder: f });
+  await cfxState.addLog('info', `File tools on (${m === 'write' ? 'read and write' : 'read only'}) for ${f}`);
 }
 
 // Unsafe mode lets Claude act on Google sign-in pages, to debug the sign-in bug. It lasts for this
@@ -104,17 +104,17 @@ async function setFiles(value, mode, folder, { keepOldOnNo = false } = {}) {
 async function setUnsafe(value) {
   if (!value) {
     sendNative({ type: 'unsafe_off' });
-    if (cizState.get().unsafe) {
-      await cizState.set({ unsafe: false });
-      await cizState.addLog('info', 'Unsafe mode off');
+    if (cfxState.get().unsafe) {
+      await cfxState.set({ unsafe: false });
+      await cfxState.addLog('info', 'Unsafe mode off');
     }
     return;
   }
-  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on Unsafe mode.');
+  if (cfxState.get().agent !== 'active') return cfxState.addLog('error', 'Press Start first, then turn on Unsafe mode.');
   const r = await askConfirm({ kind: 'unsafe' });
-  if (!r.ok) return cizState.addLog('info', `Unsafe mode stays off: ${r.error || 'not allowed in the confirm window.'}`);
-  await cizState.set({ unsafe: true });
-  await cizState.addLog('warn', 'Unsafe mode on: Claude may act on Google sign-in pages. It still never types passwords, 2FA codes or payment details.');
+  if (!r.ok) return cfxState.addLog('info', `Unsafe mode stays off: ${r.error || 'not allowed in the confirm window.'}`);
+  await cfxState.set({ unsafe: true });
+  await cfxState.addLog('warn', 'Unsafe mode on: Claude may act on Google sign-in pages. It still never types passwords, 2FA codes or payment details.');
 }
 
 // Automatic mode (the state key and messages are still `trusted`): the asks for pictures, sites, form sends, uploads, form
@@ -123,14 +123,14 @@ async function setUnsafe(value) {
 async function setTrusted(on) {
   if (!on) {
     sendNative({ type: 'trusted_off' });
-    await cizState.set({ trusted: false });
+    await cfxState.set({ trusted: false });
     return;
   }
-  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on Automatic mode.');
+  if (cfxState.get().agent !== 'active') return cfxState.addLog('error', 'Press Start first, then turn on Automatic mode.');
   const r = await askConfirm({ kind: 'trusted' });
-  if (!r.ok) return cizState.addLog('info', `Automatic mode stays off: ${r.error || 'not allowed in the confirm window.'}`);
-  await cizState.set({ trusted: true });
-  await cizState.addLog('warn', 'Automatic on: Claude answers Yes by itself to pictures, other sites, form sends, uploads, form filling and folders until you press Stop or restart Zen. Google sign-in pages, blocked sites and protected folders stay off-limits. Pages can try to steer it.');
+  if (!r.ok) return cfxState.addLog('info', `Automatic mode stays off: ${r.error || 'not allowed in the confirm window.'}`);
+  await cfxState.set({ trusted: true });
+  await cfxState.addLog('warn', 'Automatic on: Claude answers Yes by itself to pictures, other sites, form sends, uploads, form filling and folders until you press Stop or restart Zen. Google sign-in pages, blocked sites and protected folders stay off-limits. Pages can try to steer it.');
 }
 
 // The Sites list (storage.local sites): a site is its host, lowercase, with one leading www. dropped. Value 'allow' or 'block';
@@ -144,7 +144,7 @@ async function siteListSet(site, value) {
   const text = String(site || '').trim();
   if (!text) return;
   const host = listSiteOf(text);
-  if (!host) return cizState.addLog('error', `Sites: "${text.slice(0, 80)}" is not a site. Type a host name such as example.org.`);
+  if (!host) return cfxState.addLog('error', `Sites: "${text.slice(0, 80)}" is not a site. Type a host name such as example.org.`);
   if (value !== 'allow' && value !== 'block' && value !== null) return;
   const { sites } = await browser.storage.local.get('sites');
   const next = Object.assign({}, sites);
@@ -157,17 +157,17 @@ async function siteListSet(site, value) {
 async function setWatch(value) {
   if (!value) {
     sendNative({ type: 'watch_off' });
-    if (cizState.get().watch) {
-      await cizState.set({ watch: false });
-      await cizState.addLog('info', 'Watch videos off');
+    if (cfxState.get().watch) {
+      await cfxState.set({ watch: false });
+      await cfxState.addLog('info', 'Watch videos off');
     }
     return;
   }
-  if (cizState.get().agent !== 'active') return cizState.addLog('error', 'Press Start first, then turn on watching.');
+  if (cfxState.get().agent !== 'active') return cfxState.addLog('error', 'Press Start first, then turn on watching.');
   const r = await askConfirm({ kind: 'watch' });
-  if (!r.ok) return cizState.addLog('info', `Watch videos stays off: ${r.error || 'not allowed in the confirm window.'}`);
-  await cizState.set({ watch: true });
-  await cizState.addLog('info', 'Watch videos on for this session.');
+  if (!r.ok) return cfxState.addLog('info', `Watch videos stays off: ${r.error || 'not allowed in the confirm window.'}`);
+  await cfxState.set({ watch: true });
+  await cfxState.addLog('info', 'Watch videos on for this session.');
 }
 
 // The saved option "Start with watching on". Off is saved at once. On asks the confirm window; the helper saves the answer
@@ -175,18 +175,18 @@ async function setWatch(value) {
 async function setWatchOnLoad(value) {
   if (!value) {
     sendNative({ type: 'watch_set_on_load', value: false });
-    return cizState.set({ watchOnLoad: false });
+    return cfxState.set({ watchOnLoad: false });
   }
   const r = await askConfirm({ kind: 'watch_on_load' });
-  if (!r.ok) return cizState.addLog('info', `Watching every time the panel opens stays off: ${r.error || 'not allowed in the confirm window.'}`);
+  if (!r.ok) return cfxState.addLog('info', `Watching every time the panel opens stays off: ${r.error || 'not allowed in the confirm window.'}`);
 }
 
 // The army switch (Quality only): Opus 5.5 at max effort may send up to five Haiku workers to background tabs.
 // Remembered across restarts. Turning it on picks Quality.
 async function setArmy(value) {
   try { await browser.storage.local.set(value ? { armyOn: true, armyModel: 'quality' } : { armyOn: false }); } catch {}
-  await cizState.set({ chatArmy: value, ...(value ? { chatModel: 'quality' } : {}) });
-  return cizState.addLog('info', value ? 'Army on: Opus 5.5 may send Haiku workers to background tabs' : 'Army off');
+  await cfxState.set({ chatArmy: value, ...(value ? { chatModel: 'quality' } : {}) });
+  return cfxState.addLog('info', value ? 'Army on: Opus 5.5 may send Haiku workers to background tabs' : 'Army off');
 }
 
 // Today's local date, YYYY-MM-DD: the army run counter starts over each day.
@@ -197,8 +197,8 @@ function localDay() {
 
 // Speed or Quality. With the army switch on, the mode is remembered with it, so a restart comes back as it was left.
 async function setModel(model) {
-  await cizState.set({ chatModel: model });
-  if (cizState.get().chatArmy) { try { await browser.storage.local.set({ armyModel: model }); } catch {} }
+  await cfxState.set({ chatModel: model });
+  if (cfxState.get().chatArmy) { try { await browser.storage.local.set({ armyModel: model }); } catch {} }
 }
 
 // Today's army runs, read again: the count starts over at midnight even while Zen stays open (startup, every half
@@ -211,8 +211,8 @@ async function refreshArmyToday() {
     const t = (await browser.storage.local.get('armyTokens')).armyTokens;
     tokens = t && t.date === localDay() ? Number(t.tokens) || 0 : 0;
   } catch { return; }
-  const s = cizState.get();
-  if (s.armyToday !== count || s.armyTokensToday !== tokens) await cizState.set({ armyToday: count, armyTokensToday: tokens });
+  const s = cfxState.get();
+  if (s.armyToday !== count || s.armyTokensToday !== tokens) await cfxState.set({ armyToday: count, armyTokensToday: tokens });
 }
 
 // A new army run: count it for today. 5 a day is the recommended most; the panel warns past that, nothing blocks.
@@ -222,10 +222,10 @@ async function countArmyRun() {
   try {
     const r = (await browser.storage.local.get('armyRuns')).armyRuns;
     count = r && r.day === day ? Number(r.count) || 0 : 0;
-  } catch { count = cizState.get().armyToday || 0; }
+  } catch { count = cfxState.get().armyToday || 0; }
   count++;
   try { await browser.storage.local.set({ armyRuns: { day, count } }); } catch {}
-  await cizState.set({ armyToday: count });
+  await cfxState.set({ armyToday: count });
   return count;
 }
 
@@ -236,9 +236,9 @@ async function countArmyTokens(n) {
   try {
     const r = (await browser.storage.local.get('armyTokens')).armyTokens;
     tokens = r && r.date === day ? Number(r.tokens) || 0 : 0;
-  } catch { tokens = cizState.get().armyTokensToday || 0; }
+  } catch { tokens = cfxState.get().armyTokensToday || 0; }
   tokens += n;
   try { await browser.storage.local.set({ armyTokens: { date: day, tokens } }); } catch {}
-  await cizState.set({ armyTokensToday: tokens });
+  await cfxState.set({ armyTokensToday: tokens });
   return tokens;
 }

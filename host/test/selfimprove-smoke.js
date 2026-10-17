@@ -1,11 +1,11 @@
 'use strict';
-// Improve Claude in Zen, helper side: the diff, the checks (a mod's files only), the copy, the proposal, Apply and
+// Improve Claudefox, helper side: the diff, the checks (a mod's files only), the copy, the proposal, Apply and
 // Discard, the notes on earlier runs, and the run's flags and master prompt. Uses temp folders only (the copies and the
 // notes go under a temp LOCALAPPDATA); no Claude Code and no Zen are needed.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-self-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-self-'));
 process.env.LOCALAPPDATA = path.join(tmp, 'local');   // paths.js reads this when it loads
 const S = require('../lib/selfimprove');
 const G = require('../lib/guard');
@@ -26,7 +26,7 @@ function fakeAddon(dir, runnerExit) {
     'extension/lib/policy.js': 'module.exports = {};\n',
     'extension/mods/wider-composer/mod.json': '{ "name": "Wider composer", "description": "Gives the text bar room." }\n',
     'extension/mods/wider-composer/panel.js': 'window.widerComposer = true;\n',
-    'host/claude-in-zen-host.js': 'module.exports = 1;\n',
+    'host/claudefox-host.js': 'module.exports = 1;\n',
     'host/lib/guard.js': 'module.exports = {};\n',
     'host/lib/extra.js': 'module.exports = "extra";\n',
     'test/run-all.js': `console.log('fake tests');\nconsole.log(${runnerExit ? "'1 test file(s) failed'" : "'All test files passed'"});\nprocess.exit(${runnerExit});\n`,
@@ -148,7 +148,7 @@ putFile('extension/mods/syntax/panel.js', 'const a = ;\n');
   S.discard(sbNm.id);
 
   // Notes on earlier runs: in memory/ under the helper folder, scrubbed, kept to the newest 50, and capped for a prompt.
-  check('the notes live in memory/ under the helper folder', S.MEMORY_DIR === path.join(process.env.LOCALAPPDATA, 'claude-in-zen', 'memory'), S.MEMORY_DIR);
+  check('the notes live in memory/ under the helper folder', S.MEMORY_DIR === path.join(process.env.LOCALAPPDATA, 'claudefox', 'memory'), S.MEMORY_DIR);
   const idA = 'aaaaaaaaaaaa';
   S.recordStart({ id: idA }, 'make the panel nicer');
   S.recordProposal(idA, { changed: 2, blocked: [], canApply: true, tests: { ok: true, summary: 'All test files passed' }, files: [{ path: 'extension/mods/quiet-tip/mod.json', status: 'added' }] }, 'I added a quiet tip.');

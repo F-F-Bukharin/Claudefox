@@ -1,12 +1,12 @@
 @echo off
-rem Claude in Zen - one double-click setup. Safe to run again.
+rem Claudefox - one double-click setup. Safe to run again.
 rem 1) installs the helper that links the add-on to Claude Code (no admin needed)
 rem 2) signs the Claude Code profile the add-on uses into your Claude account
-rem 3) opens Zen on its add-ons page with the add-on file path copied (only where claude-in-zen.xpi sits next to this file)
-title Claude in Zen setup
+rem 3) opens Zen on its add-ons page with the add-on file path copied (only where claudefox.xpi sits next to this file)
+title Claudefox setup
 cd /d "%~dp0"
 echo.
-echo  Claude in Zen setup
+echo  Claudefox setup
 echo  -------------------
 echo.
 echo  [1/3] Installing the helper...
@@ -28,7 +28,7 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-if not exist "%~dp0claude-in-zen.xpi" (
+if not exist "%~dp0claudefox.xpi" (
   echo  [3/3] There is no add-on file next to this file, so nothing to install in Zen.
   goto finish
 )
@@ -39,7 +39,7 @@ if not exist "%ZEN%" (
   echo  Zen Browser was not found. Install it, then do step 2 in START HERE.txt.
   goto finish
 )
-for %%I in ("%~dp0claude-in-zen.xpi") do (<nul set /p="%%~fI") | clip
+for %%I in ("%~dp0claudefox.xpi") do (<nul set /p="%%~fI") | clip
 start "" "%ZEN%" "about:addons"
 echo  In Zen: gear icon, Install Add-on From File, then paste the path (Ctrl+V) and press Enter.
 echo  The path is already copied. If Zen says the add-on is not signed, see step 2a in START HERE.txt.

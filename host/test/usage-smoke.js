@@ -28,8 +28,8 @@ function fakeChat(cfg) {
     if (!inited) { inited = true; out({ type: 'system', subtype: 'init', session_id: cfg.sid, model: 'fake-model', mcp_servers: [] }); }
     if (text.startsWith('USAGE')) {
       out({ type: 'assistant', message: { content: [
-        { type: 'tool_use', id: 'toolu_A1', name: 'mcp__claude-in-zen__click', input: { selector: 'a' } },
-        { type: 'tool_use', id: 'toolu_A2', name: 'mcp__claude-in-zen__tabs_list', input: {} },
+        { type: 'tool_use', id: 'toolu_A1', name: 'mcp__claudefox__click', input: { selector: 'a' } },
+        { type: 'tool_use', id: 'toolu_A2', name: 'mcp__claudefox__tabs_list', input: {} },
       ] } });
       out({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_A2', content: 'two tabs' }] } });
       out({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_A1', content: 'clicked', is_error: true }] } });
@@ -56,12 +56,12 @@ function fakeChat(cfg) {
 }
 
 function startHelper() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-usage-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-usage-'));
   const fake = path.join(dir, 'claude');
   fs.writeFileSync(fake, `#!${process.execPath}\n(${fakeChat.toString()})(${JSON.stringify({ dir, sid: SID })});\n`, { mode: 0o755 });
-  fs.mkdirSync(path.join(dir, 'claude-in-zen'), { recursive: true });
-  const env = { ...process.env, LOCALAPPDATA: dir, CLAUDE_IN_ZEN_PIPE: path.join(dir, 's.sock'), CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fake };
-  const proc = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+  fs.mkdirSync(path.join(dir, 'claudefox'), { recursive: true });
+  const env = { ...process.env, LOCALAPPDATA: dir, CLAUDEFOX_PIPE: path.join(dir, 's.sock'), CLAUDEFOX_TEST: '1', CLAUDEFOX_CLAUDE: fake };
+  const proc = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
   const inbox = []; let waiters = []; let hbuf = Buffer.alloc(0);
   const H = { dir, proc };
   H.send = msg => { const body = Buffer.from(JSON.stringify(msg)); const head = Buffer.alloc(4); head.writeUInt32LE(body.length, 0); proc.stdin.write(Buffer.concat([head, body])); };
@@ -87,7 +87,7 @@ function startHelper() {
   };
   H.events = id => inbox.filter(m => m.type === 'chat_event' && m.id === id).map(m => m.event);
   H.spawns = () => { try { return fs.readFileSync(path.join(dir, 'spawns'), 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
-  H.log = () => { try { return fs.readFileSync(path.join(dir, 'claude-in-zen', 'logs', 'host.log'), 'utf8'); } catch { return ''; } };
+  H.log = () => { try { return fs.readFileSync(path.join(dir, 'claudefox', 'logs', 'host.log'), 'utf8'); } catch { return ''; } };
   H.chat = async (id, fields) => { H.send({ type: 'chat', id, text: id, resume: '', ...(fields || {}) }); return H.next(m => m.type === 'chat_done' && m.id === id, 15000); };
   H.hello = async () => { H.send({ type: 'hello', version: 'test' }); await H.next(m => m.type === 'hello'); await H.next(m => m.type === 'confirmed_state'); };
   H.stop = () => { try { proc.kill(); } catch {} for (const s of H.spawns()) if (alive(s.pid)) { try { process.kill(s.pid, 'SIGKILL'); } catch {} } };
@@ -152,7 +152,7 @@ function fakeWorker() {
 
 // A real army run, in this process, with the add-on and the lead's chat turn stubbed.
 async function partArmy() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-usage-army-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-usage-army-'));
   process.env.LOCALAPPDATA = dir;
   const fake = path.join(dir, 'claude');
   fs.writeFileSync(fake, `#!${process.execPath}\n(${fakeWorker.toString()})();\n`, { mode: 0o755 });
@@ -164,7 +164,7 @@ async function partArmy() {
   const a = army.createArmy({
     callAddon: async (tool, args) => ({ ok: true, result: { tab_id: ++tab, url: args.url } }),
     sendAddon() {}, emit() {}, currentChat: () => chat, findClaude: () => fake,
-    envFor: () => ({ ...process.env }), mcpServer: path.join(__dirname, '..', 'zen-mcp.js'), limitRe: /usage limit/i,
+    envFor: () => ({ ...process.env }), mcpServer: path.join(__dirname, '..', 'claudefox-mcp.js'), limitRe: /usage limit/i,
     workerSettings: () => ({}),
   });
   try {

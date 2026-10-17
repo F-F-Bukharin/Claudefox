@@ -12,15 +12,15 @@ let pass = 0, fail = 0; const ok = (n, c, x) => { c ? pass++ : fail++; console.l
 const HALF = 'This image is at half size: double x and y for click and hover.';
 const headingsOf = t => String(t).split('\n').filter(l => /^#{1,6} /.test(l));
 
-// The page: the injected page code (cizPageCode) run in the jsdom window, the way executeScript runs it.
+// The page: the injected page code (cfxPageCode) run in the jsdom window, the way executeScript runs it.
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://shop.example/', runScripts: 'outside-only' });
 const w = dom.window, d = w.document;
 w.Element.prototype.getBoundingClientRect = () => ({ width: 10, height: 10 });
 Object.defineProperty(w.HTMLElement.prototype, 'innerText', { get() { return this.textContent; } });
 const ctx = vm.createContext({ URL });
-vm.runInContext(src + ';this.cizPageCode=cizPageCode;', ctx);
+vm.runInContext(src + ';this.cfxPageCode=cfxPageCode;', ctx);
 // The text op's answer as plain JSON (the page's objects come from another realm). An error comes back as text.
-const text = args => { try { return JSON.parse(JSON.stringify(w.eval(ctx.cizPageCode('text', args)))); } catch (e) { return { text: 'ERROR ' + e.message, truncated: null }; } };
+const text = args => { try { return JSON.parse(JSON.stringify(w.eval(ctx.cfxPageCode('text', args)))); } catch (e) { return { text: 'ERROR ' + e.message, truncated: null }; } };
 
 d.body.innerHTML = `<main>
 <h1>Shop</h1>
@@ -66,13 +66,13 @@ const tools = vm.createContext({ console, setTimeout, browser: { tabs: { capture
 vm.runInContext(fs.readFileSync(EXT + 'lib/pageTools.js', 'utf8'), tools, { filename: 'pageTools.js' });
 const tab = { id: 7, url: 'https://shop.example/', title: 'Shop' };
 Object.assign(tools, {
-  cizPageTab: async () => tab,
-  cizGatedTab: async () => ({ tab, gate: { blocked: false, about: false } }),
-  cizGoogleExport: async () => null,
-  cizPdfOf: async () => null,
-  cizInPage: async (t, op, args) => { pageCalls.push({ op, args }); return op === 'viewport' ? { width: 800, height: 600, scroll_y: 0 } : { title: 'Shop', url: tab.url, text: 'text' }; },
+  cfxPageTab: async () => tab,
+  cfxGatedTab: async () => ({ tab, gate: { blocked: false, about: false } }),
+  cfxGoogleExport: async () => null,
+  cfxPdfOf: async () => null,
+  cfxInPage: async (t, op, args) => { pageCalls.push({ op, args }); return op === 'viewport' ? { width: 800, height: 600, scroll_y: 0 } : { title: 'Shop', url: tab.url, text: 'text' }; },
 });
-const T = vm.runInContext('CIZ_TOOLS', tools);
+const T = vm.runInContext('CFX_TOOLS', tools);
 const safe = async f => { try { return await f(); } catch (e) { return { error: String(e.message) }; } };
 const lastArgs = () => (pageCalls[pageCalls.length - 1] || { args: {} }).args;
 const shotOpts = i => (shots[i] || { opts: {} }).opts;

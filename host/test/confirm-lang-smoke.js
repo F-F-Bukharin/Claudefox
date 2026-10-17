@@ -7,9 +7,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-conflang-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-conflang-'));
 process.env.LOCALAPPDATA = tmp;
-process.env.CLAUDE_IN_ZEN_TEST = '1';
+process.env.CLAUDEFOX_TEST = '1';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const failed = []; let passed = 0, helper = null, helperRan = false;
 const check = (name, cond, extra) => { if (cond) passed++; else failed.push(name + (extra ? '  ' + extra : '')); };
@@ -38,11 +38,11 @@ async function helperTests() {
   helperRan = true;
   const confirmLog = path.join(tmp, 'confirm.log');
   const fakeConfirm = path.join(tmp, 'confirm');
-  fs.writeFileSync(fakeConfirm, `#!${process.execPath}\nconst fs = require('fs');\nconst e = process.env;\nfs.appendFileSync(${JSON.stringify(confirmLog)}, JSON.stringify({ title: e.CIZ_Q_TITLE, text: e.CIZ_Q_TEXT, yes: e.CIZ_Q_YES, no: e.CIZ_Q_NO }) + '\\n');\nprocess.stdout.write('yes');\n`, { mode: 0o755 });
+  fs.writeFileSync(fakeConfirm, `#!${process.execPath}\nconst fs = require('fs');\nconst e = process.env;\nfs.appendFileSync(${JSON.stringify(confirmLog)}, JSON.stringify({ title: e.CFX_Q_TITLE, text: e.CFX_Q_TEXT, yes: e.CFX_Q_YES, no: e.CFX_Q_NO }) + '\\n');\nprocess.stdout.write('yes');\n`, { mode: 0o755 });
   const questions = () => { try { return fs.readFileSync(confirmLog, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
-  const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: path.join(tmp, 'helper.sock'), CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CONFIRM: fakeConfirm };
+  const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDEFOX_PIPE: path.join(tmp, 'helper.sock'), CLAUDEFOX_TEST: '1', CLAUDEFOX_CONFIRM: fakeConfirm };
   delete env.ANTHROPIC_API_KEY;
-  helper = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+  helper = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
   helper.stdin.on('error', () => {});
   const inbox = [], waiters = [];
   let hbuf = Buffer.alloc(0);
@@ -103,12 +103,12 @@ async function helperTests() {
   for (const [name, msg] of kindsFor(folder2)) {
     const { win } = await ask(msg);
     en[name] = win;
-    check(`after {type:'lang', lang:'en'}: the ${name} window is in English`, !!win && /^(Turn on|Allow reading|Allow read and write)$/.test(win.yes) && win.no === 'Cancel' && /Claude in Zen/.test(win.title), JSON.stringify(win));
+    check(`after {type:'lang', lang:'en'}: the ${name} window is in English`, !!win && /^(Turn on|Allow reading|Allow read and write)$/.test(win.yes) && win.no === 'Cancel' && /Claudefox/.test(win.title), JSON.stringify(win));
   }
   const AUTO_EN = 'Claude then answers Yes by itself to these questions: saving a picture, using another site, sending a form or following a link to another site after reading a page, uploading a file, filling a form, and allowing a folder for file tools or local pages.\n\nGoogle sign-in and account pages, sites you blocked and protected folders stay off-limits. It still never types passwords, 2FA codes or payment details. Pages can try to steer it.\n\nIt stays on until you press Stop.';
   const AUTO_PT = 'O Claude passa a responder Sim sozinho a estas perguntas: salvar uma imagem, usar outro site, enviar um formulário ou seguir um link para outro site depois de ler uma página, enviar um arquivo, preencher um formulário e permitir uma pasta para as ferramentas de arquivos ou as páginas locais.\n\nAs páginas de login e de conta do Google, os sites que você bloqueou e as pastas protegidas continuam fora do alcance. Ele continua sem digitar senhas, códigos 2FA ou dados de pagamento. As páginas podem tentar influenciá-lo.\n\nO modo fica ativo até você apertar Parar.';
-  check('the English Automatic window: its title and what it answers and keeps', en.trusted && en.trusted.title === 'Claude in Zen: turn on Automatic mode?' && en.trusted.text === AUTO_EN, JSON.stringify(en.trusted));
-  check('the Portuguese Automatic window: its title and what it answers and keeps', pt.trusted && pt.trusted.title === 'Claude in Zen: ativar o modo automático?' && pt.trusted.text === AUTO_PT, JSON.stringify(pt.trusted));
+  check('the English Automatic window: its title and what it answers and keeps', en.trusted && en.trusted.title === 'Claudefox: turn on Automatic mode?' && en.trusted.text === AUTO_EN, JSON.stringify(en.trusted));
+  check('the Portuguese Automatic window: its title and what it answers and keeps', pt.trusted && pt.trusted.title === 'Claudefox: ativar o modo automático?' && pt.trusted.text === AUTO_PT, JSON.stringify(pt.trusted));
   check('the Unsafe window says it includes Automatic mode, in English and Portuguese', en.unsafe && /Unsafe mode includes Automatic mode/.test(en.unsafe.text) && pt.unsafe && /O modo Inseguro inclui o modo automático/.test(pt.unsafe.text));
   check('no window text says Trusted or Confiável', !T || !Object.values(T.texts.en).some(v => /Trusted/.test(v)) && !Object.values(T.texts.pt_BR).some(v => /Confiável/.test(v)));
 

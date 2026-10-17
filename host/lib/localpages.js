@@ -53,11 +53,11 @@ function parentBrowser() {
   }));
 }
 
-// The browser to show local pages in: CLAUDE_IN_ZEN_ZEN_EXE (tests only, with CLAUDE_IN_ZEN_TEST=1), else the one that
+// The browser to show local pages in: CLAUDEFOX_ZEN_EXE (tests only, with CLAUDEFOX_TEST=1), else the one that
 // started this helper, so Zen opens them in Zen and Firefox in Firefox, else Zen or Firefox where they usually are installed.
 let browserFound = null;
 async function findBrowser() {
-  if (process.env.CLAUDE_IN_ZEN_TEST === '1' && process.env.CLAUDE_IN_ZEN_ZEN_EXE) return process.env.CLAUDE_IN_ZEN_ZEN_EXE;
+  if (process.env.CLAUDEFOX_TEST === '1' && process.env.CLAUDEFOX_ZEN_EXE) return process.env.CLAUDEFOX_ZEN_EXE;
   if (!browserFound) browserFound = (await parentBrowser()) || findZen() || findFirefox();
   return browserFound;
 }

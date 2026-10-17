@@ -1,7 +1,7 @@
 'use strict';
 // Automatic mode (Trusted mode's internal name) and the page-safety prompt (w3-3b): the Automatic question and the helper's flag
 // (confirmflow.js, the host), the chat prompt's card and Automatic lines (chatargs.js, chatturns.js), the tool server's instructions
-// (zen-mcp.js), the 150 s limits (toolSchemas.js), page_read after a helper-side read, and what Automatic and Unsafe answer by
+// (claudefox-mcp.js), the 150 s limits (toolSchemas.js), page_read after a helper-side read, and what Automatic and Unsafe answer by
 // themselves in the helper: the picture card and the folder questions, never past a refusal. The helper part needs Linux or macOS (the fake
 // Claude and confirm window are scripts with a shebang).   node host/test/trusted-smoke.js
 const { spawn } = require('child_process');
@@ -10,10 +10,10 @@ const net = require('net');
 const os = require('os');
 const path = require('path');
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-trusted-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-trusted-'));
 // Everything the helper and the tool server read or write lives under tmp (the data folder and the pipes).
 process.env.LOCALAPPDATA = tmp;
-process.env.CLAUDE_IN_ZEN_TEST = '1';
+process.env.CLAUDEFOX_TEST = '1';
 const A = require('../lib/chatargs');
 const P = require('../lib/paths');
 const { TOOLS } = require('../lib/toolSchemas');
@@ -71,12 +71,12 @@ process.stdin.on('end', () => {
 `, { mode: 0o755 });
   const confirmLog = path.join(tmp, 'confirm.log'), confirmAnswer = path.join(tmp, 'confirm-answer.txt');
   const fakeConfirm = path.join(tmp, 'confirm');
-  fs.writeFileSync(fakeConfirm, `#!${process.execPath}\nconst fs = require('fs');\nfs.appendFileSync(${JSON.stringify(confirmLog)}, JSON.stringify({ title: process.env.CIZ_Q_TITLE, text: process.env.CIZ_Q_TEXT }) + '\\n');\nlet a = 'yes'; try { a = fs.readFileSync(${JSON.stringify(confirmAnswer)}, 'utf8').trim(); } catch {}\nprocess.stdout.write(a);\n`, { mode: 0o755 });
+  fs.writeFileSync(fakeConfirm, `#!${process.execPath}\nconst fs = require('fs');\nfs.appendFileSync(${JSON.stringify(confirmLog)}, JSON.stringify({ title: process.env.CFX_Q_TITLE, text: process.env.CFX_Q_TEXT }) + '\\n');\nlet a = 'yes'; try { a = fs.readFileSync(${JSON.stringify(confirmAnswer)}, 'utf8').trim(); } catch {}\nprocess.stdout.write(a);\n`, { mode: 0o755 });
   const questions = () => { try { return fs.readFileSync(confirmLog, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
   const records = () => { try { return fs.readFileSync(record, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
-  const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: realPipe, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fakeClaude, CLAUDE_IN_ZEN_CONFIRM: fakeConfirm };
+  const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDEFOX_PIPE: realPipe, CLAUDEFOX_TEST: '1', CLAUDEFOX_CLAUDE: fakeClaude, CLAUDEFOX_CONFIRM: fakeConfirm };
   delete env.ANTHROPIC_API_KEY;
-  helper = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+  helper = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
   helper.stdin.on('error', () => {});
   const inbox = [], waiters = [];
   let hbuf = Buffer.alloc(0);
@@ -116,7 +116,7 @@ process.stdin.on('end', () => {
     const argv = runs[runs.length - 1];
     return lines(argv[argv.indexOf('--append-system-prompt') + 1]);
   }
-  // A call the way zen-mcp makes one: a client on the helper's pipe, after hello. Resolves with the reply.
+  // A call the way claudefox-mcp makes one: a client on the helper's pipe, after hello. Resolves with the reply.
   let seq = 0;
   const call = (tool, args) => new Promise(resolve => {
     const id = `c${++seq}`, sock = net.connect(realPipe);
@@ -135,9 +135,9 @@ process.stdin.on('end', () => {
       }
     });
   });
-  // The tool server's instructions at initialize (zen-mcp.js), which Claude Code reads.
+  // The tool server's instructions at initialize (claudefox-mcp.js), which Claude Code reads.
   const instructions = () => new Promise(resolve => {
-    const mcp = spawn(process.execPath, [path.join(__dirname, '..', 'zen-mcp.js')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
+    const mcp = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-mcp.js')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
     mcp.stdin.on('error', () => {});
     let buf = '';
     const done = v => { mcp.kill(); resolve(v); };
@@ -167,7 +167,7 @@ process.stdin.on('end', () => {
   const no = await expect(m => m.type === 'confirm_result' && m.id === 'k1');
   await sync();
   const asked = questions().pop() || {};
-  check('the Automatic question has its title and text', asked.title === 'Claude in Zen: turn on Automatic mode?' && asked.text === TRUSTED_Q, JSON.stringify(asked));
+  check('the Automatic question has its title and text', asked.title === 'Claudefox: turn on Automatic mode?' && asked.text === TRUSTED_Q, JSON.stringify(asked));
   check('a no is answered no and sends no state', !!no && no.ok === false && !inbox.slice(mark).some(m => m.type === 'confirmed_state'), JSON.stringify(no));
 
   fs.writeFileSync(confirmAnswer, 'yes');
@@ -190,7 +190,7 @@ process.stdin.on('end', () => {
   const windows = () => questions().length;
   const mkdir = name => fs.realpathSync(fs.mkdtempSync(path.join(tmp, name)));
   const notes = mkdir('notes-'), notes2 = mkdir('notes2-'), notes3 = mkdir('notes3-'), notes4 = mkdir('notes4-'), notes5 = mkdir('notes5-'), notes6 = mkdir('notes6-'), notes7 = mkdir('notes7-');
-  const secret = path.join(P.BASE, 'private-test'); fs.mkdirSync(secret, { recursive: true });   // Claude in Zen's own data folder: protected
+  const secret = path.join(P.BASE, 'private-test'); fs.mkdirSync(secret, { recursive: true });   // Claudefox's own data folder: protected
   const holdTurn = async (id, msg) => { const n = records().length; toHelper(Object.assign({ type: 'chat', id, text: 'hold' }, msg)); await until(() => records().length > n); };
   const endTurn = async id => { toHelper({ type: 'chat_cancel', id }); await expect(m => m.type === 'chat_done' && m.id === id, 15000); };
   const confirmKind = async (id, msg) => { toHelper(Object.assign({ type: 'confirm', id }, msg)); const r = await expect(m => m.type === 'confirm_result' && m.id === id); await sync(); return r || {}; };
@@ -212,9 +212,9 @@ process.stdin.on('end', () => {
   check('Automatic: the file-tools read and write folder is allowed with no confirm window', fr.ok === true && windows() === q0 && lastState().files && lastState().files.mode === 'write' && lastState().files.folder === notes2, JSON.stringify([fr, windows() - q0, lastState().files]));
   toHelper({ type: 'files_off' }); await sync();
   fr = await confirmKind('f4', { kind: 'files', mode: 'read', folder: secret });
-  check('Automatic: a protected folder (Claude in Zen\'s data) is still refused, with no window', fr.ok === false && /can't use/.test(fr.error || '') && windows() === q0 && lastState().files === null, JSON.stringify([fr, windows() - q0]));
+  check('Automatic: a protected folder (Claudefox\'s data) is still refused, with no window', fr.ok === false && /can't use/.test(fr.error || '') && windows() === q0 && lastState().files === null, JSON.stringify([fr, windows() - q0]));
   fr = await confirmKind('f5', { kind: 'files', mode: 'write', folder: path.join(__dirname, '..', '..') });
-  check('Automatic: Claude in Zen\'s own code is still refused for writing, with no window', fr.ok === false && /can't use/.test(fr.error || '') && windows() === q0 && lastState().files === null, JSON.stringify([fr, windows() - q0]));
+  check('Automatic: Claudefox\'s own code is still refused for writing, with no window', fr.ok === false && /can't use/.test(fr.error || '') && windows() === q0 && lastState().files === null, JSON.stringify([fr, windows() - q0]));
   fr = await confirmKind('f6', { kind: 'files', mode: 'read', folder: path.join(tmp, 'no-such-folder') });
   check('Automatic: a folder that is not there is still refused', fr.ok === false && /no folder/i.test(fr.error || '') && windows() === q0);
 

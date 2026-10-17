@@ -1,6 +1,6 @@
 'use strict';
 // The output folder: the files Claude makes that the add-on stores here instead of downloading (Settings, Files).
-// It sits in Claude in Zen's data folder (paths.js OUTPUT_DIR), where an update of the project cannot touch it. Each file is written in one step under its own name; a name that is taken gets
+// It sits in Claudefox's data folder (paths.js OUTPUT_DIR), where an update of the project cannot touch it. Each file is written in one step under its own name; a name that is taken gets
 // " (2)", " (3)" and so on, so nothing is overwritten.
 const fs = require('fs');
 const path = require('path');

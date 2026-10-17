@@ -1,7 +1,7 @@
 'use strict';
 // Hardening checks for the confirm window and the questions that add a tool server: what the window shows
 // (host/confirm.ps1, host/lib/confirm.js), which remote tool servers ask first, and the cmd refusal (host/lib/plugins.js).
-// The test-only hooks (the pipe, the confirm window, the tool server's script) count only with CLAUDE_IN_ZEN_TEST=1,
+// The test-only hooks (the pipe, the confirm window, the tool server's script) count only with CLAUDEFOX_TEST=1,
 // and an army limit can be lowered through its variable but never raised.
 // No Zen and no Windows needed: the window is checked as text, and Windows is pretended where the code asks.
 //   node test/harden-confirm.js
@@ -15,7 +15,7 @@ let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
 const read = rel => fs.readFileSync(path.join(root, rel), 'utf8');
 
-const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-harden-confirm-')));
+const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-harden-confirm-')));
 process.env.LOCALAPPDATA = path.join(tmp, 'local');   // paths.js reads it when it loads
 const confirmLib = require('../host/lib/confirm');
 const plugins = require('../host/lib/plugins');
@@ -37,10 +37,10 @@ async function asPlatform(platform, fn) {
 // Runs fn as if on Windows, where the cmd /c wrap applies.
 const asWindows = fn => asPlatform('win32', fn);
 
-// This process's environment without any CLAUDE_IN_ZEN_ variable, plus extra: what a child process gets in these checks.
+// This process's environment without any CLAUDEFOX_ variable, plus extra: what a child process gets in these checks.
 function childEnv(extra) {
   const env = { ...process.env };
-  for (const k of Object.keys(env)) if (k.startsWith('CLAUDE_IN_ZEN_')) delete env[k];
+  for (const k of Object.keys(env)) if (k.startsWith('CLAUDEFOX_')) delete env[k];
   return { ...env, ...extra };
 }
 // Runs a one-line node program with childEnv(extra) and returns its stdout, or null when it fails.
@@ -48,10 +48,10 @@ function nodeWith(code, extra) {
   const r = spawnSync(process.execPath, ['-e', code], { env: childEnv(extra), encoding: 'utf8', timeout: 20000 });
   return r.status === 0 ? r.stdout : null;
 }
-// Starts the tool server (host/zen-mcp.js), asks it for one tool, and returns that reply, or null if none comes in 4 s.
+// Starts the tool server (host/claudefox-mcp.js), asks it for one tool, and returns that reply, or null if none comes in 4 s.
 function askToolServer(env, tool) {
   return new Promise(resolve => {
-    const child = spawn(process.execPath, [path.join(root, 'host', 'zen-mcp.js')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = spawn(process.execPath, [path.join(root, 'host', 'claudefox-mcp.js')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
     let buf = '';
     const timer = setTimeout(() => finish(null), 4000);
     const finish = r => { clearTimeout(timer); child.kill(); resolve(r); };
@@ -78,26 +78,26 @@ async function main() {
 
   const dump = path.join(tmp, 'window-text.txt');
   const exe = path.join(tmp, 'fake-window.js');
-  fs.writeFileSync(exe, `#!${process.execPath}\nrequire('fs').writeFileSync(${JSON.stringify(dump)}, process.env.CIZ_Q_TEXT || '');\nprocess.stdout.write('yes');\n`, { mode: 0o755 });
-  // Without CLAUDE_IN_ZEN_TEST=1 the override is ignored: the real window path answers (no window here) and the fake never runs.
-  delete process.env.CLAUDE_IN_ZEN_TEST;
-  process.env.CLAUDE_IN_ZEN_CONFIRM = exe;
+  fs.writeFileSync(exe, `#!${process.execPath}\nrequire('fs').writeFileSync(${JSON.stringify(dump)}, process.env.CFX_Q_TEXT || '');\nprocess.stdout.write('yes');\n`, { mode: 0o755 });
+  // Without CLAUDEFOX_TEST=1 the override is ignored: the real window path answers (no window here) and the fake never runs.
+  delete process.env.CLAUDEFOX_TEST;
+  process.env.CLAUDEFOX_CONFIRM = exe;
   const unset = await asPlatform('linux', () => confirmLib.createConfirm({ killTree: () => {} }).ask({ title: 'T', text: 'x', yes: 'Y', no: 'N' }));
-  check('without CLAUDE_IN_ZEN_TEST the confirm override is ignored: the fake window never runs', !unset.ok && !fs.existsSync(dump)
+  check('without CLAUDEFOX_TEST the confirm override is ignored: the fake window never runs', !unset.ok && !fs.existsSync(dump)
     && unset.error === 'This system has no confirm window, so the answer is no.', JSON.stringify(unset));
-  process.env.CLAUDE_IN_ZEN_TEST = '1';
+  process.env.CLAUDEFOX_TEST = '1';
   const confirm = confirmLib.createConfirm({ killTree: () => {} });
   const answer = await confirm.ask({ title: 'T', text: 'run\x1b[2J this\nnext\x00line', yes: 'Y', no: 'N' });
   check('the window gets its text without control characters', answer.ok && fs.existsSync(dump) && fs.readFileSync(dump, 'utf8') === 'run[2J this\nnextline',
     fs.existsSync(dump) ? JSON.stringify(fs.readFileSync(dump, 'utf8')) : 'no text');
-  delete process.env.CLAUDE_IN_ZEN_CONFIRM;
-  delete process.env.CLAUDE_IN_ZEN_TEST;
+  delete process.env.CLAUDEFOX_CONFIRM;
+  delete process.env.CLAUDEFOX_TEST;
 
   const ps = read('host/confirm.ps1');
   check('confirm.ps1 shows the text in a read-only, multiline Consolas 9 box', /New-Object System\.Windows\.Forms\.TextBox/.test(ps) && /\$box\.ReadOnly = \$true/.test(ps)
     && /\$box\.Multiline = \$true/.test(ps) && /Font\('Consolas', 9\)/.test(ps));
   check('confirm.ps1 gives that box a vertical scrollbar, at most 260 px tall', /ScrollBars = 'Vertical'/.test(ps) && /Math\]::Min\(260,/.test(ps));
-  check('confirm.ps1 puts the question text in that box', /\$box\.Text = \(\$env:CIZ_Q_TEXT/.test(ps));
+  check('confirm.ps1 puts the question text in that box', /\$box\.Text = \(\$env:CFX_Q_TEXT/.test(ps));
   check('confirm.ps1 keeps CRLF line endings', ps.endsWith('\r\n') && !/[^\r]\n/.test(ps));
 
   // ---- remote tool servers ask first
@@ -125,33 +125,33 @@ async function main() {
   check('a command cmd does not wrap is still asked, not refused', plain.asked.length === 1 && plain.result.error !== 'That command has characters cmd would run as another command.');
   const wrapped = await asWindows(() => addWith({ name: 'srv', target: 'npx -y tool' }));
   check('a plain npx command is wrapped in cmd /c and shown that way', wrapped.asked.length === 1 && wrapped.asked[0].text.includes('\n\ncmd\n/c\nnpx\n-y\ntool\n\n'));
-  // ---- the test hooks count only with CLAUDE_IN_ZEN_TEST=1: the pipe name (host/lib/paths.js)
+  // ---- the test hooks count only with CLAUDEFOX_TEST=1: the pipe name (host/lib/paths.js)
   const pathsFile = path.join(root, 'host', 'lib', 'paths.js');
   const pipeWith = extra => nodeWith(`process.stdout.write(require(${JSON.stringify(pathsFile)}).PIPE)`, extra);
   const defaultPipe = pipeWith({});
   const override = path.join(tmp, 'override.sock');
   check('the pipe has a default name when no override is set', !!defaultPipe && defaultPipe !== override, defaultPipe);
-  check('without CLAUDE_IN_ZEN_TEST, CLAUDE_IN_ZEN_PIPE does not move the pipe', !!defaultPipe && pipeWith({ CLAUDE_IN_ZEN_PIPE: override }) === defaultPipe);
-  check('with CLAUDE_IN_ZEN_TEST=1, CLAUDE_IN_ZEN_PIPE moves the pipe', pipeWith({ CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_PIPE: override }) === override);
+  check('without CLAUDEFOX_TEST, CLAUDEFOX_PIPE does not move the pipe', !!defaultPipe && pipeWith({ CLAUDEFOX_PIPE: override }) === defaultPipe);
+  check('with CLAUDEFOX_TEST=1, CLAUDEFOX_PIPE moves the pipe', pipeWith({ CLAUDEFOX_TEST: '1', CLAUDEFOX_PIPE: override }) === override);
 
-  // ---- the test hooks count only with CLAUDE_IN_ZEN_TEST=1: the tool server's script (host/zen-mcp.js)
+  // ---- the test hooks count only with CLAUDEFOX_TEST=1: the tool server's script (host/claudefox-mcp.js)
   const scriptFile = path.join(tmp, 'script.json'), scriptLog = path.join(tmp, 'script-calls.jsonl');
   fs.writeFileSync(scriptFile, JSON.stringify({ log: scriptLog, results: { get_page_text: 'SCRIPTED-PAGE' } }));
-  const serverEnv = extra => childEnv({ TMPDIR: tmp, LOCALAPPDATA: path.join(tmp, 'local-server'), CLAUDE_IN_ZEN_SCRIPT: scriptFile, ...extra });
+  const serverEnv = extra => childEnv({ TMPDIR: tmp, LOCALAPPDATA: path.join(tmp, 'local-server'), CLAUDEFOX_SCRIPT: scriptFile, ...extra });
   const off = await askToolServer(serverEnv({}), 'get_page_text');
-  check('without CLAUDE_IN_ZEN_TEST the script is ignored: no scripted answer, no call logged', off !== null && !JSON.stringify(off).includes('SCRIPTED-PAGE') && !fs.existsSync(scriptLog), JSON.stringify(off));
-  const on = await askToolServer(serverEnv({ CLAUDE_IN_ZEN_TEST: '1' }), 'get_page_text');
-  check('with CLAUDE_IN_ZEN_TEST=1 the script answers the call, and the call is logged', on !== null && JSON.stringify(on).includes('SCRIPTED-PAGE') && fs.existsSync(scriptLog), JSON.stringify(on));
+  check('without CLAUDEFOX_TEST the script is ignored: no scripted answer, no call logged', off !== null && !JSON.stringify(off).includes('SCRIPTED-PAGE') && !fs.existsSync(scriptLog), JSON.stringify(off));
+  const on = await askToolServer(serverEnv({ CLAUDEFOX_TEST: '1' }), 'get_page_text');
+  check('with CLAUDEFOX_TEST=1 the script answers the call, and the call is logged', on !== null && JSON.stringify(on).includes('SCRIPTED-PAGE') && fs.existsSync(scriptLog), JSON.stringify(on));
 
   // ---- an army limit can be lowered through its variable, never raised (host/lib/armyguard.js)
   const armyFile = path.join(root, 'host', 'lib', 'armyguard.js');
   const limitsWith = extra => { const out = nodeWith(`process.stdout.write(JSON.stringify(require(${JSON.stringify(armyFile)}).LIMITS))`, extra); return out === null ? null : JSON.parse(out); };
-  const ARMY_VARS = ['CLAUDE_IN_ZEN_ARMY_CALLS', 'CLAUDE_IN_ZEN_ARMY_NAVS', 'CLAUDE_IN_ZEN_ARMY_PAGES', 'CLAUDE_IN_ZEN_ARMY_EXTRA_TABS', 'CLAUDE_IN_ZEN_ARMY_SOFT_MS', 'CLAUDE_IN_ZEN_ARMY_HARD_MS', 'CLAUDE_IN_ZEN_ARMY_RUN_MS'];
+  const ARMY_VARS = ['CLAUDEFOX_ARMY_CALLS', 'CLAUDEFOX_ARMY_NAVS', 'CLAUDEFOX_ARMY_PAGES', 'CLAUDEFOX_ARMY_EXTRA_TABS', 'CLAUDEFOX_ARMY_SOFT_MS', 'CLAUDEFOX_ARMY_HARD_MS', 'CLAUDEFOX_ARMY_RUN_MS'];
   const defaults = limitsWith({});
   const atDefaults = o => o !== null && !!defaults && JSON.stringify(o) === JSON.stringify(defaults);
   check('no army limit can be raised through its variable', atDefaults(limitsWith(Object.fromEntries(ARMY_VARS.map(k => [k, '1000000000'])))));
-  check('an infinite or junk army limit keeps its default', ['Infinity', 'abc', '0', '-5'].every(v => atDefaults(limitsWith({ CLAUDE_IN_ZEN_ARMY_CALLS: v, CLAUDE_IN_ZEN_ARMY_HARD_MS: v }))));
-  const lower = limitsWith({ CLAUDE_IN_ZEN_ARMY_CALLS: '3' });
+  check('an infinite or junk army limit keeps its default', ['Infinity', 'abc', '0', '-5'].every(v => atDefaults(limitsWith({ CLAUDEFOX_ARMY_CALLS: v, CLAUDEFOX_ARMY_HARD_MS: v }))));
+  const lower = limitsWith({ CLAUDEFOX_ARMY_CALLS: '3' });
   check('an army limit can be lowered through its variable', !!defaults && lower !== null && lower.calls === 3 && Object.keys(defaults).every(k => k === 'calls' || lower[k] === defaults[k]), JSON.stringify(lower));
 }
 

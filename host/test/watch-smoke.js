@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 // The data folder goes to a temp folder before any helper module loads (paths are read at require time): a watch run
 // is listed in children.json, which must never land in the real data folder.
-process.env.LOCALAPPDATA = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-watch-data-'));
+process.env.LOCALAPPDATA = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-watch-data-'));
 
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
@@ -14,7 +14,7 @@ const deepEqual = (a, b) => { try { assert.deepStrictEqual(a, b); return true; }
 
 const { checkSource, checkQuestion, checkTime, buildArgv, buildEnv } = require('../lib/watchvideo');
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-watch-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-watch-'));
 try {
   // section args
   const videoFile = path.join(tmp, 'clip.mp4');
@@ -30,10 +30,10 @@ try {
   check('a video inside an allowed folder is accepted', checkSource(videoFile, real => path.dirname(real)).kind === 'file');
   check('a question over 500 characters is refused', checkQuestion('x'.repeat(501)).ok === false);
   check('a time with a dash is refused', checkTime('-5') === null && checkTime('1:30') === '1:30');
-  const env = buildEnv({ PATH: '/bin', HOME: '/h', GEMINI_API_KEY: 'k', WATCH_ENGINE: 'gemini', MY_API_KEY: 'y', PYTHONPATH: '/p', CLAUDE_IN_ZEN_ARMY_TOKEN: 't' });
+  const env = buildEnv({ PATH: '/bin', HOME: '/h', GEMINI_API_KEY: 'k', WATCH_ENGINE: 'gemini', MY_API_KEY: 'y', PYTHONPATH: '/p', CLAUDEFOX_ARMY_TOKEN: 't' });
   check('the child gets PATH, HOME and UTF-8 only: no keys, no WATCH_ settings, no PYTHONPATH',
     env.PATH === '/bin' && env.PYTHONUTF8 === '1' && !('GEMINI_API_KEY' in env) && !('WATCH_ENGINE' in env)
-    && !('MY_API_KEY' in env) && !('PYTHONPATH' in env) && !('CLAUDE_IN_ZEN_ARMY_TOKEN' in env));
+    && !('MY_API_KEY' in env) && !('PYTHONPATH' in env) && !('CLAUDEFOX_ARMY_TOKEN' in env));
   check('no argument can carry a cookie option', !buildArgv({ script: 's', source: 'https://a.b', runDir: '/r' }).some(a => /cookie/i.test(a)));
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -71,7 +71,7 @@ async function goneWithin(pid, ms) {
 async function runSection() {
   const { createWatchRuns, makeRunDir, removeRunDir } = require('../lib/watchrun');
   const { killTree } = require('../lib/army');
-  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-run-'));
+  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-run-'));
   try {
     const runs = createWatchRuns({ killTree });
     const node = code => ({ exe: process.execPath, args: ['-e', code], cwd: t, env: process.env });
@@ -97,7 +97,7 @@ async function runSection() {
 // section result (Task 6): report assembly
 async function resultSection() {
   const { assembleResult } = require('../lib/watchvideo');
-  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-result-'));
+  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-result-'));
   try {
     const work = path.join(t, 'run-1', 'watch-x', 'frames');
     fs.mkdirSync(work, { recursive: true });
@@ -243,7 +243,7 @@ async function handlerSection() {
   const { createWatchRuns } = require('../lib/watchrun');
   const { killTree } = require('../lib/army');
   const { DENIED } = require('../lib/watchgate');
-  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-handler-'));
+  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-handler-'));
   try {
     const stub = path.join(t, 'stub-watch.js');
     fs.writeFileSync(stub, [
@@ -306,9 +306,9 @@ function listedTools(extraEnv, base) {
   const { spawn } = require('child_process');
   return new Promise((resolve, reject) => {
     const env = { ...process.env, LOCALAPPDATA: base };
-    for (const k of ['CLAUDE_IN_ZEN_WATCH', 'CLAUDE_IN_ZEN_PANEL', 'CLAUDE_IN_ZEN_ARMY_TOKEN', 'CLAUDE_IN_ZEN_ARMY_LEAD']) delete env[k];
+    for (const k of ['CLAUDEFOX_WATCH', 'CLAUDEFOX_PANEL', 'CLAUDEFOX_ARMY_TOKEN', 'CLAUDEFOX_ARMY_LEAD']) delete env[k];
     Object.assign(env, extraEnv);
-    const child = spawn(process.execPath, [path.join(__dirname, '..', 'zen-mcp.js')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-mcp.js')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
     const timer = setTimeout(() => { child.kill(); reject(new Error('the tool server did not answer tools/list')); }, 8000);
     child.on('error', e => { clearTimeout(timer); reject(e); });
     child.stdin.on('error', () => {});
@@ -333,8 +333,8 @@ async function surfaceSection() {
   const { TOOLS, PAGE_CONTENT } = require('../lib/toolSchemas');
   const { WORKER_TOOLS, checkCall } = require('../lib/armyguard');
   const { chatPrompt } = require('../lib/chatargs');
-  const { format } = require('../zen-mcp');   // loads without starting the tool server: its startup runs only as the main module
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-surface-'));
+  const { format } = require('../claudefox-mcp');   // loads without starting the tool server: its startup runs only as the main module
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-surface-'));
   try {
     const listed = env => listedTools(env, base).catch(() => []);
     const t = TOOLS.find(x => x.name === 'watch_video');
@@ -345,9 +345,9 @@ async function surfaceSection() {
       && c[1].type === 'image' && c[1].data === 'AAAA' && c[1].mimeType === 'image/jpeg');
     check('the prompt has the watch line only when o.watch is set, and calls the content untrusted evidence', chatPrompt([], { watch: true }).includes('untrusted evidence')
       && !chatPrompt([], {}).includes('watch_video') && chatPrompt([], {}) === chatPrompt([], { watch: false }));
-    const on = await listed({ CLAUDE_IN_ZEN_WATCH: '1' });
+    const on = await listed({ CLAUDEFOX_WATCH: '1' });
     const off = await listed({});
-    check('the tool server lists watch_video only while CLAUDE_IN_ZEN_WATCH is 1', on.includes('watch_video') && !off.includes('watch_video'));
+    check('the tool server lists watch_video only while CLAUDEFOX_WATCH is 1', on.includes('watch_video') && !off.includes('watch_video'));
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }

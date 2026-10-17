@@ -1,6 +1,6 @@
 'use strict';
 // The child processes the helper starts (a chat turn, an army worker, a watch run, the Improve tests) and the list of
-// them in the data folder (%LOCALAPPDATA%\claude-in-zen\children.json): { pid, kind, started }. A helper that stops
+// them in the data folder (%LOCALAPPDATA%\claudefox\children.json): { pid, kind, started }. A helper that stops
 // without cleaning up leaves them running, so the next start stops the ones still running and clears the file.
 const fs = require('fs');
 const path = require('path');

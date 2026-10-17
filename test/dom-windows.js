@@ -72,7 +72,7 @@ function makePanel(windowId) {
     downloads: { download: async () => 1 },
   };
   w.URL.createObjectURL = () => 'blob:x'; w.URL.revokeObjectURL = () => {};
-  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
   w.eval(fs.readFileSync(EXT + 'lib/wall.js', 'utf8'));
   evalPanel(dom, EXT, panelFiles);
   connectEv.fire(P.bg);
@@ -98,11 +98,11 @@ function makePanel(windowId) {
   await A.say('hello from one');
   await B.say('hello from two');
   ok('each panel sends its window id with the message', fromPanels.filter(m => m.type === 'chat').map(m => m.windowId).join() === '1,2', JSON.stringify(fromPanels.filter(m => m.type === 'chat')));
-  ok('window 1\'s message runs on window 1\'s active tab, and the gate\'s window is window 1', chatsToHelper()[0].tab.id === 1 && g('cizSiteGate').windowId() === 1, JSON.stringify(chatsToHelper()[0]));
+  ok('window 1\'s message runs on window 1\'s active tab, and the gate\'s window is window 1', chatsToHelper()[0].tab.id === 1 && g('cfxSiteGate').windowId() === 1, JSON.stringify(chatsToHelper()[0]));
   ok('window 2\'s message waits: the helper got only the first', chatsToHelper().length === 1);
   await helperSays({ type: 'chat_event', id: chatsToHelper()[0].id, event: { kind: 'text', text: 'answer one' } });
   await helperSays({ type: 'chat_done', id: chatsToHelper()[0].id, ok: true, sessionId: 'sess-1' });
-  ok('then window 2\'s message starts on window 2\'s active tab, and the gate\'s window is window 2', chatsToHelper().length === 2 && chatsToHelper()[1].tab.id === 3 && g('cizSiteGate').windowId() === 2, JSON.stringify(chatsToHelper()[1]));
+  ok('then window 2\'s message starts on window 2\'s active tab, and the gate\'s window is window 2', chatsToHelper().length === 2 && chatsToHelper()[1].tab.id === 3 && g('cfxSiteGate').windowId() === 2, JSON.stringify(chatsToHelper()[1]));
   ok('window 2 starts its own chat (no session of window 1)', chatsToHelper()[1].resume === '', JSON.stringify(chatsToHelper()[1].resume));
   await helperSays({ type: 'chat_event', id: chatsToHelper()[1].id, event: { kind: 'text', text: 'answer two' } });
   await helperSays({ type: 'chat_done', id: chatsToHelper()[1].id, ok: true, sessionId: 'sess-2' });

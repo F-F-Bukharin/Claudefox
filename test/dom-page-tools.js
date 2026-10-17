@@ -15,9 +15,9 @@ const w=dom.window;
 w.Element.prototype.getBoundingClientRect=()=>({width:10,height:10});
 Object.defineProperty(w.HTMLElement.prototype,'innerText',{get(){return this.textContent}});
 w.Element.prototype.scrollIntoView=()=>{};
-// run the injected page code (cizPageCode) inside the jsdom window, the way executeScript does
-const ctx=vm.createContext({URL});vm.runInContext(src+';this.cizPageCode=cizPageCode;this.cizSensitiveField=cizSensitiveField;this.cizUrlBlocked=cizUrlBlocked;',ctx);
-const run=(op,args)=>w.eval(ctx.cizPageCode(op,args));
+// run the injected page code (cfxPageCode) inside the jsdom window, the way executeScript does
+const ctx=vm.createContext({URL});vm.runInContext(src+';this.cfxPageCode=cfxPageCode;this.cfxSensitiveField=cfxSensitiveField;this.cfxUrlBlocked=cfxUrlBlocked;',ctx);
+const run=(op,args)=>w.eval(ctx.cfxPageCode(op,args));
 const err=(op,args)=>{try{run(op,args);return null}catch(e){return e.message}};
 const r=run('read',{});
 ok('read lists heading and controls', /h1: Shop/.test(r.text)&&/textbox "Search"/.test(r.text)&&/button "Add to cart"/.test(r.text), '\n'+r.text);
@@ -45,13 +45,13 @@ ok('type_text refuses password', /password field/.test(err('type',{selector:'#pw
 let hov=0; w.document.getElementById('go').addEventListener('mouseover',()=>hov++); run('hover',{selector:'#go'}); ok('hover sends mouseover', hov===1);
 ok('exists by text', run('exists',{text:'add to cart'})===true && run('exists',{text:'nope'})===false);
 ok('bad selector message', /valid CSS/.test(err('click',{selector:'##'})||''));
-// policy gate used by cizPageTab / navigate / tab_open
+// policy gate used by cfxPageTab / navigate / tab_open
 for (const [u,b] of [['https://accounts.google.com/signin','y'],['https://www.google.com/ServiceLogin','y'],['https://myaccount.google.com/','y'],['about:config','y'],['file:///C:/x','y'],['https://mail.google.com/mail/u/0/','n'],['https://shop.example/','n']])
-  ok('url gate '+u, ctx.cizUrlBlocked(u).blocked===(b==='y'));
+  ok('url gate '+u, ctx.cfxUrlBlocked(u).blocked===(b==='y'));
 // Unsafe mode lifts only the Google rule; non-web pages stay refused
-ok('unsafe allows Google sign-in', ctx.cizUrlBlocked('https://accounts.google.com/signin',{unsafe:true}).blocked===false);
-ok('unsafe still refuses about:config', ctx.cizUrlBlocked('about:config',{unsafe:true}).blocked===true);
-ok('unsafe still refuses file: pages', ctx.cizUrlBlocked('file:///C:/x',{unsafe:true}).blocked===true);
+ok('unsafe allows Google sign-in', ctx.cfxUrlBlocked('https://accounts.google.com/signin',{unsafe:true}).blocked===false);
+ok('unsafe still refuses about:config', ctx.cfxUrlBlocked('about:config',{unsafe:true}).blocked===true);
+ok('unsafe still refuses file: pages', ctx.cfxUrlBlocked('file:///C:/x',{unsafe:true}).blocked===true);
 // real-click sequence, coordinates, display:contents, media
 const seen=[]; const go2=w.document.getElementById('go');
 for (const e of ['pointerdown','mousedown','mouseup','click']) go2.addEventListener(e,()=>seen.push(e));

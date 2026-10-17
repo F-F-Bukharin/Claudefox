@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 'use strict';
-// Claude in Zen: native messaging host.
+// Claudefox: native messaging host.
 //
-// Zen starts this process when the add-on calls runtime.connectNative('claude_in_zen') and ends it
+// Zen starts this process when the add-on calls runtime.connectNative('claudefox') and ends it
 // when the add-on disconnects (the Stop button, or Zen quitting). stdin/stdout carry the native
 // messaging protocol, so nothing else may ever write to stdout.
 //
 // Local clients (the Zen tool server that Claude Code starts) connect over a named pipe and must
-// present the per-session token stored in %LOCALAPPDATA%\claude-in-zen\pipe-token.
+// present the per-session token stored in %LOCALAPPDATA%\claudefox\pipe-token.
 
 const VERSION = '0.11.0';
 
@@ -156,7 +156,7 @@ function sendAddon(msg) {
 }
 
 // "Choose folder…": a Windows folder window (pick-folder.ps1, run in an STA thread, which the dialog needs).
-// CLAUDE_IN_ZEN_PICK is a test stub (read only with CLAUDE_IN_ZEN_TEST=1): the path to return, or "cancel". The stub and the
+// CLAUDEFOX_PICK is a test stub (read only with CLAUDEFOX_TEST=1): the path to return, or "cancel". The stub and the
 // real window end in the same finishPick. Picking a folder only tells the add-on which one; it never changes what was
 // allowed. The add-on asks the confirm window for the new folder (answerConfirm) before file tools move to it.
 let folderWindowOpen = false;
@@ -164,7 +164,7 @@ function finishPick(picked) {
   sendAddon({ type: 'pick_folder_result', ok: true, path: picked, cancelled: !picked });
 }
 function pickFolder() {
-  const stub = P.testHook('CLAUDE_IN_ZEN_PICK');
+  const stub = P.testHook('CLAUDEFOX_PICK');
   if (stub !== undefined) return finishPick(stub === 'cancel' ? '' : stub);
   if (folderWindowOpen) return sendAddon({ type: 'pick_folder_result', ok: false, error: 'A folder window is already open.' });
   if (process.platform !== 'win32') return sendAddon({ type: 'pick_folder_result', ok: false, error: 'The folder window works on Windows. Type the path instead.' });
@@ -367,7 +367,7 @@ server.on('error', err => {
   sendAddon({
     type: 'host_error',
     error: err.code === 'EADDRINUSE'
-      ? 'Another Claude in Zen helper is already running. Restart Zen.'
+      ? 'Another Claudefox helper is already running. Restart Zen.'
       : `The local link failed to start: ${err.message}`,
   });
 });

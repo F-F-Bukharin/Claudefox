@@ -1,6 +1,6 @@
 'use strict';
-// Inject once (C14) and the page text cache (C13): cizInPage installs the page operation once per document as
-// window.__cizOp (version window.__cizOpV) and later calls send only a small probe; get_page_text keeps its converted text 60 s.
+// Inject once (C14) and the page text cache (C13): cfxInPage installs the page operation once per document as
+// window.__cfxOp (version window.__cfxOpV) and later calls send only a small probe; get_page_text keeps its converted text 60 s.
 // DOM test (jsdom): needs jsdom (npm i --no-save jsdom, or NODE_PATH pointing at one). Skips without it.
 let JSDOM;
 try { ({ JSDOM } = require('jsdom')); } catch { console.log('SKIP  jsdom not installed'); process.exit(0); }
@@ -27,37 +27,37 @@ let w = newPage(HTML), sent = 0, calls = 0;
 
 // executeScript as the add-on's content-script world runs it: the code is evaluated in the current document, bytes counted.
 const ctx = vm.createContext({ URL, Date });
-vm.runInContext(src + ';this.cizPageCode=cizPageCode;', ctx);
+vm.runInContext(src + ';this.cfxPageCode=cfxPageCode;', ctx);
 ctx.browser = { tabs: { executeScript: async (id, o) => { calls++; sent += o.code.length; return [w.eval(o.code)]; } } };
-ctx.CIZ_FILE_ACCESS_OFF = 'file access is off';
-const fn = toolsSrc.match(/async function cizInPage[\s\S]*?\n}\n/);
-if (!fn) { console.log('FAIL cizInPage not found in pageTools.js'); process.exit(1); }
-vm.runInContext(fn[0] + ';this.cizInPage=cizInPage;', ctx);
+ctx.CFX_FILE_ACCESS_OFF = 'file access is off';
+const fn = toolsSrc.match(/async function cfxInPage[\s\S]*?\n}\n/);
+if (!fn) { console.log('FAIL cfxInPage not found in pageTools.js'); process.exit(1); }
+vm.runInContext(fn[0] + ';this.cfxInPage=cfxInPage;', ctx);
 const tab = { id: 1, url: 'https://shop.example/' };
-const call = async (op, args) => { sent = 0; calls = 0; const r = await ctx.cizInPage(tab, op, args); return { r: JSON.parse(JSON.stringify(r === undefined ? null : r)), sent, calls }; };
+const call = async (op, args) => { sent = 0; calls = 0; const r = await ctx.cfxInPage(tab, op, args); return { r: JSON.parse(JSON.stringify(r === undefined ? null : r)), sent, calls }; };
 
 (async () => {
-  const full = ctx.cizPageCode('text', {}).length;
+  const full = ctx.cfxPageCode('text', {}).length;
   // C14: first call installs, later calls probe.
   const a = await call('exists', { selector: '#b' });
   ok('first call on a fresh document sends the full code', a.sent >= full - 200 && a.r === true, `sent ${a.sent} bytes, ${a.calls} call(s), ${JSON.stringify(a.r)}`);
-  ok('it installs __cizOp and a version', typeof w.__cizOp === 'function' && typeof w.__cizOpV === 'string' && w.__cizOpV.length > 0, String(w.__cizOpV));
-  const v = w.__cizOpV;
+  ok('it installs __cfxOp and a version', typeof w.__cfxOp === 'function' && typeof w.__cfxOpV === 'string' && w.__cfxOpV.length > 0, String(w.__cfxOpV));
+  const v = w.__cfxOpV;
   const b = await call('exists', { selector: '#b' });
   ok('the second call sends only the probe (under 2 KB) with the same result', b.sent < 2048 && b.calls === 1 && JSON.stringify(b.r) === JSON.stringify(a.r), `sent ${b.sent} bytes, ${b.calls} call(s)`);
-  ok('the version did not change', w.__cizOpV === v);
+  ok('the version did not change', w.__cfxOpV === v);
   // A new document gets the full code again.
   w = newPage(HTML);
   const c = await call('exists', { selector: '#b' });
-  ok('a new document gets the full code again', c.sent >= full - 200 && c.r === true && w.__cizOpV === v, `sent ${c.sent}`);
+  ok('a new document gets the full code again', c.sent >= full - 200 && c.r === true && w.__cfxOpV === v, `sent ${c.sent}`);
   // An older version is reinstalled.
-  w.__cizOpV = 'old'; w.__cizOp = () => ({ stale: true });
+  w.__cfxOpV = 'old'; w.__cfxOp = () => ({ stale: true });
   const d1 = await call('exists', { selector: '#b' });
-  ok('an older __cizOpV gets the full code', d1.sent >= full - 200 && d1.r === true && w.__cizOpV === v, JSON.stringify(d1.r));
+  ok('an older __cfxOpV gets the full code', d1.sent >= full - 200 && d1.r === true && w.__cfxOpV === v, JSON.stringify(d1.r));
   // Probe with a missing function but the right version marker still installs.
-  delete w.__cizOp;
+  delete w.__cfxOp;
   const d2 = await call('exists', { selector: '#b' });
-  ok('a version without the function gets the full code', d2.r === true && typeof w.__cizOp === 'function');
+  ok('a version without the function gets the full code', d2.r === true && typeof w.__cfxOp === 'function');
   // Probe args are data, not code.
   const tricky = await call('exists', { selector: '#b', note: "'; throw new Error('x'); // \"" });
   ok('arguments with quotes and line separators reach the op as data', tricky.r === true && tricky.sent < 2048);
@@ -65,7 +65,7 @@ const call = async (op, args) => { sent = 0; calls = 0; const r = await ctx.cizI
   const ops = [['read', {}], ['find', { query: 'Next' }], ['exists', { selector: '#lnk' }], ['classify', { selector: '#lnk' }], ['analyze', {}], ['viewport', {}], ['selection', {}]];
   for (const [op, args] of ops) {
     const probe = await call(op, args);                                   // installed: probe path
-    const wf = newPage(HTML); const fresh = JSON.parse(JSON.stringify(wf.eval(ctx.cizPageCode(op, args))));
+    const wf = newPage(HTML); const fresh = JSON.parse(JSON.stringify(wf.eval(ctx.cfxPageCode(op, args))));
     const norm = x => JSON.stringify(x).replace(/ref_\d+/g, 'ref');
     ok(`${op} through the installed function matches a fresh install`, probe.sent < 2048 && norm(probe.r) === norm(fresh), `sent ${probe.sent}`);
   }
@@ -108,7 +108,7 @@ const call = async (op, args) => { sent = 0; calls = 0; const r = await ctx.cizI
   ok('a query answers from the cached conversion when there is one for the same scope, and is right', /shoes/.test(tq.r.text));
   w.history.pushState({}, '', '/other');
   conversions = 0; await t({}); ok('another URL in the same document is a different key', conversions > 0);
-  const cacheKeys = JSON.stringify(Object.keys(w.__cizSt || {}).sort());
-  ok('the cache lives in window.__cizSt next to the refs', /"refs"/.test(cacheKeys) && /"seq"/.test(cacheKeys), cacheKeys);
+  const cacheKeys = JSON.stringify(Object.keys(w.__cfxSt || {}).sort());
+  ok('the cache lives in window.__cfxSt next to the refs', /"refs"/.test(cacheKeys) && /"seq"/.test(cacheKeys), cacheKeys);
   console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
 })().catch(e => { console.log('FAIL ' + (e && e.stack || e)); process.exit(1); });

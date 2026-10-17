@@ -2,7 +2,7 @@
 // Session state. Lives in storage.session, so quitting Zen wipes it. Sign-in comes back on its own at
 // startup from a remembered marker in storage.local (see lib/bg-accounts.js, "Remembered sign-in").
 
-const CIZ_DEFAULT_STATE = Object.freeze({
+const CFX_DEFAULT_STATE = Object.freeze({
   mods: [],                   // from the helper: { id, name, description, panel, style, enabled, broken }
   modsKnown: false,           // true once the helper has listed the mods folder; the panel loads the on mods then, once
   agent: 'active',            // 'active' | 'stopped'
@@ -39,6 +39,7 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   draft: null,                // { text, windowId } from a right-click item, for that window's text bar (the panel takes it)
   native: 'unknown',          // 'unknown' | 'connected' | 'missing' | 'error'
   nativeDetail: '',
+  nativeNotice: '',           // "Re-run Set up Claudefox.bat…": shown while only the old helper registration answers (or neither does)
   hostVersion: '',
   sourceVersion: '',          // add-on version in the project folder the helper runs from
   canUpdate: false,           // the helper can rebuild and reinstall the add-on (source present)
@@ -55,13 +56,13 @@ const CIZ_DEFAULT_STATE = Object.freeze({
   fileAccess: 'unknown',      // 'yes' | 'no' | 'unknown': whether Zen lets the add-on into file: pages
 });
 
-const cizState = {
+const cfxState = {
   _cache: null,
   _listeners: new Set(),
 
   async load() {
     const got = await browser.storage.session.get(['state', 'log']);
-    this._cache = Object.assign({}, CIZ_DEFAULT_STATE, got.state || {}, { unsafe: false, watch: false, watchAsk: null, downloadAsk: null, siteAsk: null, fillAsk: null, uploadAsk: null, trusted: false, draft: null });   // never survive a restart
+    this._cache = Object.assign({}, CFX_DEFAULT_STATE, got.state || {}, { unsafe: false, watch: false, watchAsk: null, downloadAsk: null, siteAsk: null, fillAsk: null, uploadAsk: null, trusted: false, draft: null });   // never survive a restart
     this._log = Array.isArray(got.log) ? got.log : [];
     return this._cache;
   },
@@ -77,7 +78,7 @@ const cizState = {
 
   async addLog(kind, text) {
     this._log.push({ t: Date.now(), kind, text: String(text).slice(0, 500) });
-    if (this._log.length > CIZ.LOG_LIMIT) this._log.splice(0, this._log.length - CIZ.LOG_LIMIT);
+    if (this._log.length > CFX.LOG_LIMIT) this._log.splice(0, this._log.length - CFX.LOG_LIMIT);
     await browser.storage.session.set({ log: this._log });
     this._emit();
   },

@@ -2,7 +2,7 @@
 (async () => {
 // fill_form (E12): the page reads each field's label and refuses sensitive fields before any card; the user approves the
 // list in a card; Approve fills each field the way fill does; nothing is submitted. Page side: jsdom running the real page
-// code. Add-on side: lib/pageTools.js in a vm, whose cizInPage runs the real page code in that same jsdom page.
+// code. Add-on side: lib/pageTools.js in a vm, whose cfxInPage runs the real page code in that same jsdom page.
 // DOM test (jsdom): needs jsdom (npm i --no-save jsdom, or NODE_PATH pointing at one). Skips without it.
 let JSDOM;
 try { ({ JSDOM } = require('jsdom')); } catch { console.log('SKIP  jsdom not installed'); process.exit(0); }
@@ -29,9 +29,9 @@ w.Element.prototype.getBoundingClientRect = () => ({ width: 10, height: 10 });
 Object.defineProperty(w.HTMLElement.prototype, 'innerText', { get() { return this.textContent; } });
 let scrolls = 0; w.Element.prototype.scrollIntoView = () => { scrolls++; };
 const pctx = vm.createContext({ URL });
-vm.runInContext(src + ';this.cizPageCode=cizPageCode;', pctx);
+vm.runInContext(src + ';this.cfxPageCode=cfxPageCode;', pctx);
 // The page op as the add-on runs it (executeScript): the answer as plain JSON; a page error is thrown.
-const pageRun = (op, args) => JSON.parse(JSON.stringify(w.eval(pctx.cizPageCode(op, args))));
+const pageRun = (op, args) => JSON.parse(JSON.stringify(w.eval(pctx.cfxPageCode(op, args))));
 const sel = id => ({ selector: '#' + id });
 const F = (id, value) => ({ selector: '#' + id, value });
 let edits = 0, submits = 0;
@@ -53,18 +53,18 @@ await check('formlabels changes nothing on the page: value, scroll, events', () 
   return d.getElementById('name').value === 'old' && scrolls === s0 && edits === e0;
 });
 
-// ---- the add-on: lib/pageTools.js in a vm; cizInPage runs the real page code in the jsdom page above
+// ---- the add-on: lib/pageTools.js in a vm; cfxInPage runs the real page code in the jsdom page above
 const state = { trusted: false, unsafe: false, fillAsk: null };
 const sets = [], ops = [];
 const actx = vm.createContext({ console, URL, setTimeout, clearTimeout,
   pageOps: (op, args) => { ops.push(op); const { __army, ...a } = args || {}; return pageRun(op, a); },
-  cizState: { get: () => state, set: async p => { sets.push(p); Object.assign(state, p); } } });
+  cfxState: { get: () => state, set: async p => { sets.push(p); Object.assign(state, p); } } });
 vm.runInContext(fs.readFileSync(EXT + 'lib/pageTools.js', 'utf8'), actx, { filename: 'pageTools.js' });
-vm.runInContext(`cizSiteOf = url => new URL(url).host;
-  cizTabFor = async () => ({ id: 1, url: 'https://shop.example/' });
-  cizPageTab = async () => ({ id: 1, url: 'https://shop.example/' });
-  cizInPage = (tab, op, args) => pageOps(op, args);`, actx);
-const T = vm.runInContext('CIZ_TOOLS', actx), B = name => vm.runInContext(name, actx);
+vm.runInContext(`cfxSiteOf = url => new URL(url).host;
+  cfxTabFor = async () => ({ id: 1, url: 'https://shop.example/' });
+  cfxPageTab = async () => ({ id: 1, url: 'https://shop.example/' });
+  cfxInPage = (tab, op, args) => pageOps(op, args);`, actx);
+const T = vm.runInContext('CFX_TOOLS', actx), B = name => vm.runInContext(name, actx);
 const settle = p => p.then(res => ({ res }), e => ({ err: String((e && e.message) || e) }));
 const cardSet = () => sets.some(p => p.fillAsk);
 const nameVal = () => d.getElementById('name').value;
@@ -91,7 +91,7 @@ await check('the card lists label and value, values cut to 80 characters', async
   const c = state.fillAsk;
   const good = !!c && c.rows.length === 2 && c.rows[0].label === 'Your name' && c.rows[0].value === 'Ana'
     && c.rows[1].label === 'Town' && c.rows[1].value.length === 80 && c.rows[1].value.endsWith('…');
-  B('cizFillShown')(c.id); B('cizFillAnswer')(c.id, false);
+  B('cfxFillShown')(c.id); B('cfxFillAnswer')(c.id, false);
   await p;
   return good;
 });
@@ -100,7 +100,7 @@ await check('Approve fills each field as fill does, reports per field, and submi
   const p = settle(T.fill_form({ fields: [F('name', 'Ana'), F('town', 'Lisbon'), F('pick', 'Blue')] }));
   await tick();
   const c = state.fillAsk;
-  B('cizFillShown')(c.id); B('cizFillAnswer')(c.id, true);
+  B('cfxFillShown')(c.id); B('cfxFillAnswer')(c.id, true);
   const r = await p;
   const f = r.res && r.res.fields;
   return !r.err && nameVal() === 'Ana' && d.getElementById('town').value === 'Lisbon'
@@ -112,14 +112,14 @@ await check('Deny fills nothing and refuses with the card text', async () => {
   const p = settle(T.fill_form({ fields: [F('name', 'Bo')] }));
   await tick();
   const c = state.fillAsk;
-  B('cizFillShown')(c.id); B('cizFillAnswer')(c.id, false);
+  B('cfxFillShown')(c.id); B('cfxFillAnswer')(c.id, false);
   const r = await p;
   return r.err === 'The user did not approve filling this form.' && nameVal() === 'Ana';
 });
 await check('no answer is Deny: the card times out and nothing is filled', async () => {
-  vm.runInContext('CIZ_FILL_MS.shown = 20; CIZ_FILL_MS.answer = 20;', actx);
+  vm.runInContext('CFX_FILL_MS.shown = 20; CFX_FILL_MS.answer = 20;', actx);
   const r = await settle(T.fill_form({ fields: [F('name', 'Cy')] }));
-  vm.runInContext('CIZ_FILL_MS.shown = 5000; CIZ_FILL_MS.answer = 120000;', actx);
+  vm.runInContext('CFX_FILL_MS.shown = 5000; CFX_FILL_MS.answer = 120000;', actx);
   return r.err === 'The user did not approve filling this form.' && nameVal() === 'Ana' && state.fillAsk === null;
 });
 // Automatic mode (Trusted mode's state key) and Unsafe mode answer the card themselves; with both off it asks (the checks above).
@@ -128,7 +128,7 @@ const fillNoCard = async value => {
   const p = settle(T.fill_form({ fields: [F('name', value)] }));
   await tick();
   const shown = !!state.fillAsk || cardSet();
-  if (shown) { B('cizFillShown')(state.fillAsk.id); B('cizFillAnswer')(state.fillAsk.id, false); }
+  if (shown) { B('cfxFillShown')(state.fillAsk.id); B('cfxFillAnswer')(state.fillAsk.id, false); }
   return Object.assign({ shown }, await p);
 };
 await check('Automatic mode fills with no card, reports per field, and submits nothing', async () => {
@@ -154,9 +154,9 @@ await check('Automatic mode still refuses a password field before anything is fi
 });
 await check('Automatic mode in a scheduled macro\'s turn still shows the card', async () => {
   state.trusted = true;
-  vm.runInContext('cizSiteGate = { scheduled: () => true };', actx);
+  vm.runInContext('cfxSiteGate = { scheduled: () => true };', actx);
   const r = await fillNoCard('Di');
-  vm.runInContext('cizSiteGate = undefined;', actx);
+  vm.runInContext('cfxSiteGate = undefined;', actx);
   state.trusted = false;
   return r.shown && nameVal() !== 'Di';
 });
@@ -164,10 +164,10 @@ await check('Automatic off: the card is shown again', async () => {
   const r = await fillNoCard('Ed');
   return r.shown && nameVal() !== 'Ed';
 });
-await check('fill_form is an act tool for the site gate, as fill is', () => B("CIZ_ACT_TOOLS.has('fill_form')") === true);
+await check('fill_form is an act tool for the site gate, as fill is', () => B("CFX_ACT_TOOLS.has('fill_form')") === true);
 await check('a worker call to fill_form is refused: host guard refuses, worker lists leave it out', () => {
   const guard = require(path.join(__dirname, '..', 'host', 'lib', 'armyguard.js'));
-  const list = /CIZ_ARMY_TOOLS = new Set\(\[([^\]]*)\]/.exec(fs.readFileSync(EXT + 'lib/army.js', 'utf8'));
+  const list = /CFX_ARMY_TOOLS = new Set\(\[([^\]]*)\]/.exec(fs.readFileSync(EXT + 'lib/army.js', 'utf8'));
   return guard.checkCall({}, 'fill_form', { fields: [] }, 0).ok === false && !guard.WORKER_TOOLS.includes('fill_form')
     && !!list && !/fill_form/.test(list[1]);
 });
@@ -181,7 +181,7 @@ pw.browser = {
   storage: { session: { get: async () => ({}), set: async () => {} }, local: { get: async () => ({}), set: async () => {} }, onChanged: { addListener() {} } },
   tabs: { query: async () => [], onActivated: { addListener() {} }, onUpdated: { addListener() {} } },
 };
-pw.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+pw.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
 pw.eval(fs.readFileSync(EXT + 'lib/wall.js', 'utf8'));
 evalPanel(pdom, EXT, files);
 const $p = id => pw.document.getElementById(id);

@@ -22,10 +22,10 @@ function panelPage(dir) {
 function evalPanel(dom, dir, files, opts = {}) {
   const ctx = dom.getInternalVMContext();
   const { load } = require('./locales');
-  dom.window.CIZ_LOCALES = opts.locales || load();
+  dom.window.CFX_LOCALES = opts.locales || load();
   new vm.Script(fs.readFileSync(path.join(dir, 'lib', 'i18n.js'), 'utf8'), { filename: 'lib/i18n.js' }).runInContext(ctx);
-  dom.window.cizI18n.use(opts.lang || 'en');
-  dom.window.cizI18n.apply(dom.window.document);
+  dom.window.cfxI18n.use(opts.lang || 'en');
+  dom.window.cfxI18n.apply(dom.window.document);
   for (const f of files) new vm.Script(fs.readFileSync(path.join(dir, f), 'utf8'), { filename: f }).runInContext(ctx);
 }
 

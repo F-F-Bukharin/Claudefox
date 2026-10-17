@@ -29,7 +29,7 @@ function render() {
   const kind = showRaw ? 'raw' : /^(md|markdown)$/i.test(ext) ? 'md' : /^(csv|tsv)$/i.test(ext) ? 'csv'
     : /^(docx|pdf)$/i.test(ext) ? (html ? 'html' : 'md') : /^xlsx$/i.test(ext) ? (tables ? 'md' : 'csv')
       : /^(html?|doc)$/i.test(ext) ? 'html' : /^svg$/i.test(ext) ? 'svg' : /^json$/i.test(ext) ? 'json' : 'raw';
-  if (kind === 'md') cizMarkdown(view, file.content, (k, v) => { if (k === 'url') window.open(v, '_blank', 'noopener'); });
+  if (kind === 'md') cfxMarkdown(view, file.content, (k, v) => { if (k === 'url') window.open(v, '_blank', 'noopener'); });
   else if (kind === 'csv') {
     const first = file.content.split('\n')[0] || '';
     const sep = /tsv/i.test(ext) || (first.match(/\t/g) || []).length > (first.match(/,/g) || []).length ? '\t'
@@ -65,7 +65,7 @@ function render() {
     return;
   }
   file = Object.assign({}, meta, { content: got['file:' + id] });
-  document.title = `${file.name} · Claude in Zen`;
+  document.title = `${file.name} · Claudefox`;
   $('name').textContent = file.name;
   $('info').textContent = [file.title, `${(file.size / 1024).toFixed(file.size < 10240 ? 1 : 0)} KB`, new Date(file.created).toLocaleString()].filter(Boolean).join(' · ');
   render();

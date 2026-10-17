@@ -1,8 +1,8 @@
 'use strict';
-// Improve Claude in Zen. Claude edits a copy of the add-on, the helper checks the change and runs the add-on's tests
+// Improve Claudefox. Claude edits a copy of the add-on, the helper checks the change and runs the add-on's tests
 // on the copy, and the real add-on changes only when the user presses Apply. A run may change only its mods: the files
 // of one folder under extension/mods/ (mod.json, panel.js, style.css). Everything else stays as it is.
-// A proposal is a folder under %LOCALAPPDATA%\claude-in-zen\self\<id>:
+// A proposal is a folder under %LOCALAPPDATA%\claudefox\self\<id>:
 //   base\           the add-on as it was when the copy was made (Apply checks the real files still match it)
 //   work\           the copy Claude edits; the tests run here
 //   changes.diff    the whole change as a unified diff
@@ -190,7 +190,7 @@ function checkChanges(changes, workDir) {
     const hit = MOD_PATH.exec(rel);
     if (hit) mods.add(hit[1]);
     if (c.status === 'removed') problems.add(`${rel}: removes a file. Changes may only edit or add files.`);
-    else if (!isEditable(rel)) problems.add(`${rel}: not a mod file. A change may only touch extension/mods/<id>/ (mod.json, panel.js or style.css); the rest of Claude in Zen stays as it is.`);
+    else if (!isEditable(rel)) problems.add(`${rel}: not a mod file. A change may only touch extension/mods/<id>/ (mod.json, panel.js or style.css); the rest of Claudefox stays as it is.`);
     if (c.binary) { problems.add(`${rel}: a binary file. Only text files can change.`); continue; }
     if (c.size > MAX_FILE) problems.add(`${rel}: bigger than ${MAX_FILE / 1024} KB.`);
     if (workDir && hit && hit[2] === 'panel.js' && c.status !== 'removed') {
@@ -199,7 +199,7 @@ function checkChanges(changes, workDir) {
     }
     for (const [t, text] of c.ops) {
       if (t !== '+') continue;
-      if (COOKIE_RE.test(text)) problems.add(`${rel}: adds cookie access. Claude in Zen never reads or writes cookies.`);
+      if (COOKIE_RE.test(text)) problems.add(`${rel}: adds cookie access. Claudefox never reads or writes cookies.`);
       if (SECRET_RE.test(text)) problems.add(`${rel}: adds a key or secret. Keys stay in environment variables, never in files.`);
     }
   }
@@ -329,7 +329,7 @@ function memoryText() {
 function systemPrompt(sandbox) {
   const notes = memoryText();
   return [
-    "You are Claude, made by Anthropic, improving Claude in Zen: the add-on in the user's Zen browser that shows a Claude panel, and a small helper on the PC that runs Claude Code.",
+    "You are Claude, made by Anthropic, improving Claudefox: the add-on in the user's Zen browser that shows a Claude panel, and a small helper on the PC that runs Claude Code.",
     `You work only in this copy of the add-on: ${sandbox.work}. The real add-on is not touched. The user reads your change and presses Apply, and the helper runs the add-on's tests on the copy before that.`,
     '',
     '# Your changes are mods',
@@ -360,8 +360,8 @@ function systemPrompt(sandbox) {
 function request(text) {
   const t = String(text || '').trim();
   return t
-    ? `Improve Claude in Zen as the user asks:\n\n${t}`
-    : 'Improve Claude in Zen: pick the one change that would help the user most in the panel or the tools, make it, and keep it small.';
+    ? `Improve Claudefox as the user asks:\n\n${t}`
+    : 'Improve Claudefox: pick the one change that would help the user most in the panel or the tools, make it, and keep it small.';
 }
 
 // The flags of one improve run (Opus 5.5 at max effort, from the caller). settings: the account's settings from the
@@ -496,7 +496,7 @@ function apply(id, root) {
   return {
     ok: true,
     files: p.changes.map(c => c.path),
-    text: `Applied ${n} file${n === 1 ? '' : 's'}. Reload Claude in Zen to use the change${helper ? '; the helper changes need Zen restarted' : ''}.`
+    text: `Applied ${n} file${n === 1 ? '' : 's'}. Reload Claudefox to use the change${helper ? '; the helper changes need Zen restarted' : ''}.`
       + (newMods.length ? ` New mods start off: turn ${newMods.length === 1 ? `${newMods[0]} on` : `${newMods.join(', ')} on`} in Settings, Mods, then Reload panel.` : ''),
   };
 }
@@ -504,7 +504,7 @@ function apply(id, root) {
 function discard(id) {
   const p = proposals.get(String(id));
   if (p) drop(p);
-  return { ok: true, text: 'Discarded. Claude in Zen did not change.' };
+  return { ok: true, text: 'Discarded. Claudefox did not change.' };
 }
 
 module.exports = {

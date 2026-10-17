@@ -261,7 +261,7 @@ const TOOLS = [
     readOnly: true,
     timeoutMs: 180000,
   },
-  // Video watching (lib/watchvideo.js). Listed only while the tool server has watching on (zen-mcp.js WATCH).
+  // Video watching (lib/watchvideo.js). Listed only while the tool server has watching on (claudefox-mcp.js WATCH).
   {
     name: 'watch_video',
     title: 'Watch video',
@@ -375,7 +375,7 @@ for (const t of TOOLS) if (WAIT_150.includes(t.name)) t.timeoutMs = Math.max(t.t
 // Tools whose results carry page content, which the tool server labels as untrusted.
 // army_wait carries the workers' reports, which come from web pages.
 // local_files and local_file_read carry file names and file text from this computer; tabs_list carries page titles.
-// watch_video carries a video's captions; its frames come back as images after the text (zen-mcp.js).
+// watch_video carries a video's captions; its frames come back as images after the text (claudefox-mcp.js).
 const PAGE_CONTENT = new Set(['tabs_list', 'army_wait', 'read_page', 'get_page_text', 'find', 'analyze_page', 'get_selection', 'read_document', 'local_files', 'local_file_read', 'watch_video', 'network_log', 'console_log']);
 
 module.exports = { TOOLS, PAGE_CONTENT };

@@ -87,7 +87,7 @@ const panel = { name: 'panel', onMessage: panelOnMsg, onDisconnect: ev(), postMe
 const fromPanel = async m => { panelOnMsg.fire(m); await tick(); };
 const helperSays = async m => { native.onMessage.fire(m); await tick(); };
 const g = name => vm.runInContext(name, ctx);
-const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
+const call = (tool, args) => ctx.cfxDebug.call(tool, args || {});
 let seq = 0;
 // A worker's tool call from the helper; resolves with the result the add-on sends back.
 async function armyCall(tool, args, worker = 'w1', run = 'r1') {
@@ -117,14 +117,14 @@ const answerConfirm = async ok => {
     await fromPanel({ type: 'signIn' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
     await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'f.work@example.com' });
-    await g('cizState').set({ trusted: true });   // fixture: these checks are about the army's tabs; the site gate's own checks are in test/site-wiring.js
-    const army = g('cizArmy');
+    await g('cfxState').set({ trusted: true });   // fixture: these checks are about the army's tabs; the site gate's own checks are in test/site-wiring.js
+    const army = g('cfxArmy');
 
     // 1. tools a worker may not use
     let n = injected.length;
     const r1 = [await armyCall('tabs_list'), await armyCall('tab_activate', { tab_id: 1 }), await armyCall('create_file', { name: 'x.txt', content: 'x' })];
     check('an army call with tabs_list, tab_activate or create_file is refused and nothing runs',
-      r1.every(r => !r.ok && /Army workers can't use/.test(r.error)) && updated.length === 0 && injected.length === n && !g('cizState').log().some(e => /Claude made/.test(e.text)), r1.map(r => r.error).join(' | '));
+      r1.every(r => !r.ok && /Army workers can't use/.test(r.error)) && updated.length === 0 && injected.length === n && !g('cfxState').log().some(e => /Claude made/.test(e.text)), r1.map(r => r.error).join(' | '));
 
     // 2. tab_open: always in the background, registered to the worker
     let r = await armyCall('tab_open', { url: 'https://a.example/', active: true });
@@ -160,7 +160,7 @@ const answerConfirm = async ok => {
     tabOf(A).url = 'about:config';
     const onAbout = await armyCall('read_page', { tab_id: A });
     const shotAbout = await armyCall('screenshot', { tab_id: A });
-    check('an army call on a Google sign-in tab is refused even with Unsafe mode on', g('cizState').get().unsafe && !onGoogle.ok && /Google sign-in/.test(onGoogle.error)
+    check('an army call on a Google sign-in tab is refused even with Unsafe mode on', g('cfxState').get().unsafe && !onGoogle.ok && /Google sign-in/.test(onGoogle.error)
       && !toGoogle.ok && /Google sign-in/.test(toGoogle.error) && normal.ok && injected.length === n + 1, `${onGoogle.error} | ${toGoogle.error}`);
     check('an army call on a file: or about: tab is refused: army workers only work on web pages',
       [onFile, onAbout, shotAbout].every(x => !x.ok && /only work on web pages/.test(x.error)) && injected.length === n + 1, `${onFile.error} | ${onAbout.error} | ${shotAbout.error}`);
@@ -260,7 +260,7 @@ const answerConfirm = async ok => {
     check('a tab that started opening before Stop is closed when it arrives', removed.includes(777) && !army.owner(777));
     await fromPanel({ type: 'start' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
-    await g('cizState').set({ trusted: true });   // fixture: Stop turns Trusted off (page safety, A5); these checks are about the army's tabs
+    await g('cfxState').set({ trusted: true });   // fixture: Stop turns Trusted off (page safety, A5); these checks are about the army's tabs
     const s3 = (await armyCall('tab_open', { url: 'https://s3.example/' }, 'w1', 'r3')).result.tab_id;
     rm = removed.length;
     native.onDisconnect.fire({ error: null });
@@ -278,7 +278,7 @@ const answerConfirm = async ok => {
     check('a worker call that arrives while Stop runs opens no tab', created.length === c0, JSON.stringify(created.slice(c0)));
     await fromPanel({ type: 'start' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
-    await g('cizState').set({ trusted: true });   // fixture: Stop turns Trusted off (page safety, A5)
+    await g('cfxState').set({ trusted: true });   // fixture: Stop turns Trusted off (page safety, A5)
 
     // 17. only the helper's army field makes a worker call
     native.onMessage.fire({ type: 'call', id: 'bad1', tool: 'tab_open', args: { url: 'https://bad.example/' }, source: 'x', army: 'w1' });
@@ -290,37 +290,37 @@ const answerConfirm = async ok => {
 
     // 11. the army switch
     await fromPanel({ type: 'setArmy', value: true });
-    let s = g('cizState').get();
+    let s = g('cfxState').get();
     check('setArmy true turns the army on, picks Quality and is remembered', s.chatArmy === true && s.chatModel === 'quality' && local.armyOn === true);
     await fromPanel({ type: 'chat', id: 'a1', text: 'compare three shops' });
     const sentArmy = native.sent.find(m => m.type === 'chat' && m.id === 'a1');
-    check('the next chat goes to the helper with model army', sentArmy && sentArmy.model === 'army' && g('cizState').log().some(e => /army \(Opus 5\.5 at high effort, with Haiku workers\)/.test(e.text)), sentArmy && sentArmy.model);
+    check('the next chat goes to the helper with model army', sentArmy && sentArmy.model === 'army' && g('cfxState').log().some(e => /army \(Opus 5\.5 at high effort, with Haiku workers\)/.test(e.text)), sentArmy && sentArmy.model);
 
     // 13. the run counter
     await helperSays({ type: 'chat_event', id: 'a1', event: { kind: 'army', run: 'r9', round: 1, started: true, finished: false, workers: [] } });
     const first = panelIn.filter(m => m.type === 'chatEvent' && m.id === 'a1' && m.event.kind === 'army').pop();
-    check('an army run that starts is counted and reaches the panel with today', first && first.event.today === 1 && g('cizState').get().armyToday === 1
+    check('an army run that starts is counted and reaches the panel with today', first && first.event.today === 1 && g('cfxState').get().armyToday === 1
       && local.armyRuns.day === day() && local.armyRuns.count === 1, JSON.stringify(first && first.event));
     await helperSays({ type: 'chat_event', id: 'a1', event: { kind: 'army', run: 'r9', round: 1, started: false, finished: true, workers: [] } });
     const later = panelIn.filter(m => m.type === 'chatEvent' && m.id === 'a1' && m.event.kind === 'army').pop();
-    check('later army events reach the panel as they are, not counted', later.event.finished === true && !('today' in later.event) && g('cizState').get().armyToday === 1);
+    check('later army events reach the panel as they are, not counted', later.event.finished === true && !('today' in later.event) && g('cfxState').get().armyToday === 1);
     local.armyRuns = { day: '2000-01-01', count: 4 };
     await helperSays({ type: 'chat_event', id: 'a1', event: { kind: 'army', run: 'r10', round: 1, started: true, finished: false, workers: [] } });
     const fresh = panelIn.filter(m => m.type === 'chatEvent' && m.id === 'a1' && m.event.kind === 'army').pop();
-    check('a count from an earlier day starts over at 1', fresh.event.today === 1 && g('cizState').get().armyToday === 1 && local.armyRuns.day === day() && local.armyRuns.count === 1);
+    check('a count from an earlier day starts over at 1', fresh.event.today === 1 && g('cfxState').get().armyToday === 1 && local.armyRuns.day === day() && local.armyRuns.count === 1);
     await helperSays({ type: 'chat_done', id: 'a1', ok: true });
     await fromPanel({ type: 'setArmy', value: false });
     await fromPanel({ type: 'chat', id: 'a2', text: 'just one' });
-    s = g('cizState').get();
+    s = g('cfxState').get();
     check('after setArmy false the chat is plain Quality', !s.chatArmy && local.armyOn === false && native.sent.find(m => m.type === 'chat' && m.id === 'a2').model === 'quality');
     await helperSays({ type: 'chat_done', id: 'a2', ok: true });
 
     // 13b. the count starts over at midnight while Zen stays open: a panel that opens reads it again
     local.armyRuns = { day: '2000-01-01', count: 6 };
-    await g('cizState').set({ armyToday: 6 });
+    await g('cfxState').set({ armyToday: 6 });
     connectEv.fire({ name: 'panel', onMessage: ev(), onDisconnect: ev(), postMessage: () => {} });
     await tick(30);
-    check('a panel that opens on a new day sees the count start over', g('cizState').get().armyToday === 0, String(g('cizState').get().armyToday));
+    check('a panel that opens on a new day sees the count start over', g('cfxState').get().armyToday === 0, String(g('cfxState').get().armyToday));
 
     // 11b. the switch remembers the mode it was left in, so Speed is not turned back into Quality at the next start
     await fromPanel({ type: 'setArmy', value: true });
@@ -329,7 +329,7 @@ const answerConfirm = async ok => {
     const ctx3 = makeCtx();
     for (const f of SCRIPTS) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx3, { filename: f });
     await tick(80);
-    const s3s = vm.runInContext('cizState', ctx3).get();
+    const s3s = vm.runInContext('cfxState', ctx3).get();
     check('a fresh start comes back in Speed with the switch still on (the octopus waits in Quality)', s3s.chatArmy === true && s3s.chatModel === 'speed', JSON.stringify({ a: s3s.chatArmy, m: s3s.chatModel }));
     local.armyModel = 'quality';
 
@@ -339,13 +339,13 @@ const answerConfirm = async ok => {
     const ctx2 = makeCtx();
     for (const f of SCRIPTS) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx2, { filename: f });
     await tick(80);
-    const s2s = vm.runInContext('cizState', ctx2).get();
+    const s2s = vm.runInContext('cfxState', ctx2).get();
     check('a fresh start with armyOn comes up with the army on and Quality, and today\'s count', s2s.chatArmy === true && s2s.chatModel === 'quality' && s2s.armyToday === 3, JSON.stringify({ a: s2s.chatArmy, m: s2s.chatModel, t: s2s.armyToday }));
 
     // 16. static: nothing a worker can reach brings a tab or a window to the front
     const toolsSrc = fs.readFileSync(path.join(ext, 'lib', 'pageTools.js'), 'utf8');
     const armySrc = fs.readFileSync(path.join(ext, 'lib', 'army.js'), 'utf8');
-    const armyTools = [...g('CIZ_ARMY_TOOLS')];
+    const armyTools = [...g('CFX_ARMY_TOOLS')];
     const bodies = {};
     for (const part of toolsSrc.split(/^  async (?=\w+\(args)/m).slice(1)) bodies[part.slice(0, part.indexOf('('))] = part;
     const focusing = /tabs\.update\([^)]*active|windows\.update|captureVisibleTab|tabs\.highlight/;

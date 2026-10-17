@@ -4,12 +4,12 @@ const os = require('os');
 const path = require('path');
 
 const LOCAL = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-const BASE = path.join(LOCAL, 'claude-in-zen');
+const BASE = path.join(LOCAL, 'claudefox');
 const USER = (os.userInfo().username || 'user').replace(/[^A-Za-z0-9_.-]/g, '_');
-// The test-only overrides (CLAUDE_IN_ZEN_PIPE, CLAUDE_IN_ZEN_CONFIRM, CLAUDE_IN_ZEN_SCRIPT, CLAUDE_IN_ZEN_PICK) count only with
-// CLAUDE_IN_ZEN_TEST=1, so no variable in a user's environment can move the pipe, swap the confirm window, script the tool
+// The test-only overrides (CLAUDEFOX_PIPE, CLAUDEFOX_CONFIRM, CLAUDEFOX_SCRIPT, CLAUDEFOX_PICK) count only with
+// CLAUDEFOX_TEST=1, so no variable in a user's environment can move the pipe, swap the confirm window, script the tool
 // server or answer the folder window.
-const testHook = name => (process.env.CLAUDE_IN_ZEN_TEST === '1' ? process.env[name] : undefined);
+const testHook = name => (process.env.CLAUDEFOX_TEST === '1' ? process.env[name] : undefined);
 
 module.exports = {
   BASE,
@@ -23,13 +23,13 @@ module.exports = {
   MCP_ARMY_CONFIG: path.join(BASE, 'mcp-army.json'),   // the lead's tool server in Army mode (army_start, army_wait)
   ARMY_DIR: path.join(BASE, 'army'),                    // one tool-server config per running army worker
   // Pictures Claude saves (download_image) go straight into the user's Downloads folder (a test may move it).
-  DOWNLOADS_DIR: testHook('CLAUDE_IN_ZEN_DOWNLOADS') || path.join(process.env.USERPROFILE || os.homedir(), 'Downloads'),
+  DOWNLOADS_DIR: testHook('CLAUDEFOX_DOWNLOADS') || path.join(process.env.USERPROFILE || os.homedir(), 'Downloads'),
   OUTPUT_DIR: path.join(BASE, 'output'),                // files Claude makes and the add-on stores here (Settings, Saving files; lib/output.js)
   LOCAL_GRANTS: path.join(BASE, 'local-grants.json'),   // folders the user allowed for local pages (lib/localpages.js)
   WATCH_DIR: path.join(BASE, 'watch'),                 // one run folder per watch_video run (lib/watchrun.js)
   WATCH_ON_LOAD: path.join(BASE, 'watch-on-load.json'),   // the saved answer to "watch videos every time the panel opens?" (lib/watchgate.js)
-  PIPE: testHook('CLAUDE_IN_ZEN_PIPE') || (process.platform === 'win32'
-    ? `\\\\.\\pipe\\claude-in-zen-${USER}`
-    : path.join(os.tmpdir(), `claude-in-zen-${USER}.sock`)),
+  PIPE: testHook('CLAUDEFOX_PIPE') || (process.platform === 'win32'
+    ? `\\\\.\\pipe\\claudefox-${USER}`
+    : path.join(os.tmpdir(), `claudefox-${USER}.sock`)),
   testHook,
 };

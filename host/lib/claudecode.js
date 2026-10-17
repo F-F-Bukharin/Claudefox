@@ -14,12 +14,12 @@ function findClaude() {
   const win = process.platform === 'win32';
   const names = win ? ['claude.exe'] : ['claude'];
   const candidates = [];
-  // A test stub for the program's path. It counts only with CLAUDE_IN_ZEN_TEST=1 (lib/paths.js), so a variable in a
+  // A test stub for the program's path. It counts only with CLAUDEFOX_TEST=1 (lib/paths.js), so a variable in a
   // user's environment cannot point the helper at another program.
-  const stub = P.testHook('CLAUDE_IN_ZEN_CLAUDE');
-  // A helper under test (CLAUDE_IN_ZEN_TEST=1) uses its stub or nothing: it never falls back to the real Claude Code in the
+  const stub = P.testHook('CLAUDEFOX_CLAUDE');
+  // A helper under test (CLAUDEFOX_TEST=1) uses its stub or nothing: it never falls back to the real Claude Code in the
   // home folder or on PATH, so no test can start it.
-  if (process.env.CLAUDE_IN_ZEN_TEST === '1') { try { return stub && fs.statSync(stub).isFile() ? stub : null; } catch { return null; } }
+  if (process.env.CLAUDEFOX_TEST === '1') { try { return stub && fs.statSync(stub).isFile() ? stub : null; } catch { return null; } }
   candidates.push(path.join(os.homedir(), '.local', 'bin', names[0]));
   for (const dir of (process.env.PATH || '').split(path.delimiter)) {
     if (dir) for (const n of names) candidates.push(path.join(dir, n));
@@ -31,11 +31,11 @@ function findClaude() {
 function writeMcpConfig() {
   const cfg = {
     mcpServers: {
-      'claude-in-zen': {
+      'claudefox': {
         type: 'stdio',
         command: process.execPath,
-        args: [path.join(__dirname, '..', 'zen-mcp.js')],
-        env: { CLAUDE_IN_ZEN_CLIENT: 'Claude in Zen panel', CLAUDE_IN_ZEN_PANEL: '1', CLAUDE_IN_ZEN_WATCH: '1' },
+        args: [path.join(__dirname, '..', 'claudefox-mcp.js')],
+        env: { CLAUDEFOX_CLIENT: 'Claudefox panel', CLAUDEFOX_PANEL: '1', CLAUDEFOX_WATCH: '1' },
         alwaysLoad: true,   // never hidden behind tool search, whatever else is switched on
       },
     },
@@ -43,7 +43,7 @@ function writeMcpConfig() {
   try { fs.writeFileSync(P.MCP_CONFIG, JSON.stringify(cfg, null, 2)); } catch (e) { log.error('mcp.json', e.message); }
   // Army turns: the same server, which then also offers army_start and army_wait to the lead.
   const lead = JSON.parse(JSON.stringify(cfg));
-  lead.mcpServers['claude-in-zen'].env.CLAUDE_IN_ZEN_ARMY_LEAD = '1';
+  lead.mcpServers['claudefox'].env.CLAUDEFOX_ARMY_LEAD = '1';
   try { fs.writeFileSync(P.MCP_ARMY_CONFIG, JSON.stringify(lead, null, 2)); } catch (e) { log.error('mcp-army.json', e.message); }
 }
 

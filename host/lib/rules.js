@@ -1,5 +1,5 @@
 'use strict';
-// Sentences that more than one prompt says word for word: the Zen MCP instructions (zen-mcp.js), the chat prompt and
+// Sentences that more than one prompt says word for word: the Zen MCP instructions (claudefox-mcp.js), the chat prompt and
 // the army worker prompt (lib/chatargs.js), and the description of the local page tool (lib/toolSchemas.js).
 const NEVER_TYPE_SECRETS = 'Never type passwords, 2FA codes or payment details.';
 const NEVER_TYPE_SECRETS_ANY_MODE = 'Never type passwords, 2FA codes or payment details, in any mode.';

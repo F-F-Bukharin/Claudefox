@@ -12,7 +12,7 @@ const w=dom.window; const sent=[]; let onMsg;
 w.browser={runtime:{connect:()=>({postMessage:m=>sent.push(m),onMessage:{addListener:f=>onMsg=f}}),getManifest:()=>({version:'0.4.0'})},
  storage:{session:{get:async()=>({}),set:async()=>{}}},
  tabs:{query:async()=>[{title:'T',url:'https://x'}],onActivated:{addListener(){}},onUpdated:{addListener(){}}}};
-w.eval(fs.readFileSync(dir+'lib/markdown.js','utf8')+'\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir+'lib/wall.js','utf8')); evalPanel(dom, dir, panelFiles);
+w.eval(fs.readFileSync(dir+'lib/markdown.js','utf8')+'\n;window.cfxMarkdown=cfxMarkdown;'); w.eval(fs.readFileSync(dir+'lib/wall.js','utf8')); evalPanel(dom, dir, panelFiles);
 const $=id=>w.document.getElementById(id);
 let pass=0,fail=0;const ok=(n,c,x)=>{c?pass++:fail++;console.log((c?'PASS ':'FAIL ')+n+(x?'  '+x:''))};
 const base={agent:'active',signedIn:false,native:'missing',claude:null,debugPort:'off',pending:0,chatModel:'speed',filesMode:'read',filesFolder:''};
@@ -26,6 +26,11 @@ ok('the panel scripts: panel.js first, the background link (panel-link.js) last,
  $('setup').querySelector('.step-btn').click();
  ok('sign-in button sends signIn', sent.some(m=>m.type==='signIn'));
  const ready={...base,signedIn:true,account:{email:'f.work@example.com',name:'F',uuid:'u'},native:'connected',hostVersion:'0.4.0',claude:{installed:true,loggedIn:true,email:'f.work@example.com',plan:'pro'}};
+ onMsg({type:'state',state:ready,log:[]});
+ onMsg({type:'state',state:{...ready,native:'connected',nativeNotice:'Re-run Set up Claudefox.bat to finish the update.'},log:[]});
+ ok('the helper line in Settings shows the "re-run setup" notice while the old helper is in use', $('nativeDetail').textContent==='Re-run Set up Claudefox.bat to finish the update.', $('nativeDetail').textContent);
+ onMsg({type:'state',state:{...base,nativeDetail:'helper not installed',nativeNotice:'Re-run Set up Claudefox.bat to finish the update.'},log:[]});
+ ok('and next to "helper not installed" when neither helper is found', $('nativeDetail').textContent==='helper not installed Re-run Set up Claudefox.bat to finish the update.', $('nativeDetail').textContent);
  onMsg({type:'state',state:ready,log:[]});
  ok('guide hidden when ready', $('setup').hidden && $('emptyTitle').textContent==='What should I do in Zen?');
  ok('empty chat uses the centred layout', $('page-chat').classList.contains('is-empty'));
@@ -43,7 +48,7 @@ ok('the panel scripts: panel.js first, the background link (panel-link.js) last,
  slashTyped('/'); slashKey('Escape');
  ok('slash menu: Escape closes it and keeps the text', $('slashMenu').hidden && $('input').value==='/');
  slashTyped('/help'); slashKey('Enter');
- ok('/help lists every command', /\/screenshot: Screenshot of this tab/.test($('messages').textContent) && /\/improve: Improve Claude in Zen/.test($('messages').textContent));
+ ok('/help lists every command', /\/screenshot: Screenshot of this tab/.test($('messages').textContent) && /\/improve: Improve Claudefox/.test($('messages').textContent));
  ok('claude row ok, no mismatch', $('claudeVal').textContent==='signed in · f.work@example.com' && /ok/.test($('claudeDot').className));
  onMsg({type:'state',state:{...ready,claude:{...ready.claude,email:'f.home@example.com'}},log:[]});
  ok('mismatch flagged', /not f.work/.test($('claudeVal').textContent) && /warn/.test($('claudeDot').className));
@@ -65,7 +70,7 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  outBtn('store').click();
  ok('saving files: a click asks the add-on to store, and leaves file access alone', sent.some(m=>m.type==='setOutput'&&m.value==='store') && sent.filter(m=>m.type==='setFiles').length===filesBefore);
  onMsg({type:'state',state:{...ready,outputMode:'store'},log:[]});
- ok('saving files: store is checked and explained', outBtn('store').getAttribute('aria-checked')==='true' && outBtn('download').getAttribute('aria-checked')==='false' && /Claude in Zen's data folder \(…\\claude-in-zen\\output\)/.test($('outputNote').textContent));
+ ok('saving files: store is checked and explained', outBtn('store').getAttribute('aria-checked')==='true' && outBtn('download').getAttribute('aria-checked')==='false' && /Claudefox's data folder \(…\\claudefox\\output\)/.test($('outputNote').textContent));
  onMsg({type:'outputSaved',name:'chart.png',path:'C:\\Zen\\extension\\output\\chart.png'});
  ok('saving files: the chat names the stored file', /Stored chart\.png in the output folder/.test($('messages').textContent));
  onMsg({type:'state',state:ready,log:[]});
@@ -158,7 +163,7 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  $('unsafeToggle').checked=true; $('unsafeToggle').dispatchEvent(new w.Event('change'));
  ok('unsafe on asks the add-on (which asks the confirm window), and the switch waits for the answer', sent.slice(mark).some(m=>m.type==='setUnsafe'&&m.value===true) && !$('unsafeToggle').checked && !w.document.getElementById('unsafeConfirm'));
  onMsg({type:'state',state:{...ready,unsafe:false,confirmPending:{kind:'unsafe'}},log:[]});
- ok('while the confirm window is open, the note says where to answer', /Answer in the Claude in Zen window/.test($('unsafeNote').textContent) && $('unsafeNote').classList.contains('warnnote'));
+ ok('while the confirm window is open, the note says where to answer', /Answer in the Claudefox window/.test($('unsafeNote').textContent) && $('unsafeNote').classList.contains('warnnote'));
  onMsg({type:'state',state:{...ready,unsafe:true},log:[]});
  ok('badge and Google row show Unsafe mode', !$('unsafeBadge').hidden && $('googleVal').textContent==='allowed (Unsafe mode)' && $('unsafeToggle').checked===true);
  $('unsafeToggle').checked=false; $('unsafeToggle').dispatchEvent(new w.Event('change'));
@@ -166,7 +171,7 @@ const nFlipQ = sent.filter(m=>m.type==='setModel').length; $('modeBtn').click();
  onMsg({type:'state',state:{...ready,unsafe:false},log:[]});
  ok('badge hidden and Google row back to hands-off when off', $('unsafeBadge').hidden && $('googleVal').textContent==='always hands-off');
  // Tools and plugins card: essentials first, shells blocked, what runs programs asks in the helper's window, sign-in from the row
- const SHELL='It gives Claude a shell: it can run any command and read or change any file on this PC, so Claude in Zen never switches it on.';
+ const SHELL='It gives Claude a shell: it can run any command and read or change any file on this PC, so Claudefox never switches it on.';
  const tools={busy:null,scanned:1,checked:0,
   plugins:[{id:'vidiq@synced',label:'vidIQ',version:'0.1.6',scope:'synced',skills:true,local:false,recommended:true,on:true,status:'needs-auth',servers:[{name:'plugin:vidiq:vidiq',label:'vidiq',status:'needs-auth',transport:'http'}]},
    {id:'caveman@x',label:'caveman',version:'1.1.2',scope:'user',skills:true,local:false,recommended:true,on:true,status:'none',servers:[]},
@@ -298,11 +303,11 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
   ok('finishing the reply leaves the messages before it in place', done.length===before.length && done.slice(0,-1).every((n,i)=>n===before[i]));
 }
  {
-  // Improve Claude in Zen: the + menu item turns the improve bar on; a send carries improve; the card has Apply and Discard
+  // Improve Claudefox: the + menu item turns the improve bar on; a send carries improve; the card has Apply and Discard
   const frame2 = () => new Promise(r => w.requestAnimationFrame(() => r()));
   onMsg({type:'state',state:{...ready,chatModel:'speed',chatPlus:false},log:[]});
   const item = w.document.querySelector('#moreMenu [data-act="improve"]');
-  ok('the + menu has Improve Claude in Zen, on Opus 5.5', !!item && /Improve Claude in Zen/.test(item.textContent) && /Opus 5\.5/.test(item.textContent));
+  ok('the + menu has Improve Claudefox, on Opus 5.5', !!item && /Improve Claudefox/.test(item.textContent) && /Opus 5\.5/.test(item.textContent));
   $('moreBtn').click(); item.click();
   ok('the improve bar shows, and the panel is marked improving', !$('improveBar').hidden && /Opus 5\.5/.test($('improveBar').textContent) && w.document.body.classList.contains('improving'));
   ok('the improve placeholder is short enough to fit the composer on one line', typeof ($('input') && $('input').placeholder) === 'string' && $('input').placeholder.length <= 30);
@@ -412,7 +417,7 @@ ok('Choose folder sends pickFolder', sent.some(m=>m.type==='pickFolder'));
   w.document.querySelector('.tabs button[data-page="profile"]').click();
   onMsg({type:'state',state:{...ready,grantAsk:{folder},localGrants:[],fileAccess:'yes'},log:[]});
   ok('local: a question shows the folder, brings the chat page up, and says to answer in the confirm window (no buttons here)', !$('grantAsk').hidden && $('grantFolder').textContent===folder
-    && !$('page-chat').hidden && $('grantAccess').hidden && /Answer in the Claude in Zen window/.test($('grantAsk').textContent) && !$('grantAsk').querySelector('button'));
+    && !$('page-chat').hidden && $('grantAccess').hidden && /Answer in the Claudefox window/.test($('grantAsk').textContent) && !$('grantAsk').querySelector('button'));
   onMsg({type:'state',state:{...ready,grantAsk:{folder:'D:\\x'},localGrants:[folder],fileAccess:'no'},log:[]});
   ok('local: with Zen\'s file switch off, the question says how to turn it on', !$('grantAsk').hidden && !$('grantAccess').hidden && /Access local files on your computer/.test($('grantAccess').textContent) && $('grantFolder').textContent==='D:\\x');
   ok('local: Profile lists the allowed folder with Remove, and the note warns about the file switch', $('localCount').textContent==='1 allowed' && $('localList').children.length===1

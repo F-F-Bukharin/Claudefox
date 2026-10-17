@@ -2,7 +2,7 @@
 // Hardening checks for the native messaging channel (host/lib/nm.js) and the Claude Code path override (host/lib/claudecode.js).
 // A message from the add-on over 64 MiB is refused: the add-on is told at once, and the message's bytes are read off the
 // pipe and dropped, never kept. A reply over 1 MiB is not thrown away: the add-on gets a short error with the same id.
-// The CLAUDE_IN_ZEN_CLAUDE override counts only with CLAUDE_IN_ZEN_TEST=1 (host/lib/paths.js).
+// The CLAUDEFOX_CLAUDE override counts only with CLAUDEFOX_TEST=1 (host/lib/paths.js).
 // No Zen, no Windows and no Claude Code needed: the channel runs on in-memory streams, and the program the override
 // names is a file that is never run.
 //   node test/harden-native.js
@@ -21,7 +21,7 @@ const check = (name, ok, extra) => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${!ok && extra ? '  ' + extra : ''}`);
 };
 
-const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-harden-native-')));
+const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-harden-native-')));
 process.env.LOCALAPPDATA = path.join(tmp, 'local');   // log.js and paths.js read it when they load
 const { NativeChannel, MAX_IN } = require('../host/lib/nm');
 const log = require('../host/lib/log');
@@ -142,7 +142,7 @@ async function main() {
   check('the refused input is logged as a warning', /warn\s+message from the add-on too large \(65 MB, limit 64 MB\)/.test(logged), logged.slice(0, 200));
   check('the over-size reply is logged as a warning that names its type', /warn\s+reply too large to send \(3 MB\): chat_event/.test(logged));
 
-  // ---- B9: the Claude Code path override counts only with CLAUDE_IN_ZEN_TEST=1 (host/lib/claudecode.js)
+  // ---- B9: the Claude Code path override counts only with CLAUDEFOX_TEST=1 (host/lib/claudecode.js)
   // The override names a file that exists but is never run: findClaude only checks that it is there.
   const fakeClaude = path.join(tmp, 'fake-claude');
   fs.writeFileSync(fakeClaude, '');
@@ -160,27 +160,27 @@ async function main() {
     const env = {};
     // This process's environment, minus the variables set here (any casing: Windows calls the path variable Path).
     for (const [k, v] of Object.entries(process.env)) {
-      if (!/^(path|home|userprofile|localappdata|claude_in_zen_test|claude_in_zen_claude)$/i.test(k)) env[k] = v;
+      if (!/^(path|home|userprofile|localappdata|claudefox_test|claudefox_claude)$/i.test(k)) env[k] = v;
     }
     const r = spawnSync(process.execPath, ['-e', code], {
-      env: { ...env, HOME: home, USERPROFILE: home, PATH: bin, LOCALAPPDATA: path.join(tmp, 'local-child'), CLAUDE_IN_ZEN_CLAUDE: fakeClaude, ...extra },
+      env: { ...env, HOME: home, USERPROFILE: home, PATH: bin, LOCALAPPDATA: path.join(tmp, 'local-child'), CLAUDEFOX_CLAUDE: fakeClaude, ...extra },
       encoding: 'utf8', timeout: 20000,
     });
     return r.status === 0 ? r.stdout : `(exit ${r.status}) ${r.stderr}`;
   };
   const unset = findWith({});
-  const on = findWith({ CLAUDE_IN_ZEN_TEST: '1' });
-  const zero = findWith({ CLAUDE_IN_ZEN_TEST: '0' });
-  check('without CLAUDE_IN_ZEN_TEST the override is ignored, and findClaude finds nothing', unset === 'null', unset);
-  check('with CLAUDE_IN_ZEN_TEST=1 the override is the program found', on === fakeClaude, on);
-  check('with CLAUDE_IN_ZEN_TEST=0 the override is ignored too', zero === 'null', zero);
+  const on = findWith({ CLAUDEFOX_TEST: '1' });
+  const zero = findWith({ CLAUDEFOX_TEST: '0' });
+  check('without CLAUDEFOX_TEST the override is ignored, and findClaude finds nothing', unset === 'null', unset);
+  check('with CLAUDEFOX_TEST=1 the override is the program found', on === fakeClaude, on);
+  check('with CLAUDEFOX_TEST=0 the override is ignored too', zero === 'null', zero);
   // A missing stub never falls back: a "claude" on PATH (the real one, on a developer's machine) is not used.
   const onPath = path.join(bin, process.platform === 'win32' ? 'claude.exe' : 'claude');
   fs.writeFileSync(onPath, '');
-  const missing = findWith({ CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: path.join(tmp, 'no-such-claude') });
-  check('with CLAUDE_IN_ZEN_TEST=1 and a missing stub, findClaude finds nothing, even with claude on PATH', missing === 'null', missing);
-  const noStub = findWith({ CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: '' });
-  check('with CLAUDE_IN_ZEN_TEST=1 and no stub at all, findClaude finds nothing, even with claude on PATH', noStub === 'null', noStub);
+  const missing = findWith({ CLAUDEFOX_TEST: '1', CLAUDEFOX_CLAUDE: path.join(tmp, 'no-such-claude') });
+  check('with CLAUDEFOX_TEST=1 and a missing stub, findClaude finds nothing, even with claude on PATH', missing === 'null', missing);
+  const noStub = findWith({ CLAUDEFOX_TEST: '1', CLAUDEFOX_CLAUDE: '' });
+  check('with CLAUDEFOX_TEST=1 and no stub at all, findClaude finds nothing, even with claude on PATH', noStub === 'null', noStub);
   fs.unlinkSync(onPath);
 }
 

@@ -27,7 +27,7 @@ w.browser = {
   windows: { getCurrent: async () => ({ id: 5 }) },
   tabs: { query: async q => TABS.filter(t => q.windowId == null || t.windowId === q.windowId), onActivated: { addListener() {} }, onUpdated: { addListener() {} } },
 };
-w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
 w.eval(fs.readFileSync(EXT + 'lib/wall.js', 'utf8'));
 evalPanel(dom, EXT, panelFiles);
 const $ = id => w.document.getElementById(id);

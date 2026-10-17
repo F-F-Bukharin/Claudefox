@@ -95,8 +95,8 @@ const fromPanel = async m => { panelOnMsg.fire(m); await tick(); };
 const helperSays = async m => { native.onMessage.fire(m); await tick(); };
 const g = name => vm.runInContext(name, ctx);
 // fixture: the site gate (page safety) lets the hosts these tests use through, for the workers' runs too (their list is this message's)
-g('cizSiteGate').begin('fixture', { tabUrl: 'https://shop.example/', windowId: 1, text: '', newChat: true, allow: ['a.example', 'accounts.google.com', 'example.com', 'shop.example'] });
-const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
+g('cfxSiteGate').begin('fixture', { tabUrl: 'https://shop.example/', windowId: 1, text: '', newChat: true, allow: ['a.example', 'accounts.google.com', 'example.com', 'shop.example'] });
+const call = (tool, args) => ctx.cfxDebug.call(tool, args || {});
 let seq = 0;
 // A worker's tool call (army set) or a native message from the helper; resolves with the add-on's answer.
 async function waitSent(type, id) {
@@ -120,44 +120,44 @@ async function armyCall(tool, args, worker = 'w1', run = 'r1') {
 }
 const tabOf = id => tabs.find(t => t.id === id);
 const ASKED = /^Claude asks to look in /;
-const asks = () => g('cizState').log().filter(e => ASKED.test(e.text)).length;
-const st = () => g('cizState').get();
+const asks = () => g('cfxState').log().filter(e => ASKED.test(e.text)).length;
+const st = () => g('cfxState').get();
 const W = 'C:\\Users\\H\\Downloads\\';
 const DENY = f => `You did not allow Claude to look in ${f}.`;
-const ACCESS = "Zen keeps add-ons out of files on this computer. Turn on 'Access local files on your computer' for Claude in Zen: about:addons -> Claude in Zen -> Permissions and data.";
+const ACCESS = "Zen keeps add-ons out of files on this computer. Turn on 'Access local files on your computer' for Claudefox: about:addons -> Claudefox -> Permissions and data.";
 let nid = 0;
 const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.fire(Object.assign({ id }, m)); return waitSent(type, id); };
 
 (async () => {
   try {
     // ---- pure path rules
-    const fp = u => g('cizFilePath')(u);
-    check('cizFilePath: Windows drive path', fp('file:///C:/Users/H/Downloads/game/index.html') === 'C:\\Users\\H\\Downloads\\game\\index.html', fp('file:///C:/Users/H/Downloads/game/index.html'));
-    check('cizFilePath: POSIX path', fp('file:///home/f/game/index.html') === '/home/f/game/index.html');
-    check('cizFilePath: %20 and raw spaces decode to spaces', fp('file:///C:/My%20Games/a%20b.html') === 'C:\\My Games\\a b.html' && fp('file:///C:/My Games/a.html') === 'C:\\My Games\\a.html');
-    check('cizFilePath: . and .. are resolved, also when percent-encoded, never above the drive',
+    const fp = u => g('cfxFilePath')(u);
+    check('cfxFilePath: Windows drive path', fp('file:///C:/Users/H/Downloads/game/index.html') === 'C:\\Users\\H\\Downloads\\game\\index.html', fp('file:///C:/Users/H/Downloads/game/index.html'));
+    check('cfxFilePath: POSIX path', fp('file:///home/f/game/index.html') === '/home/f/game/index.html');
+    check('cfxFilePath: %20 and raw spaces decode to spaces', fp('file:///C:/My%20Games/a%20b.html') === 'C:\\My Games\\a b.html' && fp('file:///C:/My Games/a.html') === 'C:\\My Games\\a.html');
+    check('cfxFilePath: . and .. are resolved, also when percent-encoded, never above the drive',
       fp('file:///C:/a/b/../c.html') === 'C:\\a\\c.html' && fp('file:///C:/a/./b/%2e%2e/c.html') === 'C:\\a\\c.html' && fp('file:///C:/a/%2e%2e/%2e%2e/x') === 'C:\\x' && fp('file:///C:/a%5C..%5Cb.html') === 'C:\\b.html');
-    check('cizFilePath: localhost is this computer, another host (a network share) is null',
+    check('cfxFilePath: localhost is this computer, another host (a network share) is null',
       fp('file://localhost/home/f/x.html') === '/home/f/x.html' && fp('file://server/share/x.html') === null && fp('file:////server/share/x.html') === null);
-    check('cizFilePath: encoded backslashes cannot spell a network share', fp('file:///%5C%5Cserver/share/x.html') === null && fp('file:///%5Cserver/x.html') === null
-      && g('cizUrlBlocked')('file:///%5C%5Cserver/share/x.html', { localGrants: [] }).needGrant === undefined, fp('file:///%5C%5Cserver/share/x.html'));
-    check('cizFilePath: NUL and non-file URLs are null', fp('file:///home/f/a%00b.html') === null && fp('https://example.com/x.html') === null && fp('about:config') === null);
-    const inF = (p, f) => g('cizInFolder')(p, f);
-    check('cizInFolder: drive paths ignore case and slash direction', inF('c:/users/h/downloads/game/x.html', 'C:\\Users\\H\\Downloads\\game') && inF('C:\\A\\b', 'c:/a/'));
-    check('cizInFolder: a folder holds itself and its subfolders', inF('C:\\a', 'C:\\a') && inF('C:\\a\\b\\c\\d.html', 'C:\\a') && inF('/home/f/game/x', '/home/f'));
-    check('cizInFolder: a sibling with the same prefix is not inside, POSIX keeps case, drives differ',
+    check('cfxFilePath: encoded backslashes cannot spell a network share', fp('file:///%5C%5Cserver/share/x.html') === null && fp('file:///%5Cserver/x.html') === null
+      && g('cfxUrlBlocked')('file:///%5C%5Cserver/share/x.html', { localGrants: [] }).needGrant === undefined, fp('file:///%5C%5Cserver/share/x.html'));
+    check('cfxFilePath: NUL and non-file URLs are null', fp('file:///home/f/a%00b.html') === null && fp('https://example.com/x.html') === null && fp('about:config') === null);
+    const inF = (p, f) => g('cfxInFolder')(p, f);
+    check('cfxInFolder: drive paths ignore case and slash direction', inF('c:/users/h/downloads/game/x.html', 'C:\\Users\\H\\Downloads\\game') && inF('C:\\A\\b', 'c:/a/'));
+    check('cfxInFolder: a folder holds itself and its subfolders', inF('C:\\a', 'C:\\a') && inF('C:\\a\\b\\c\\d.html', 'C:\\a') && inF('/home/f/game/x', '/home/f'));
+    check('cfxInFolder: a sibling with the same prefix is not inside, POSIX keeps case, drives differ',
       !inF('C:\\ab\\x.html', 'C:\\a') && !inF('/home/F/x', '/home/f') && !inF('D:\\a\\x', 'C:\\a') && !inF('/a/x', 'C:\\a'));
-    const nf = p => g('cizNormFolder')(p);
-    check('cizNormFolder: no trailing separator, one slash style, roots kept, relative paths empty',
+    const nf = p => g('cfxNormFolder')(p);
+    check('cfxNormFolder: no trailing separator, one slash style, roots kept, relative paths empty',
       nf('C:/a/b/') === 'C:\\a\\b' && nf('c:\\a\\\\b') === 'C:\\a\\b' && nf('/a//b/') === '/a/b' && nf('C:\\') === 'C:\\' && nf('/') === '/' && nf('a\\b') === '' && nf('\\\\server\\share') === '');
-    check('cizFolderOf: the folder a file is in', g('cizFolderOf')('C:\\a\\b.html') === 'C:\\a' && g('cizFolderOf')('/home/f/x') === '/home/f');
+    check('cfxFolderOf: the folder a file is in', g('cfxFolderOf')('C:\\a\\b.html') === 'C:\\a' && g('cfxFolderOf')('/home/f/x') === '/home/f');
 
     // ---- set up: signed in, helper connected
     await tick(50);
     connectEv.fire(panel);
     await fromPanel({ type: 'signIn' });
     await helperSays({ type: 'hello', version: '0.9.0', clients: [] });
-    const L = g('cizLocal');
+    const L = g('cfxLocal');
     L.ASK_MS = 5000;
     check('state starts with no grants, no question, and file access known', Array.isArray(st().localGrants) && st().localGrants.length === 0 && st().grantAsk === null && st().fileAccess === 'yes', JSON.stringify([st().localGrants, st().grantAsk, st().fileAccess]));
 
@@ -338,7 +338,7 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
     const ctx2 = makeCtx();
     for (const f of SCRIPTS) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx2, { filename: f });
     await tick(80);
-    const s2 = vm.runInContext('cizState', ctx2).get();
+    const s2 = vm.runInContext('cfxState', ctx2).get();
     check('a fresh start allows nothing until the helper sends its list, and drops the old stored list', s2.localGrants.length === 0 && !('localGrants' in local) && s2.grantAsk === null && s2.fileAccess === 'yes', JSON.stringify(s2.localGrants));
   } catch (e) {
     check('no unexpected errors', false, e.stack);

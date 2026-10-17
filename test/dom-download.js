@@ -28,7 +28,7 @@ async function panelPart() {
     storage: { session: { get: async () => ({}), set: async () => {} } },
     tabs: { query: async () => [{ title: 'T', url: 'https://x' }], onActivated: { addListener() {} }, onUpdated: { addListener() {} } },
   };
-  w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+  w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
   w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8'));
   evalPanel(dom, dir, panelFiles);
   const $ = id => w.document.getElementById(id);
@@ -66,32 +66,32 @@ async function addonPart() {
       runtime: { onConnect: { addListener() {} }, onMessage: { addListener() {} }, getManifest: () => ({ version: '0.11.0' }) },
       tabs: { query: async () => [], onActivated: { addListener() {} }, onUpdated: { addListener() {} } },
     },
-    cizSiteGate: { begin: () => [], list: () => [], cancel() {}, markRead() {} },
-    cizLocal: { cancelAll: async () => {} },
-    cizArmy: { closeAll: async () => {} },
-    cizNetReset() {}, disconnectNative() {}, failChats() {},
+    cfxSiteGate: { begin: () => [], list: () => [], cancel() {}, markRead() {} },
+    cfxLocal: { cancelAll: async () => {} },
+    cfxArmy: { closeAll: async () => {} },
+    cfxNetReset() {}, disconnectNative() {}, failChats() {},
   };
   const bgCtx = vm.createContext(sb);
   for (const f of ['lib/state.js', 'lib/bg-chat.js']) vm.runInContext(fs.readFileSync(dir + f, 'utf8'), bgCtx, { filename: f });
   vm.runInContext('sendNative = m => { __sent.push(m); return true; };', bgCtx);   // the native port: recorded, not sent
   const bg = code => vm.runInContext(code, bgCtx);
   const msg = o => bg(`onNativeMessage(${JSON.stringify(o)})`);
-  await bg('cizState.load()');   // background.js loads the session state at start-up; the vm does the same
+  await bg('cfxState.load()');   // background.js loads the session state at start-up; the vm does the same
 
-  attempt('the download card state is null by default', () => bg('cizState.get().downloadAsk') === null);
+  attempt('the download card state is null by default', () => bg('cfxState.get().downloadAsk') === null);
   bgSites = { 'example.com': 'block' };
   await msg({ type: 'download_ask', id: '6', host: 'img.example.com', name: 'cat.gif', folder: '/home/u/Art' });
   attempt('a blocked site (or its parent domain) is answered No at once', () => nativeSent.some(m => m.type === 'download_answer' && m.id === '6' && m.allow === false));
-  attempt('a blocked site shows no card', () => bg('cizState.get().downloadAsk') === null);
+  attempt('a blocked site shows no card', () => bg('cfxState.get().downloadAsk') === null);
   bgSites = {};
   await msg({ type: 'download_ask', id: '7', host: 'example.com', name: 'cat.gif', folder: '/home/u/Art' });
   attempt('an allowed site sets the card state', () => {
-    const d = bg('cizState.get().downloadAsk');
+    const d = bg('cfxState.get().downloadAsk');
     return !!d && d.id === '7' && d.host === 'example.com' && d.name === 'cat.gif' && d.folder === '/home/u/Art';
   });
   attempt('an allowed site is not answered by the add-on', () => !nativeSent.some(m => m.type === 'download_answer' && m.id === '7'));
   await msg({ type: 'download_ask', id: null });
-  attempt('a download_ask with no id clears the card', () => bg('cizState.get().downloadAsk') === null);
+  attempt('a download_ask with no id clears the card', () => bg('cfxState.get().downloadAsk') === null);
 }
 
 (async () => {

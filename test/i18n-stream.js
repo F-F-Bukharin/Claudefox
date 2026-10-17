@@ -26,7 +26,7 @@ async function panel(lang) {
     storage: { session: { get: async () => ({}), set: async () => {} },
       local: { get: async k => (k in local ? { [k]: local[k] } : {}), set: async o => { Object.assign(local, o); } } },
     tabs: { query: async () => [{ title: 'T', url: 'https://x' }], onActivated: { addListener() {} }, onUpdated: { addListener() {} } } };
-  w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8'));
+  w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;'); w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8'));
   evalPanel(dom, dir, panelFiles, { lang });
   const $ = id => w.document.getElementById(id);
   const base = { agent: 'active', signedIn: true, account: { email: 'f.work@example.com', name: 'F', uuid: 'u' }, native: 'connected', hostVersion: '0.4.0',

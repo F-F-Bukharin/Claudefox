@@ -1,8 +1,8 @@
 @echo off
-rem Claude in Zen - signs the Claude Code profile used by the add-on in with your Claude account (Pro plan).
+rem Claudefox - signs the Claude Code profile used by the add-on in with your Claude account (Pro plan).
 rem This profile is separate from the Claude desktop app, so the panel Claude loads none of its plugins or settings.
-rem "Set up Claude in Zen.bat" runs this with /quiet, which skips the pauses.
-set "CLAUDE_CONFIG_DIR=%LOCALAPPDATA%\claude-in-zen\claude"
+rem "Set up Claudefox.bat" runs this with /quiet, which skips the pauses.
+set "CLAUDE_CONFIG_DIR=%LOCALAPPDATA%\claudefox\claude"
 set "ANTHROPIC_API_KEY="
 set "ANTHROPIC_AUTH_TOKEN="
 if not exist "%CLAUDE_CONFIG_DIR%" mkdir "%CLAUDE_CONFIG_DIR%"

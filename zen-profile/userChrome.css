@@ -1,6 +1,6 @@
-/* Claude in Zen: open the add-on's sidebar wide enough to read (about 660 px; set for a 1440p screen)
+/* Claudefox: open the add-on's sidebar wide enough to read (about 660 px; set for a 1440p screen)
    and round all four corners of the panel (Zen rounds only the bottom ones).
-   Only applies while the Claude in Zen panel is the one shown; other sidebars are untouched.
+   Only applies while the Claudefox panel is the one shown; other sidebars are untouched.
    You can still drag it wider. Change the numbers to taste. The page itself cannot do this:
    Zen paints the sidebar's own background behind it, so the corners have to be cut here. */
 #sidebar-box[sidebarcommand="claude-in-zen_f_local-sidebar-action"] {
@@ -14,7 +14,7 @@
   clip-path: inset(0 round var(--zen-native-inner-radius, var(--zen-border-radius, 10px))) !important;
 }
 
-/* Hide Zen's title bar above the panel (its "Claude in Zen" menu and close button). Open and close the
+/* Hide Zen's title bar above the panel (its "Claudefox" menu and close button). Open and close the
    panel with the toolbar button or Alt+Shift+C. The bar's menu, with Move Sidebar to Right, goes too.
    Delete this rule to bring the bar back. */
 #sidebar-box[sidebarcommand="claude-in-zen_f_local-sidebar-action"] > #sidebar-header {

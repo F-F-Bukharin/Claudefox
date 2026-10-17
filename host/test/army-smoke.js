@@ -11,7 +11,7 @@ const path = require('path');
 
 if (process.platform === 'win32') { console.log('SKIP  army-smoke runs on Linux/macOS only'); process.exit(0); }
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-army-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-army-'));
 const fake = path.join(tmp, 'claude');
 const recDir = path.join(tmp, 'rec');
 fs.mkdirSync(recDir);
@@ -24,15 +24,15 @@ function fakeClaude(C) {
   const argv = process.argv.slice(2);
   if (argv[0] === 'plugin' || argv[0] === 'mcp' || argv[0] === 'auth') { process.stdout.write(argv[1] === 'list' ? '[]' : ''); process.exit(0); }
   const val = f => argv[argv.indexOf(f) + 1];
-  const worker = /worker in Claude in Zen's army/.test(val('--append-system-prompt') || '');
-  const cfg = JSON.parse(fs.readFileSync(val('--mcp-config'), 'utf8')).mcpServers['claude-in-zen'];
+  const worker = /worker in Claudefox's army/.test(val('--append-system-prompt') || '');
+  const cfg = JSON.parse(fs.readFileSync(val('--mcp-config'), 'utf8')).mcpServers['claudefox'];
   const out = o => process.stdout.write(JSON.stringify(o) + '\n');
   if (process.argv.includes('--input-format')) { process.stderr.write("error: unknown option '--input-format'\\n"); process.exit(1); }   // this fake takes one prompt per process: the helper falls back to that
   let prompt = '';
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', d => { prompt += d; });
   process.stdin.on('end', async () => {
-    const name = worker ? `w-${cfg.env.CLAUDE_IN_ZEN_ARMY_TOKEN}` : `lead-${(/LEAD:(\w+)/.exec(prompt) || [])[1]}`;
+    const name = worker ? `w-${cfg.env.CLAUDEFOX_ARMY_TOKEN}` : `lead-${(/LEAD:(\w+)/.exec(prompt) || [])[1]}`;
     let settings = null;
     try { settings = JSON.parse(fs.readFileSync(val('--settings'), 'utf8')); } catch {}
     const rec = { worker, argv, prompt, pid: process.pid, env: cfg.env, settings, steps: [] };
@@ -66,7 +66,7 @@ function fakeClaude(C) {
           else { sock.end(); resolve(m); }
         }
       });
-      sock.on('connect', () => sock.write(JSON.stringify({ type: 'hello', token: fs.readFileSync(P.TOKEN_FILE, 'utf8').trim(), client: cfg.env.CLAUDE_IN_ZEN_CLIENT, army: cfg.env.CLAUDE_IN_ZEN_ARMY_TOKEN }) + '\n'));
+      sock.on('connect', () => sock.write(JSON.stringify({ type: 'hello', token: fs.readFileSync(P.TOKEN_FILE, 'utf8').trim(), client: cfg.env.CLAUDEFOX_CLIENT, army: cfg.env.CLAUDEFOX_ARMY_TOKEN }) + '\n'));
     });
     const s0 = mcp({});
     await s0.ready;
@@ -86,7 +86,7 @@ function fakeClaude(C) {
         rec.childPid = ch.pid;
       } else if (st.raw) rec.steps.push({ raw: st.raw, res: await raw(st.raw, fill(st.args)) });
       else if (st.tool) {
-        const s = st.forceLead ? mcp({ CLAUDE_IN_ZEN_ARMY_LEAD: '1' }) : s0;
+        const s = st.forceLead ? mcp({ CLAUDEFOX_ARMY_LEAD: '1' }) : s0;
         await s.ready;
         for (;;) {
           const r = (await s.rpc('tools/call', { name: st.tool, arguments: fill(st.args) })).result;
@@ -104,7 +104,7 @@ function fakeClaude(C) {
     out({ type: 'system', subtype: 'init', session_id: sid });
     if (final && final.exit) { process.stderr.write(final.stderr + '\n'); process.exit(final.exit); }
     if (final && final.error) return out({ type: 'result', subtype: 'success', is_error: true, result: final.error, session_id: sid });
-    const report = (final && final.report) || `Report from ${cfg.env.CLAUDE_IN_ZEN_CLIENT || 'the lead'}.`;
+    const report = (final && final.report) || `Report from ${cfg.env.CLAUDEFOX_CLIENT || 'the lead'}.`;
     out({ type: 'result', subtype: 'success', is_error: false, result: report, session_id: sid });
   });
 }
@@ -129,8 +129,8 @@ const alive = pid => {
 function startHelper(name, extraEnv) {
   const base = path.join(tmp, name);
   fs.mkdirSync(base);
-  const env = { ...process.env, LOCALAPPDATA: base, CLAUDE_IN_ZEN_PIPE: path.join(base, 'h.sock'), CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fake, ...extraEnv };
-  const proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+  const env = { ...process.env, LOCALAPPDATA: base, CLAUDEFOX_PIPE: path.join(base, 'h.sock'), CLAUDEFOX_TEST: '1', CLAUDEFOX_CLAUDE: fake, ...extraEnv };
+  const proc = spawn(process.execPath, [path.join(HOST_DIR, 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
   const h = { proc, base, inbox: [], calls: [], waiters: [], tabSeq: 100, held: [] };
   let buf = Buffer.alloc(0);
   h.send = msg => {
@@ -183,12 +183,12 @@ function hello(h, armyToken) {
     let buf = '';
     sock.on('data', d => { buf += d; const i = buf.indexOf('\n'); if (i !== -1) { sock.destroy(); resolve(JSON.parse(buf.slice(0, i))); } });
     sock.on('error', () => resolve({ type: 'error', error: 'socket error' }));
-    sock.on('connect', () => sock.write(JSON.stringify({ type: 'hello', token: fs.readFileSync(path.join(h.base, 'claude-in-zen', 'pipe-token'), 'utf8').trim(), client: 'Army worker w9', army: armyToken }) + '\n'));
+    sock.on('connect', () => sock.write(JSON.stringify({ type: 'hello', token: fs.readFileSync(path.join(h.base, 'claudefox', 'pipe-token'), 'utf8').trim(), client: 'Army worker w9', army: armyToken }) + '\n'));
   });
 }
 
 async function mainChecks() {
-  const h = startHelper('a', { CLAUDE_IN_ZEN_ARMY_CALLS: '3' });
+  const h = startHelper('a', { CLAUDEFOX_ARMY_CALLS: '3' });
   try {
     h.send({ type: 'hello', version: 'test' });
     await h.next(m => m.type === 'hello');
@@ -235,10 +235,10 @@ async function mainChecks() {
     const L = lead('a1');
     const la = L.argv, lv = f => la[la.indexOf(f) + 1];
     const armyCfgFile = lv('--mcp-config');
-    const armyCfg = JSON.parse(fs.readFileSync(armyCfgFile, 'utf8')).mcpServers['claude-in-zen'];
+    const armyCfg = JSON.parse(fs.readFileSync(armyCfgFile, 'utf8')).mcpServers['claudefox'];
     check('1. army lead: Opus 5.5 at high effort, mcp-army.json in lead mode, the army prompt section',
       lv('--model') === 'claude-opus-5-5' && lv('--effort') === 'high' && path.basename(armyCfgFile) === 'mcp-army.json'
-      && armyCfg.env.CLAUDE_IN_ZEN_ARMY_LEAD === '1' && /# Army mode \(on\)/.test(lv('--append-system-prompt')) && L.tools.includes('army_start') && L.tools.includes('army_wait'));
+      && armyCfg.env.CLAUDEFOX_ARMY_LEAD === '1' && /# Army mode \(on\)/.test(lv('--append-system-prompt')) && L.tools.includes('army_start') && L.tools.includes('army_wait'));
     check('the army turn ends ok', done.ok, done.error);
     const st = L.steps;
     check('12. six tasks are refused', st[0].isError && st[0].text === 'Give at most 5 tasks.', st[0].text);
@@ -256,9 +256,9 @@ async function mainChecks() {
     const wa = w1.argv, wv = f => wa[wa.indexOf(f) + 1];
     check('3. worker flags: Haiku medium, no built-in tools, only the Zen tools, nothing prompted, no Bash',
       wv('--model') === 'claude-haiku-5-5' && wv('--effort') === 'medium' && wa.includes('--tools') && wv('--tools') === '' && wa.includes('--strict-mcp-config')
-      && wv('--allowedTools') === 'mcp__claude-in-zen' && wv('--permission-mode') === 'dontAsk' && !wa.join(' ').includes('Bash')
+      && wv('--allowedTools') === 'mcp__claudefox' && wv('--permission-mode') === 'dontAsk' && !wa.join(' ').includes('Bash')
       && /^r\d+-settings\.json$/.test(path.basename(wv('--settings'))), JSON.stringify(wa.filter(x => x.length < 80)));
-    check('3. worker tool server: its token, its name, no panel flag', ws.length === 3 && ws.every(w => /^[0-9a-f]{32}$/.test(w.env.CLAUDE_IN_ZEN_ARMY_TOKEN) && /^Army worker w\d$/.test(w.env.CLAUDE_IN_ZEN_CLIENT) && !('CLAUDE_IN_ZEN_PANEL' in w.env)));
+    check('3. worker tool server: its token, its name, no panel flag', ws.length === 3 && ws.every(w => /^[0-9a-f]{32}$/.test(w.env.CLAUDEFOX_ARMY_TOKEN) && /^Army worker w\d$/.test(w.env.CLAUDEFOX_CLIENT) && !('CLAUDEFOX_PANEL' in w.env)));
     check('3. worker prompt names its first tab and what to report', /^Your task: SCRIPT:s5 read the first page\n\nStart in tab \d+ \(https:\/\/example\.com\/a\)\.\nReport: the price$/.test(w1.prompt), w1.prompt);
     const settings = w1.settings || { permissions: { deny: [] } };
     check('3. worker settings carry the guard deny rules', settings.permissions.deny.length > 10);
@@ -304,14 +304,14 @@ async function mainChecks() {
     check('11. army_end is sent for every worker', ['w1', 'w2', 'w3'].every(w => h.ends(r1).some(m => m.worker === w)) && h.ends('r2').some(m => m.worker === 'w1'));
     const third = st[st.length - 1];
     check('12. a third army_start in one message is refused', third.tool === 'army_start' && third.isError && third.text === 'This message already used 2 army runs. Answer with what you have.', third.text);
-    const leftovers = fs.readdirSync(path.join(h.base, 'claude-in-zen', 'army'));
+    const leftovers = fs.readdirSync(path.join(h.base, 'claudefox', 'army'));
     check('worker tool-server configs and run settings are deleted when workers end', !leftovers.length, leftovers.join(','));
     const clientsMsgs = h.inbox.filter(m => m.type === 'clients' || Array.isArray(m.clients));
     check('workers stay out of the clients list', !clientsMsgs.some(m => (m.clients || []).some(n => /Army worker/.test(n))));
 
     const unknown = await hello(h, 'ab'.repeat(16));
     check('14. a hello with an unknown army token is refused', unknown.type === 'error' && unknown.error === 'unauthorized', JSON.stringify(unknown));
-    const finished = await hello(h, w1.env.CLAUDE_IN_ZEN_ARMY_TOKEN);
+    const finished = await hello(h, w1.env.CLAUDEFOX_ARMY_TOKEN);
     check('14. a hello with a finished worker\'s token is refused', finished.type === 'error' && finished.error === 'unauthorized', JSON.stringify(finished));
 
     // Cancel while a worker sleeps with a child of its own.
@@ -338,7 +338,7 @@ async function mainChecks() {
 
 // Stop while the first tabs are still opening, and the page loads one message may use.
 async function raceChecks() {
-  const h = startHelper('c', { CLAUDE_IN_ZEN_ARMY_PAGES: '6' });
+  const h = startHelper('c', { CLAUDEFOX_ARMY_PAGES: '6' });
   try {
     h.send({ type: 'hello', version: 'test' });
     await h.next(m => m.type === 'hello');
@@ -381,7 +381,7 @@ async function raceChecks() {
 
 // A worker that hangs is killed at the hard time; a usage limit and a crash are reported as failures.
 async function timeoutChecks() {
-  const h = startHelper('b', { CLAUDE_IN_ZEN_ARMY_HARD_MS: '2500' });
+  const h = startHelper('b', { CLAUDEFOX_ARMY_HARD_MS: '2500' });
   try {
     h.send({ type: 'hello', version: 'test' });
     await h.next(m => m.type === 'hello');

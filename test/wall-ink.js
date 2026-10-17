@@ -7,7 +7,7 @@ const vm = require('vm');
 
 const sandbox = { window: {} };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'extension', 'lib', 'wall.js'), 'utf8'), sandbox);
-const W = sandbox.window.cizWallInk;
+const W = sandbox.window.cfxWallInk;
 
 let pass = 0;
 let fail = 0;

@@ -12,7 +12,7 @@ const { onLines, sendLine } = require('../lib/lines');
 if (process.platform === 'win32') { console.log('SKIP the tool server part uses a unix socket'); process.exit(0); }
 
 const HOST = path.join(__dirname, '..');
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-effort-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-effort-'));
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
 
@@ -46,17 +46,17 @@ check('8. army_wait is allowed 300 s on the tool server, and its schema says 280
 const cc = createClaudeCode({ accountDir: () => tmp, activeId: () => 'main', sendAddon: () => {} });
 check('9. Claude Code processes get MCP_TOOL_TIMEOUT 960000', cc.claudeEnv(tmp).MCP_TOOL_TIMEOUT === '960000');
 
-// ---- the tool server (zen-mcp.js) as Claude Code runs it: MCP lines on its stdio; the helper's pipe is a socket here
+// ---- the tool server (claudefox-mcp.js) as Claude Code runs it: MCP lines on its stdio; the helper's pipe is a socket here
 const sock = path.join(tmp, 'mcp.sock');
-const base = path.join(tmp, 'claude-in-zen');
+const base = path.join(tmp, 'claudefox');
 fs.mkdirSync(base, { recursive: true });
 fs.writeFileSync(path.join(base, 'pipe-token'), 'test-token');
-const ENV = { LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_PIPE: sock, CLAUDE_IN_ZEN_CLIENT: 'effort-smoke' };
+const ENV = { LOCALAPPDATA: tmp, CLAUDEFOX_TEST: '1', CLAUDEFOX_PIPE: sock, CLAUDEFOX_CLIENT: 'effort-smoke' };
 const children = [];
 
 function session(extra) {
-  const child = spawn(process.execPath, [path.join(HOST, 'zen-mcp.js')], {
-    env: { ...process.env, ...ENV, CLAUDE_IN_ZEN_PANEL: '', CLAUDE_IN_ZEN_ARMY_TOKEN: '', ...extra },
+  const child = spawn(process.execPath, [path.join(HOST, 'claudefox-mcp.js')], {
+    env: { ...process.env, ...ENV, CLAUDEFOX_PANEL: '', CLAUDEFOX_ARMY_TOKEN: '', ...extra },
     stdio: ['pipe', 'pipe', 'ignore'],
   });
   children.push(child);
@@ -112,9 +112,9 @@ const CALL = { name: 'tabs_list', arguments: {} };
 
 (async () => {
   // 10-12: instructions
-  const panel = await session({ CLAUDE_IN_ZEN_PANEL: '1' }).ask('initialize', INIT);
+  const panel = await session({ CLAUDEFOX_PANEL: '1' }).ask('initialize', INIT);
   check('10. the panel gets the one-line instructions', panel.result.instructions === ONE_LINE, JSON.stringify(panel.result.instructions).slice(0, 90));
-  const worker = await session({ CLAUDE_IN_ZEN_ARMY_TOKEN: 'token-1' }).ask('initialize', INIT);
+  const worker = await session({ CLAUDEFOX_ARMY_TOKEN: 'token-1' }).ask('initialize', INIT);
   check('11. an army worker gets the one-line instructions', worker.result.instructions === ONE_LINE);
   const outside = (await session({}).ask('initialize', INIT)).result.instructions;
   check('12. an outside client gets the long instructions', outside.startsWith("These tools act on the user's real Zen browser") && outside.length > 200, `${outside.length} characters`);

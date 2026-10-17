@@ -13,10 +13,10 @@ const w = dom.window, d = w.document;
 w.Element.prototype.getBoundingClientRect = () => ({ width: 10, height: 10 });
 Object.defineProperty(w.HTMLElement.prototype, 'innerText', { get() { return this.textContent; } });
 let scrolls = 0; w.Element.prototype.scrollIntoView = () => { scrolls++; };
-// the injected page code (cizPageCode) run in the jsdom window, the way executeScript runs it
+// the injected page code (cfxPageCode) run in the jsdom window, the way executeScript runs it
 const ctx = vm.createContext({ URL });
-vm.runInContext(src + ';this.cizPageCode=cizPageCode;', ctx);
-const run = (op, args) => w.eval(ctx.cizPageCode(op, args));
+vm.runInContext(src + ';this.cfxPageCode=cfxPageCode;', ctx);
+const run = (op, args) => w.eval(ctx.cfxPageCode(op, args));
 // The answer as plain JSON (the page's objects come from another realm). An error comes back as { error }.
 const cls = args => { try { return JSON.parse(JSON.stringify(run('classify', args))); } catch (e) { return { error: String(e.message) }; } };
 // Expected: posts or not, the site it leaves to (null for none), and whether the target was found.

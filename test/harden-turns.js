@@ -10,7 +10,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const root = path.join(__dirname, '..');
-const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-harden-turns-')));
+const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-harden-turns-')));
 process.env.LOCALAPPDATA = path.join(tmp, 'local');   // paths.js reads it when it loads, so this comes before any lib
 
 const P = require('../host/lib/paths');

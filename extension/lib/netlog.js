@@ -1,5 +1,5 @@
 'use strict';
-// Claude in Zen: debug tools for pages (network_log, console_log), without the debug port.
+// Claudefox: debug tools for pages (network_log, console_log), without the debug port.
 //
 // network_log: the add-on watches requests with webRequest while the agent is active. Page loads and frames are
 // always kept; every request type is kept for tabs Claude asked "all" for. Each hop of a redirect chain is its own
@@ -9,19 +9,19 @@
 // console_log: on the first call for a tab, a small listener goes into that tab (and again after each reload while it
 // is watched). It collects console messages and uncaught errors in the add-on's own content-script world.
 
-const CIZ_NET_MAX = 300;
-const cizNet = new Map();            // tabId -> entries (oldest first)
-const cizNetOpen = new Map();        // requestId -> the entry of the current hop
-const cizNetAll = new Set();         // tabs whose every request is kept
-const cizConsoleTabs = new Set();    // tabs whose console is watched
-const CIZ_SECRET_PARAM = /^(code|token|access_?token|id_?token|refresh_?token|auth|authuser_?token|authorization|key|api_?key|secret|client_?secret|password|passwd|pwd|pass|session|session_?id|sid|ssid|hsid|sig|signature|otp|state|nonce|ticket|jwt|bearer|credential|assertion|saml\w*|oauth\w*|x-?amz-\w+|tok|at)$/i;
+const CFX_NET_MAX = 300;
+const cfxNet = new Map();            // tabId -> entries (oldest first)
+const cfxNetOpen = new Map();        // requestId -> the entry of the current hop
+const cfxNetAll = new Set();         // tabs whose every request is kept
+const cfxConsoleTabs = new Set();    // tabs whose console is watched
+const CFX_SECRET_PARAM = /^(code|token|access_?token|id_?token|refresh_?token|auth|authuser_?token|authorization|key|api_?key|secret|client_?secret|password|passwd|pwd|pass|session|session_?id|sid|ssid|hsid|sig|signature|otp|state|nonce|ticket|jwt|bearer|credential|assertion|saml\w*|oauth\w*|x-?amz-\w+|tok|at)$/i;
 
 // A URL with secrets hidden: user:password@, secret-named query and fragment values, and long token-like values.
-function cizRedactUrl(raw) {
+function cfxRedactUrl(raw) {
   let u;
   try { u = new URL(raw); } catch { return String(raw || '').slice(0, 300); }
   if (u.username || u.password) { u.username = ''; u.password = ''; }
-  const hide = (k, v) => CIZ_SECRET_PARAM.test(k) || (v.length >= 32 && /^[A-Za-z0-9_\-.~+/=%]+$/.test(v) && /[0-9]/.test(v) && /[A-Za-z]/.test(v));
+  const hide = (k, v) => CFX_SECRET_PARAM.test(k) || (v.length >= 32 && /^[A-Za-z0-9_\-.~+/=%]+$/.test(v) && /[0-9]/.test(v) && /[A-Za-z]/.test(v));
   const clean = params => {
     const out = [];
     for (const [k, v] of params) out.push(`${encodeURIComponent(k)}=${hide(k, v) ? '[hidden]' : encodeURIComponent(v).slice(0, 200)}`);
@@ -33,12 +33,12 @@ function cizRedactUrl(raw) {
   return `${u.origin}${u.pathname}${q ? '?' + q : ''}${frag}`.slice(0, 1200);
 }
 
-function cizCookieNames(header) {
+function cfxCookieNames(header) {
   return String(header || '').split(';').map(c => c.split('=')[0].trim()).filter(Boolean).slice(0, 60);
 }
 
 // "Set-Cookie: NID=abc; Domain=.google.com; Secure; SameSite=None" -> "NID (Domain=.google.com, Secure, SameSite=None)"
-function cizSetCookie(line) {
+function cfxSetCookie(line) {
   const parts = String(line).split(';').map(s => s.trim());
   const name = (parts.shift() || '').split('=')[0].trim();
   if (!name) return '';
@@ -55,125 +55,125 @@ function cizSetCookie(line) {
   return `${name}${flags.length ? ` (${flags.join(', ')})` : ''}`;
 }
 
-function cizHeader(headers, name) {
+function cfxHeader(headers, name) {
   const h = (headers || []).filter(x => x && String(x.name).toLowerCase() === name);
   return h.map(x => String(x.value || '')).join('\n');
 }
 
-function cizNetRecording(d) {
+function cfxNetRecording(d) {
   if (d.tabId == null || d.tabId < 0) return false;
-  if (typeof cizState !== 'undefined' && cizState.get && cizState.get().agent !== 'active') return false;
-  return d.type === 'main_frame' || d.type === 'sub_frame' || cizNetAll.has(d.tabId);
+  if (typeof cfxState !== 'undefined' && cfxState.get && cfxState.get().agent !== 'active') return false;
+  return d.type === 'main_frame' || d.type === 'sub_frame' || cfxNetAll.has(d.tabId);
 }
 
-function cizNetPush(tabId, entry) {
-  let list = cizNet.get(tabId);
-  if (!list) { list = []; cizNet.set(tabId, list); }
+function cfxNetPush(tabId, entry) {
+  let list = cfxNet.get(tabId);
+  if (!list) { list = []; cfxNet.set(tabId, list); }
   list.push(entry);
-  if (list.length > CIZ_NET_MAX) list.splice(0, list.length - CIZ_NET_MAX);
+  if (list.length > CFX_NET_MAX) list.splice(0, list.length - CFX_NET_MAX);
 }
 
-const cizNetListeners = {
+const cfxNetListeners = {
   before(d) {
-    if (!cizNetRecording(d)) return;
-    const e = { t: Math.round(d.timeStamp || Date.now()), method: d.method, url: cizRedactUrl(d.url), type: d.type, frame: d.frameId || 0 };
-    cizNetOpen.set(d.requestId, e);
-    cizNetPush(d.tabId, e);
+    if (!cfxNetRecording(d)) return;
+    const e = { t: Math.round(d.timeStamp || Date.now()), method: d.method, url: cfxRedactUrl(d.url), type: d.type, frame: d.frameId || 0 };
+    cfxNetOpen.set(d.requestId, e);
+    cfxNetPush(d.tabId, e);
   },
   send(d) {
-    const e = cizNetOpen.get(d.requestId);
+    const e = cfxNetOpen.get(d.requestId);
     if (!e) return;
-    const sent = cizCookieNames(cizHeader(d.requestHeaders, 'cookie'));
+    const sent = cfxCookieNames(cfxHeader(d.requestHeaders, 'cookie'));
     e.cookies_sent = sent.length ? sent : [];
   },
   headers(d) {
-    const e = cizNetOpen.get(d.requestId);
+    const e = cfxNetOpen.get(d.requestId);
     if (!e) return;
     e.status = d.statusCode;
-    const set = cizHeader(d.responseHeaders, 'set-cookie').split('\n').map(cizSetCookie).filter(Boolean).slice(0, 60);
+    const set = cfxHeader(d.responseHeaders, 'set-cookie').split('\n').map(cfxSetCookie).filter(Boolean).slice(0, 60);
     if (set.length) e.cookies_set = set;
-    const type = cizHeader(d.responseHeaders, 'content-type');
+    const type = cfxHeader(d.responseHeaders, 'content-type');
     if (type) e.content_type = type.split(';')[0].slice(0, 60);
   },
   redirect(d) {
-    const e = cizNetOpen.get(d.requestId);
+    const e = cfxNetOpen.get(d.requestId);
     if (!e) return;
     e.status = d.statusCode;
-    e.redirect_to = cizRedactUrl(d.redirectUrl);
-    cizNetOpen.delete(d.requestId);   // the next hop is a new entry
+    e.redirect_to = cfxRedactUrl(d.redirectUrl);
+    cfxNetOpen.delete(d.requestId);   // the next hop is a new entry
   },
   done(d) {
-    const e = cizNetOpen.get(d.requestId);
+    const e = cfxNetOpen.get(d.requestId);
     if (!e) return;
     e.status = d.statusCode;
     if (d.fromCache) e.from_cache = true;
-    cizNetOpen.delete(d.requestId);
+    cfxNetOpen.delete(d.requestId);
   },
   error(d) {
-    const e = cizNetOpen.get(d.requestId);
+    const e = cfxNetOpen.get(d.requestId);
     if (!e) return;
     e.error = String(d.error || 'failed').slice(0, 120);
-    cizNetOpen.delete(d.requestId);
+    cfxNetOpen.delete(d.requestId);
   },
 };
 
-// The listeners the log keeps while the agent is active: cizNetLogStart adds them (once), cizNetLogStop removes them.
-const cizNetTabListeners = {
-  removed: id => { cizNet.delete(id); cizNetAll.delete(id); cizConsoleTabs.delete(id); },
+// The listeners the log keeps while the agent is active: cfxNetLogStart adds them (once), cfxNetLogStop removes them.
+const cfxNetTabListeners = {
+  removed: id => { cfxNet.delete(id); cfxNetAll.delete(id); cfxConsoleTabs.delete(id); },
   updated: (id, info, tab) => {
-    if (info.status === 'loading' && cizConsoleTabs.has(id)) cizConsoleInject(tab || { id, url: info.url || '' }).catch(() => {});
+    if (info.status === 'loading' && cfxConsoleTabs.has(id)) cfxConsoleInject(tab || { id, url: info.url || '' }).catch(() => {});
   },
 };
-let cizNetWr = null;   // the webRequest API the listeners are on, or null while they are off
+let cfxNetWr = null;   // the webRequest API the listeners are on, or null while they are off
 
-function cizNetLogStart() {
+function cfxNetLogStart() {
   const wr = typeof browser !== 'undefined' && browser.webRequest;
-  if (!wr || cizNetWr) return;
-  cizNetWr = wr;
+  if (!wr || cfxNetWr) return;
+  cfxNetWr = wr;
   const filter = { urls: ['<all_urls>'] };
   try {
-    wr.onBeforeRequest.addListener(cizNetListeners.before, filter);
-    wr.onSendHeaders.addListener(cizNetListeners.send, filter, ['requestHeaders']);
-    wr.onHeadersReceived.addListener(cizNetListeners.headers, filter, ['responseHeaders']);
-    wr.onBeforeRedirect.addListener(cizNetListeners.redirect, filter);
-    wr.onCompleted.addListener(cizNetListeners.done, filter);
-    wr.onErrorOccurred.addListener(cizNetListeners.error, filter);
+    wr.onBeforeRequest.addListener(cfxNetListeners.before, filter);
+    wr.onSendHeaders.addListener(cfxNetListeners.send, filter, ['requestHeaders']);
+    wr.onHeadersReceived.addListener(cfxNetListeners.headers, filter, ['responseHeaders']);
+    wr.onBeforeRedirect.addListener(cfxNetListeners.redirect, filter);
+    wr.onCompleted.addListener(cfxNetListeners.done, filter);
+    wr.onErrorOccurred.addListener(cfxNetListeners.error, filter);
   } catch (e) { console.warn('network log unavailable', e); }
-  if (browser.tabs && browser.tabs.onRemoved) browser.tabs.onRemoved.addListener(cizNetTabListeners.removed);
-  if (browser.tabs && browser.tabs.onUpdated) browser.tabs.onUpdated.addListener(cizNetTabListeners.updated);
+  if (browser.tabs && browser.tabs.onRemoved) browser.tabs.onRemoved.addListener(cfxNetTabListeners.removed);
+  if (browser.tabs && browser.tabs.onUpdated) browser.tabs.onUpdated.addListener(cfxNetTabListeners.updated);
 }
 
 // Stop: the listeners go. A listener that cannot be removed is logged, not thrown, so Stop goes on past this call
-// (as cizNetLogStart logs a listener it cannot add).
-function cizNetLogStop() {
-  const wr = cizNetWr;
+// (as cfxNetLogStart logs a listener it cannot add).
+function cfxNetLogStop() {
+  const wr = cfxNetWr;
   if (!wr) return;
-  cizNetWr = null;
+  cfxNetWr = null;
   try {
-    wr.onBeforeRequest.removeListener(cizNetListeners.before);
-    wr.onSendHeaders.removeListener(cizNetListeners.send);
-    wr.onHeadersReceived.removeListener(cizNetListeners.headers);
-    wr.onBeforeRedirect.removeListener(cizNetListeners.redirect);
-    wr.onCompleted.removeListener(cizNetListeners.done);
-    wr.onErrorOccurred.removeListener(cizNetListeners.error);
-    if (browser.tabs && browser.tabs.onRemoved) browser.tabs.onRemoved.removeListener(cizNetTabListeners.removed);
-    if (browser.tabs && browser.tabs.onUpdated) browser.tabs.onUpdated.removeListener(cizNetTabListeners.updated);
+    wr.onBeforeRequest.removeListener(cfxNetListeners.before);
+    wr.onSendHeaders.removeListener(cfxNetListeners.send);
+    wr.onHeadersReceived.removeListener(cfxNetListeners.headers);
+    wr.onBeforeRedirect.removeListener(cfxNetListeners.redirect);
+    wr.onCompleted.removeListener(cfxNetListeners.done);
+    wr.onErrorOccurred.removeListener(cfxNetListeners.error);
+    if (browser.tabs && browser.tabs.onRemoved) browser.tabs.onRemoved.removeListener(cfxNetTabListeners.removed);
+    if (browser.tabs && browser.tabs.onUpdated) browser.tabs.onUpdated.removeListener(cfxNetTabListeners.updated);
   } catch (e) { console.warn('network log: listeners not removed', e); }
 }
 
-// Stop: forget everything recorded and stop watching consoles; the listeners go too (cizNetLogStop).
-function cizNetReset() {
-  cizNet.clear(); cizNetOpen.clear(); cizNetAll.clear(); cizConsoleTabs.clear();
-  cizNetLogStop();
+// Stop: forget everything recorded and stop watching consoles; the listeners go too (cfxNetLogStop).
+function cfxNetReset() {
+  cfxNet.clear(); cfxNetOpen.clear(); cfxNetAll.clear(); cfxConsoleTabs.clear();
+  cfxNetLogStop();
 }
 
-function cizNetLog(tabId, args) {
+function cfxNetLog(tabId, args) {
   const a = args || {};
-  if (a.detail === 'all') cizNetAll.add(tabId);
-  const limit = Math.min(Math.max(Math.round(Number(a.limit) || 60), 1), CIZ_NET_MAX);
-  const all = cizNet.get(tabId) || [];
+  if (a.detail === 'all') cfxNetAll.add(tabId);
+  const limit = Math.min(Math.max(Math.round(Number(a.limit) || 60), 1), CFX_NET_MAX);
+  const all = cfxNet.get(tabId) || [];
   const list = (a.detail === 'all' ? all : all.filter(e => e.type === 'main_frame' || e.type === 'sub_frame' || e.redirect_to)).slice(-limit);
-  if (a.clear) { cizNet.delete(tabId); for (const [k, e] of cizNetOpen) if (all.includes(e)) cizNetOpen.delete(k); }
+  if (a.clear) { cfxNet.delete(tabId); for (const [k, e] of cfxNetOpen) if (all.includes(e)) cfxNetOpen.delete(k); }
   const t0 = list.length ? list[0].t : 0;
   const lines = list.map(e => {
     const bits = [`+${((e.t - t0) / 1000).toFixed(2)}s`, e.method, e.status || (e.error ? 'ERR' : '…'), e.type === 'main_frame' ? 'page' : e.type, e.url];
@@ -200,9 +200,9 @@ function cizNetLog(tabId, args) {
 
 // Runs in the tab's content-script world. Wraps the page's console methods (Firefox exportFunction) and keeps up to
 // 500 messages; uncaught errors, failed promises and Content-Security-Policy blocks are kept too.
-const CIZ_CONSOLE_HOOK = `(function () {
-  if (window.__cizConsole) return true;
-  var buf = window.__cizConsole = [];
+const CFX_CONSOLE_HOOK = `(function () {
+  if (window.__cfxConsole) return true;
+  var buf = window.__cfxConsole = [];
   var fmt = function (v) {
     try {
       if (typeof v === 'string') return v;
@@ -228,18 +228,18 @@ const CIZ_CONSOLE_HOOK = `(function () {
   return true;
 })();`;
 
-async function cizConsoleInject(tab) {
-  const gate = cizUrlBlocked(tab.url || '', { unsafe: !!cizState.get().unsafe });
+async function cfxConsoleInject(tab) {
+  const gate = cfxUrlBlocked(tab.url || '', { unsafe: !!cfxState.get().unsafe });
   if (gate.blocked) return false;
-  await browser.tabs.executeScript(tab.id, { code: CIZ_CONSOLE_HOOK, runAt: 'document_start' });
+  await browser.tabs.executeScript(tab.id, { code: CFX_CONSOLE_HOOK, runAt: 'document_start' });
   return true;
 }
 
-async function cizConsoleLog(tab, args) {
-  const fresh = !cizConsoleTabs.has(tab.id);
-  cizConsoleTabs.add(tab.id);
-  await cizConsoleInject(tab);
-  const [list] = await browser.tabs.executeScript(tab.id, { code: `(function(){var b=window.__cizConsole||[];var o=b.slice();${args && args.clear ? 'b.length=0;' : ''}return o;})();` });
+async function cfxConsoleLog(tab, args) {
+  const fresh = !cfxConsoleTabs.has(tab.id);
+  cfxConsoleTabs.add(tab.id);
+  await cfxConsoleInject(tab);
+  const [list] = await browser.tabs.executeScript(tab.id, { code: `(function(){var b=window.__cfxConsole||[];var o=b.slice();${args && args.clear ? 'b.length=0;' : ''}return o;})();` });
   const items = Array.isArray(list) ? list : [];
   const t0 = items.length ? items[0].t : 0;
   return {

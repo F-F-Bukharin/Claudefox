@@ -1,13 +1,13 @@
 'use strict';
-// Claude in Zen: files Claude makes with create_file (documents, tables, code) and chat exports.
+// Claudefox: files Claude makes with create_file (documents, tables, code) and chat exports.
 // They live in storage.local, so they survive restarts, until the user deletes them. The newest
-// CIZ_FILES_MAX files (and at most CIZ_FILES_TOTAL bytes in all) are kept; older ones drop off.
+// CFX_FILES_MAX files (and at most CFX_FILES_TOTAL bytes in all) are kept; older ones drop off.
 
-const CIZ_FILES_MAX = 200;
-const CIZ_FILES_TOTAL = 60 * 1024 * 1024;
-const CIZ_FILE_MAX = 5 * 1024 * 1024;
+const CFX_FILES_MAX = 200;
+const CFX_FILES_TOTAL = 60 * 1024 * 1024;
+const CFX_FILE_MAX = 5 * 1024 * 1024;
 
-const CIZ_FILE_TYPES = {
+const CFX_FILE_TYPES = {
   md: 'text/markdown', markdown: 'text/markdown', txt: 'text/plain', text: 'text/plain', log: 'text/plain',
   html: 'text/html', htm: 'text/html', css: 'text/css', js: 'text/javascript', mjs: 'text/javascript',
   ts: 'text/plain', tsx: 'text/plain', jsx: 'text/plain', json: 'application/json', csv: 'text/csv',
@@ -22,14 +22,14 @@ const CIZ_FILE_TYPES = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', pdf: 'application/pdf',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
-const CIZ_RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i;
+const CFX_RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i;
 
 // A file name that is safe on Windows and in the downloads folder: no folders, no reserved characters.
-function cizSafeFileName(raw, fallback) {
+function cfxSafeFileName(raw, fallback) {
   let name = String(raw == null ? '' : raw).replace(/^.*[\\/]/, '');
   name = name.replace(/[\u0000-\u001f<>:"|?*\u007f]/g, '').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '');
   if (!name || name === '.' || name === '..') name = fallback || 'document.md';
-  if (CIZ_RESERVED_NAMES.test(name)) name = '_' + name;
+  if (CFX_RESERVED_NAMES.test(name)) name = '_' + name;
   if (!/\.[A-Za-z0-9]{1,8}$/.test(name)) name += '.md';
   if (name.length > 120) {
     const ext = /\.[A-Za-z0-9]{1,8}$/.exec(name)[0];
@@ -38,12 +38,12 @@ function cizSafeFileName(raw, fallback) {
   return name;
 }
 
-function cizFileType(name) {
+function cfxFileType(name) {
   const ext = (/\.([A-Za-z0-9]{1,8})$/.exec(name) || [])[1] || '';
-  return CIZ_FILE_TYPES[ext.toLowerCase()] || 'text/plain';
+  return CFX_FILE_TYPES[ext.toLowerCase()] || 'text/plain';
 }
 
-const cizFiles = {
+const cfxFiles = {
   async list() {
     try {
       const got = await browser.storage.local.get('files');
@@ -55,11 +55,11 @@ const cizFiles = {
     const text = typeof content === 'string' ? content : content == null ? '' : String(content);
     if (!text) throw new Error('The file is empty: give it some content.');
     const size = new TextEncoder().encode(text).length;
-    if (size > CIZ_FILE_MAX) throw new Error(`That file is ${(size / 1048576).toFixed(1)} MB; the limit is 5 MB. Split it into smaller files.`);
-    const fname = cizSafeFileName(name);
+    if (size > CFX_FILE_MAX) throw new Error(`That file is ${(size / 1048576).toFixed(1)} MB; the limit is 5 MB. Split it into smaller files.`);
+    const fname = cfxSafeFileName(name);
     const meta = {
       id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-      name: fname, mime: cizFileType(fname), size, created: Date.now(),
+      name: fname, mime: cfxFileType(fname), size, created: Date.now(),
       title: String(title || '').slice(0, 200), source: String(source || 'Claude').slice(0, 40),
       conv: String(conv || ''), msg: String(msg || ''),
     };
@@ -70,7 +70,7 @@ const cizFiles = {
     let total = 0;
     const keep = list.filter((f, i) => {
       total += f.size || 0;
-      const ok = i < CIZ_FILES_MAX && (i === 0 || total <= CIZ_FILES_TOTAL);
+      const ok = i < CFX_FILES_MAX && (i === 0 || total <= CFX_FILES_TOTAL);
       if (!ok) drop.push(f.id);
       return ok;
     });

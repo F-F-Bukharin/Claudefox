@@ -4,18 +4,18 @@
 // The user's current tab must never change because of the army.
 
 // What a worker may do. No tab switching, no tab list, no files, no debugging tools.
-const CIZ_ARMY_TOOLS = new Set(['navigate', 'get_page_text', 'read_page', 'find', 'analyze_page', 'scroll', 'wait_for',
+const CFX_ARMY_TOOLS = new Set(['navigate', 'get_page_text', 'read_page', 'find', 'analyze_page', 'scroll', 'wait_for',
   'click', 'hover', 'fill', 'type_text', 'press_key', 'screenshot', 'tab_open', 'tab_close']);
 
 // An army tab that comes to the front this soon after a worker acted on it was brought there by the worker's
 // page, not by the user, so the user's tab goes back in front.
-const CIZ_ARMY_FOCUS_MS = 3000;
+const CFX_ARMY_FOCUS_MS = 3000;
 
 // The tabs one worker may have at once: its first tab and 3 more (20 for a run of five). A tab a worker's page opens
 // past that is closed at once (the helper's armyguard.js keeps the same count).
-const CIZ_ARMY_MAX_TABS = 4;
+const CFX_ARMY_MAX_TABS = 4;
 
-const cizArmy = {
+const cfxArmy = {
   tabs: new Map(),   // tabId -> { run, worker, at }   at = time of the last army action on it
   userTab: null,     // { tabId, windowId }: the last tab the user had in front that is not an army tab
   ended: new Set(),  // runs and "run/worker" pairs that are over: a tab of theirs that finishes opening late is closed
@@ -25,7 +25,7 @@ const cizArmy = {
   // Throws when a worker's call is refused; nothing runs then.
   check(tool, args, army) {
     if (!army || !army.run || !army.worker) throw new Error('Bad army call.');
-    if (!CIZ_ARMY_TOOLS.has(tool)) throw new Error(`Army workers can't use ${tool}.`);
+    if (!CFX_ARMY_TOOLS.has(tool)) throw new Error(`Army workers can't use ${tool}.`);
     if (tool === 'tab_open') return;
     const id = args && args.tab_id;
     if (!Number.isInteger(id)) throw new Error('Army calls must name their tab.');
@@ -89,13 +89,13 @@ const cizArmy = {
       if (!t) { this.userTab = { tabId: info.tabId, windowId: info.windowId }; return; }
       const s = this.shown;
       if (s && s.tabId === info.tabId && Date.now() < s.until) { this.shown = null; return; }
-      if (Date.now() - t.at < CIZ_ARMY_FOCUS_MS) this._restore(info.windowId);
+      if (Date.now() - t.at < CFX_ARMY_FOCUS_MS) this._restore(info.windowId);
     });
     // A tab a worker's page opens (a link with target=_blank, a popup) belongs to that worker, up to its 4 tabs.
     browser.tabs.onCreated.addListener(tab => {
       const parent = tab && this.tabs.get(tab.openerTabId);
       if (!parent) return;
-      if (this.count(parent.run, parent.worker) >= CIZ_ARMY_MAX_TABS) browser.tabs.remove(tab.id).catch(() => {});
+      if (this.count(parent.run, parent.worker) >= CFX_ARMY_MAX_TABS) browser.tabs.remove(tab.id).catch(() => {});
       else this.register(tab.id, parent);
       if (tab.active) this._restore(tab.windowId);
     });

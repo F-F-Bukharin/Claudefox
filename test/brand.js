@@ -1,6 +1,8 @@
 'use strict';
-// The friends build is branded Claudefox (tools/brand.js); this PC's install and the source stay Claude in Zen.
-// Stages the files the way tools/build-friends.ps1 does, brands them, and checks the result.   node test/brand.js
+// The source and this PC's install say Claudefox, and Zen where they mean the browser. The friends build (tools/brand.js)
+// turns that Zen into Firefox. Stages the files the way tools/build-friends.ps1 does, brands them, and checks the result.
+// The last section (D3) checks the rename itself: no old name is left outside a short allowlist, the migration in
+// host/install.ps1, and the helper's registration.   node test/brand.js
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -8,6 +10,9 @@ const { spawnSync } = require('child_process');
 
 const root = path.join(__dirname, '..');
 const read = rel => fs.readFileSync(path.join(root, rel), 'latin1');
+// The old names, built from parts so this file does not contain them itself (the D3 section below scans this file too).
+const OLD_WORD = sep => ['claude', 'in', 'zen'].join(sep);       // OLD_WORD('_') is the old registration, OLD_WORD('-') the old data folder
+const OLD_NAME = ['Claude', 'in', 'Zen'].join(' ');              // the old product name
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
 
@@ -25,14 +30,14 @@ function walk(dir, out = []) {
 }
 // What build-friends.ps1 puts in its stage before it brands it (local mods and saved files left out).
 function stage() {
-  const s = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-brand-'));
+  const s = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-brand-'));
   copy(path.join(root, 'extension'), path.join(s, 'extension'));
   for (const sub of ['mods', 'output']) {
     const d = path.join(s, 'extension', sub);
     if (!fs.existsSync(d)) continue;
     for (const n of fs.readdirSync(d)) if (n !== 'README.txt') fs.rmSync(path.join(d, n), { recursive: true, force: true });
   }
-  for (const f of ['claude-in-zen-host.js', 'zen-mcp.js', 'webfetch-hook.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1']) copy(path.join(root, 'host', f), path.join(s, 'host', f));
+  for (const f of ['claudefox-host.js', 'claudefox-mcp.js', 'webfetch-hook.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1']) copy(path.join(root, 'host', f), path.join(s, 'host', f));
   for (const f of fs.readdirSync(path.join(root, 'host', 'lib')).filter(f => f.endsWith('.js'))) copy(path.join(root, 'host', 'lib', f), path.join(s, 'host', 'lib', f));
   for (const f of ['Set up Claudefox.bat', 'START HERE.txt']) copy(path.join(root, 'friends', f), path.join(s, f));
   copy(path.join(root, 'tools', 'Sign in Claude Code.bat'), path.join(s, 'tools', 'Sign in Claude Code.bat'));
@@ -52,8 +57,8 @@ try {
     && m.browser_specific_settings.gecko.update_url === 'https://github.com/F-F-Bukharin/Claudefox/releases/latest/download/updates.json'
     && m.browser_specific_settings.gecko.id === 'claude-in-zen@f.local', JSON.stringify([m.homepage_url, m.browser_specific_settings.gecko.update_url]));
   check('the empty chat asks "What should Claude do in Firefox?"', panel.includes('What should Claude do in Firefox?') && !panel.includes('What should I do in Zen?') && /<title>Claudefox<\/title>/.test(panel));
-  const left = walk(s).filter(f => fs.readFileSync(f, 'latin1').includes('Claude in Zen')).map(f => path.relative(s, f));
-  check('no "Claude in Zen" is left anywhere in the copy', left.length === 0, left.join(', '));
+  const left = walk(s).filter(f => fs.readFileSync(f, 'latin1').includes(OLD_NAME)).map(f => path.relative(s, f));
+  check(`no "${OLD_NAME}" is left anywhere in the copy`, left.length === 0, left.join(', '));
   const bat = path.join(s, 'Set up Claudefox.bat');
   const batText = fs.readFileSync(bat, 'latin1');
   check('the setup finds Firefox and opens about:debugging, or about:addons for a signed build, with claudefox.xpi copied', /Mozilla Firefox\\firefox\.exe/.test(batText)
@@ -91,16 +96,18 @@ try {
     && !/Zen/.test(msg('pt_BR', 'ui_panelPlaceEnd')) && msg('pt_BR', 'main_unsafeOn').includes('ou reiniciar o Firefox.')
     && msg('pt_BR', 'main_acctDiffers').includes('conectada no Firefox.') && msg('pt_BR', 'main_signInHint').includes('O Firefox se lembra disso depois.')
     && !/\bZen\b/.test(['ui_emptyTitle', 'ui_signedOutText', 'ui_usingZenNow', 'ui_panelPlace', 'ui_panelPlaceEnd', 'main_signInHint', 'main_unsafeOn', 'main_acctDiffers'].map(k => msg('pt_BR', k)).join(' ')));
-  const mcp = fs.readFileSync(path.join(s, 'host', 'zen-mcp.js'), 'utf8'), args = fs.readFileSync(path.join(s, 'host', 'lib', 'chatargs.js'), 'utf8');
+  const mcp = fs.readFileSync(path.join(s, 'host', 'claudefox-mcp.js'), 'utf8'), args = fs.readFileSync(path.join(s, 'host', 'lib', 'chatargs.js'), 'utf8');
   check('Claude is told it works in Firefox, and its errors say Firefox', mcp.includes("real Firefox browser") && !mcp.includes('real Zen browser') && args.includes('which field to fill in Firefox.')
     && fs.readFileSync(path.join(s, 'host', 'lib', 'toolSchemas.js'), 'utf8').includes('in a new tab, in front') && !/Zen did not answer|No answer from Zen|No Zen tab/.test(walk(s).filter(f => /\.js$/.test(f)).map(f => fs.readFileSync(f, 'utf8')).join('\n')));
   check('the helper\'s windows say Claudefox', /Claudefox: switch on something that runs programs\?/.test(fs.readFileSync(path.join(s, 'host', 'lib', 'confirmtexts.js'), 'utf8')));
-  check('inside names stay: the helper\'s registry name and the data folder', /NATIVE_HOST: 'claude_in_zen'/.test(fs.readFileSync(path.join(s, 'extension', 'lib', 'policy.js'), 'utf8'))
-    && /\$name\s+= 'claude_in_zen'/.test(fs.readFileSync(path.join(s, 'host', 'install.ps1'), 'latin1')) && /path\.join\(LOCAL, 'claude-in-zen'\)/.test(fs.readFileSync(path.join(s, 'host', 'lib', 'paths.js'), 'utf8')));
+  check('inside names in the friends copy: the helper\'s registry name, the old name for the fallback, the data folder, and the add-on id', /NATIVE_HOST: 'claudefox'/.test(fs.readFileSync(path.join(s, 'extension', 'lib', 'policy.js'), 'utf8'))
+    && fs.readFileSync(path.join(s, 'extension', 'lib', 'policy.js'), 'utf8').includes(`NATIVE_HOST_OLD: '${OLD_WORD('_')}'`)
+    && /\$name\s+= 'claudefox'/.test(fs.readFileSync(path.join(s, 'host', 'install.ps1'), 'latin1')) && /path\.join\(LOCAL, 'claudefox'\)/.test(fs.readFileSync(path.join(s, 'host', 'lib', 'paths.js'), 'utf8'))
+    && m.browser_specific_settings.gecko.id === 'claude-in-zen@f.local');
   check('a file without the old name keeps every byte', fs.readFileSync(path.join(s, 'extension', 'lib', 'state.js')).equals(fs.readFileSync(path.join(root, 'extension', 'lib', 'state.js'))));
   check('Windows files keep their CRLF line endings', [batText, startHere, fs.readFileSync(path.join(s, 'host', 'install.ps1'), 'latin1')].every(b => b.includes('\r\n') && !/[^\r]\n/.test(b)));
-  check('the source and this PC\'s install stay Claude in Zen', JSON.parse(read('extension/manifest.json')).name === 'Claude in Zen' && read('extension/panel.html').includes('What should I do in Zen?')
-    && fs.existsSync(path.join(root, 'Set up Claude in Zen.bat')) && read('START HERE.txt').startsWith('Claude in Zen'));
+  check('the source and this PC\'s install say Claudefox, and Zen where they mean the browser', JSON.parse(read('extension/manifest.json')).name === 'Claudefox' && read('extension/panel.html').includes('What should I do in Zen?')
+    && fs.existsSync(path.join(root, 'Set up Claudefox.bat')) && read('START HERE.txt').startsWith('Claudefox'));
   const own = JSON.parse(read('extension/manifest.json'));
   check('this PC\'s own build has no GitHub homepage or update address', !own.homepage_url && !own.browser_specific_settings.gecko.update_url);
 } finally { fs.rmSync(s, { recursive: true, force: true }); }
@@ -116,7 +123,7 @@ try {
 
 // Without tools/release.json the friends build stops: an add-on signed without its update address could never update.
 const s3 = stage();
-const lone = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-brand-tools-'));
+const lone = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-brand-tools-'));
 try {
   fs.copyFileSync(path.join(root, 'tools', 'brand.js'), path.join(lone, 'brand.js'));
   const r = spawnSync(process.execPath, [path.join(lone, 'brand.js'), s3], { encoding: 'utf8' });
@@ -144,10 +151,10 @@ check('signing finds keys set after its window opened (the account\'s user varia
 check('signing never prints the API keys', !/Write-Host[^\r\n]*\$env:WEB_EXT/.test(sign) && !/echo[^\r\n]*%WEB_EXT/i.test(signBat));
 check('the zip has forward-slash paths (New-FolderZip, not Compress-Archive)', /New-FolderZip \$stage \$zip/.test(friends) && !/Compress-Archive/.test(friends)
   && /\$rel = \$top \+ '\/' \+ \$_\.FullName\.Substring\(\$Folder\.Length \+ 1\)\.Replace\('\\', '\/'\)/.test(read('tools/xpi-tools.ps1')));
-check('signed builds are matched by name: Claudefox for friends, Claude in Zen for this PC', /Find-SignedXpi \$root \$v 'Claudefox'/.test(friends)
-  && /Find-SignedXpi \$root \$version 'Claude in Zen'/.test(read('tools/install-xpi.ps1')) && /\$m\.name -eq \$Name/.test(read('tools/xpi-tools.ps1')));
+check('signed builds are matched by their add-on name, Claudefox, in both the friends build and this PC\'s install', /Find-SignedXpi \$root \$v 'Claudefox'/.test(friends)
+  && /Find-SignedXpi \$root \$version 'Claudefox'/.test(read('tools/install-xpi.ps1')) && /\$m\.name -eq \$Name/.test(read('tools/xpi-tools.ps1')));
 check('build-xpi packs another folder when asked, and this PC\'s build by default', /param\(\[string\]\$Source, \[string\]\$Out\)/.test(read('tools/build-xpi.ps1'))
-  && /else \{ Join-Path \$root 'build\\claude-in-zen\.xpi' \}/.test(read('tools/build-xpi.ps1')));
+  && /else \{ Join-Path \$root 'build\\claudefox\.xpi' \}/.test(read('tools/build-xpi.ps1')));
 check('the changed PowerShell keeps CRLF', ['tools/build-friends.ps1', 'tools/build-xpi.ps1', 'tools/xpi-tools.ps1', 'tools/install-xpi.ps1'].every(f => { const t = read(f); return t.includes('\r\n') && !/[^\r]\n/.test(t); }));
 
 // Releases (PowerShell, read here): the signed Claudefox of this version with its update address checked, updates.json
@@ -164,6 +171,91 @@ check('the public clone gets the branded build and keeps its README, LICENSE, .g
 check('the release files keep CRLF and the .bat runs the script', rel !== '' && relBat !== '' && [rel, relBat].every(t => t.includes('\r\n') && !/[^\r]\n/.test(t)) && /prepare-release\.ps1/.test(relBat));
 
 check('the friends build ships the WebFetch hook (page safety, A3)', /'webfetch-hook\.js'/.test(stageFn));
+
+// ---------------------------------------------------------------- D3 · the rename to Claudefox
+// No old name is left in the add-on, the helper, the scripts, the tests or the docs people read, except what must stay:
+// the add-on id (and the widget id Firefox makes from it), the four localStorage keys saved on people's PCs, the
+// migration's own old names (host/install.ps1), and the fallback's old helper name (extension/lib/policy.js).
+const ADDON_ID = ['claude', 'in', 'zen@f.local'].join('-');
+const ADDON_WIDGET = ['claude', 'in', 'zen_f_local'].join('-');                        // Firefox's name for the add-on's sidebar, made from its id
+const KEPT_KEYS = ['lang', 'theme', 'wall', 'mods-loading'].map(k => 'c' + 'iz-' + k);   // localStorage keys already saved; a new name would lose them
+const OLD_ANY = new RegExp(['c' + 'iz', 'claude[-_ ]in[-_ ]zen', ['zen', 'mcp'].join('-')].join('|'), 'i');
+const oldWord = new RegExp(`${OLD_WORD('[-_]')}(-host\\.bat|\\.json)?`, 'g');
+const ALLOWED = {   // file -> what may still be said there, as a pattern
+  'host/install.ps1': oldWord,                    // the migration from the old folder and registration
+  'extension/lib/policy.js': oldWord,             // NATIVE_HOST_OLD, the helper the add-on falls back to
+  'test/addon-smoke.js': oldWord,                 // the fallback checks
+  'README.md': oldWord,                           // says what the setup moves and removes
+  'zen-profile/apply.ps1': new RegExp(OLD_NAME + ' (BEGIN|END)|' + OLD_NAME + ' BEGIN/END', 'g'),   // the marker lines already in people's Zen profile files
+};
+const SCANNED = ['extension', 'host', 'tools', 'test', 'friends', 'zen-profile', 'build'];
+const scanFiles = [];
+const gather = rel => {
+  for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
+    const r = `${rel}/${e.name}`;
+    if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '.git') gather(r); } else scanFiles.push(r);
+  }
+};
+SCANNED.forEach(gather);
+for (const e of fs.readdirSync(root, { withFileTypes: true })) if (e.isFile()) scanFiles.push(e.name);
+const offenders = [];
+for (const rel of scanFiles) {
+  if (OLD_ANY.test(rel)) { offenders.push(`${rel} (its name)`); continue; }
+  if (/\.(png|xpi|zip|ico|woff2?)$/i.test(rel)) continue;
+  let text = fs.readFileSync(path.join(root, rel), 'latin1');
+  for (const keep of [ADDON_ID, ADDON_WIDGET, ...KEPT_KEYS]) text = text.split(keep).join('');
+  if (ALLOWED[rel]) text = text.replace(ALLOWED[rel], '');
+  const hit = OLD_ANY.exec(text);
+  if (hit) offenders.push(`${rel}: ${hit[0]}`);
+}
+check('D3: no old name (the old identifier prefixes, environment prefix, registration, data folder, product name and tool-server file) is left outside the allowlist', offenders.length === 0, offenders.slice(0, 8).join(' | '));
+check('D3: the allowlist is used: the add-on id, the kept keys and the migration\'s old names are really there', read('extension/manifest.json').includes(ADDON_ID)
+  && KEPT_KEYS.every(k => scanFiles.some(f => !/^test\//.test(f) && read(f).includes(k))) && oldWord.test(read('host/install.ps1')) && read('extension/lib/policy.js').includes(`'${OLD_WORD('_')}'`));
+oldWord.lastIndex = 0;
+check('D3: the files are renamed (git mv): the helper, the tool server, the setup and the menu', ['host/claudefox-host.js', 'host/claudefox-mcp.js', 'Set up Claudefox.bat', 'tools/Claudefox menu.bat'].every(has)
+  && [`host/${OLD_WORD('-')}-host.js`, `host/${['zen', 'mcp'].join('-')}.js`, `Set up ${OLD_NAME}.bat`, `tools/${OLD_NAME} menu.bat`].every(f => !has(f)));
+check('D3: files named after the browser keep their names', ['zen-profile/apply.ps1', 'tools/Load in Zen.bat', 'tools/Install in Zen.bat', 'tools/Apply Zen settings.bat', 'tools/Link add-on to Zen.bat', 'friends/Set up Claudefox.bat'].every(has));
+check('D3: zen-profile/apply.ps1 keeps its marker lines (they are already in people\'s Zen profile files, and a new name would add a second block)', read('zen-profile/apply.ps1').includes(`$comment ${OLD_NAME} BEGIN$close`) && read('zen-profile/apply.ps1').includes(`$comment ${OLD_NAME} END$close`));
+check('D3: the add-on id stays', JSON.parse(read('extension/manifest.json')).browser_specific_settings.gecko.id === ADDON_ID && read('host/install.ps1').includes(`'${ADDON_ID}'`));
+
+// The names the helper uses, read from the real modules (a child process, so LOCALAPPDATA can point at a temp folder).
+const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-names-'));
+try {
+  const out = spawnSync(process.execPath, ['-e', "const p=require(process.argv[1]);console.log(JSON.stringify({base:p.BASE,pipe:p.PIPE,hook:p.testHook('CLAUDEFOX_PIPE')}))", path.join(root, 'host', 'lib', 'paths.js')],
+    { encoding: 'utf8', env: { ...process.env, LOCALAPPDATA: probe, CLAUDEFOX_TEST: '1', CLAUDEFOX_PIPE: '/x/y.sock' } });
+  const o = JSON.parse(out.stdout || '{}');
+  check('D3: the data folder is %LOCALAPPDATA%\\claudefox and the test hooks read CLAUDEFOX_*', o.base === path.join(probe, 'claudefox') && o.hook === '/x/y.sock', out.stdout + out.stderr);
+  const env2 = { ...process.env, LOCALAPPDATA: probe }; delete env2.CLAUDEFOX_PIPE; delete env2.CLAUDEFOX_TEST;
+  const out2 = spawnSync(process.execPath, ['-e', "const p=require(process.argv[1]);console.log(p.PIPE)", path.join(root, 'host', 'lib', 'paths.js')], { encoding: 'utf8', env: env2 });
+  check('D3: the pipe is claudefox-<user> (the socket file on Linux)', /[\\/]claudefox-[^\\/]+(\.sock)?$/.test(out2.stdout.trim()) && !/zen/i.test(out2.stdout), out2.stdout + out2.stderr);
+  const out3 = spawnSync(process.execPath, ['-e', "const p=require(process.argv[1]);console.log(p.PIPE)", path.join(root, 'host', 'lib', 'paths.js')], { encoding: 'utf8', env: { ...env2, [['CLAUDE', 'IN', 'ZEN', 'TEST'].join('_')]: '1', [['CLAUDE', 'IN', 'ZEN', 'PIPE'].join('_')]: '/old/x.sock' } });
+  check('D3: the old test variables (the previous environment prefix) no longer move the pipe', out3.stdout.trim() === out2.stdout.trim(), out3.stdout);
+} finally { fs.rmSync(probe, { recursive: true, force: true }); }
+const cc = read('host/lib/claudecode.js'), plug = read('host/lib/plugins.js');
+check('D3: the tool server is `claudefox` (tools are mcp__claudefox__*): in the config Claude Code gets, the allowed tools, the server\'s own name and the plugins\' reserved names', /'claudefox': \{/.test(cc) && /'mcp__claudefox'/.test(read('host/lib/chatargs.js'))
+  && /serverInfo: \{ name: 'claudefox'/.test(read('host/claudefox-mcp.js')) && /s\.name === 'claudefox'/.test(plug) && /mcp__claudefox__local_files/.test(read('host/lib/sites.js')));
+
+// host/install.ps1 (no PowerShell here, so its text is read): it registers claudefox, moves the old data folder without
+// opening a file, and removes the old registration, launcher and manifest; -Uninstall removes both registrations.
+const inst = read('host/install.ps1');
+const hasRe = (re, t = inst) => re.test(t);
+const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const OLD_US = OLD_WORD('_'), OLD_DASH = OLD_WORD('-');
+const mig = inst.slice(inst.indexOf('# Migration'), inst.indexOf('# Registration'));
+check('D3: install.ps1 registers claudefox: the manifest name, its data folder, the launcher claudefox-host.bat and the helper claudefox-host.js', hasRe(/\$name\s+= 'claudefox'/) && hasRe(/\$base\s+= Join-Path \$env:LOCALAPPDATA 'claudefox'/)
+  && hasRe(/\$launcher\s+= Join-Path \$base 'claudefox-host\.bat'/) && hasRe(/Join-Path \$PSScriptRoot 'claudefox-host\.js'/) && hasRe(new RegExp(`\\$addonId\\s+= '${esc(ADDON_ID)}'`)));
+check('D3: install.ps1 names the old registration, folder, launcher and manifest', hasRe(new RegExp(`\\$oldName\\s+= '${OLD_US}'`)) && hasRe(new RegExp(`\\$oldBase\\s+= Join-Path \\$env:LOCALAPPDATA '${OLD_DASH}'`))
+  && hasRe(new RegExp(`'${OLD_DASH}-host\\.bat'`)) && hasRe(/\$oldName\.json/));
+check('D3: migration, old folder only: the folder is renamed to claudefox', mig !== '' && /Test-Path -LiteralPath \$oldBase\) -and -not \(Test-Path -LiteralPath \$base\)/.test(mig) && /Rename-Item -LiteralPath \$oldBase -NewName/.test(mig));
+check('D3: migration, both folders: each top-level item the new folder lacks is moved, the rest stays and is said', /Get-ChildItem -LiteralPath \$oldBase -Force/.test(mig) && /Move-Item -LiteralPath \$item\.FullName -Destination/.test(mig)
+  && /Test-Path -LiteralPath \(Join-Path \$base \$item\.Name\)/.test(mig) && /left in place/i.test(mig));
+check('D3: migration moves files and never opens them', mig !== '' && !/Get-Content|ReadAll|Select-String|Copy-Item|Import-|\[IO\.File\]::(Open|Read)|-Recurse/.test(mig));
+check('D3: a locked folder (the old helper still running) stops with a plain message, before anything is registered', /catch/.test(mig) && /Close Zen/i.test(mig) && inst.indexOf('# Migration') < inst.indexOf('# Registration'));
+check('D3: install.ps1 removes the old registration, launcher and manifest after registering claudefox', /Remove-Item \$oldRegKey -Force/.test(inst) && inst.indexOf('Remove-Item $oldRegKey') > inst.indexOf('New-Item -Path $regKey'));
+const un = inst.slice(inst.indexOf('if ($Uninstall)'), inst.indexOf('exit 0'));
+check('D3: -Uninstall removes the new registration, and the old one if it is still there', /\$regKey/.test(un) && /\$oldRegKey/.test(un) && /\$launcher/.test(un) && /\$oldLauncher/.test(un) && /Test-Path/.test(un));
+check('D3: install.ps1 keeps CRLF', inst.includes('\r\n') && !/[^\r]\n/.test(inst));
+check('D3: the setup says Claudefox in its messages', /Claudefox helper installed\./.test(inst) && /Claudefox helper removed\./.test(inst) && !inst.includes(OLD_NAME));
 
 console.log(`${passed} checks passed${failed ? `, ${failed} failed` : ''}`);
 process.exitCode = failed ? 1 : 0;

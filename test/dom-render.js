@@ -15,8 +15,8 @@ w.browser = {
     local: { get: async k => (k in local ? { [k]: local[k] } : {}), set: async o => { Object.assign(local, o); } } },
   tabs: { query: async () => [{ title: 'T', url: 'https://x' }], onActivated: { addListener() {} }, onUpdated: { addListener() {} } } };
 let mdCalls = 0;
-w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
-const realMd = w.cizMarkdown; w.cizMarkdown = (...a) => { mdCalls++; return realMd(...a); };
+w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
+const realMd = w.cfxMarkdown; w.cfxMarkdown = (...a) => { mdCalls++; return realMd(...a); };
 w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8')); evalPanel(dom, dir, panelFiles);
 const $ = id => w.document.getElementById(id);
 let pass = 0, fail = 0; const ok = (n, c, x) => { c ? pass++ : fail++; console.log((c ? 'PASS ' : 'FAIL ') + n + (x ? '  ' + x : '')); };

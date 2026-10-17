@@ -2,7 +2,7 @@
 // Army mode: the lead Claude of a chat turn (Quality with the octopus on) sends up to five Haiku workers, each a
 // separate "claude -p" run in its own background tabs. This file keeps the runs: army_start and army_wait, the worker
 // processes, the trail the panel shows, the budgets and time limits, and Stop. The helper wires it in
-// (claude-in-zen-host.js); the tab and budget rules for each worker call are in lib/armyguard.js.
+// (claudefox-host.js); the tab and budget rules for each worker call are in lib/armyguard.js.
 
 const fs = require('fs');
 const path = require('path');
@@ -80,7 +80,7 @@ function cleanUrl(u) {
 }
 
 // deps: { callAddon(tool, args, extra, ms) -> Promise<{ ok, result, error }>, sendAddon(msg), emit(chatRun, event),
-// currentChat() -> the running chat turn, findClaude(), envFor(accountKey), mcpServer: path of zen-mcp.js, limitRe,
+// currentChat() -> the running chat turn, findClaude(), envFor(accountKey), mcpServer: path of claudefox-mcp.js, limitRe,
 // workerSettings(accountKey) -> settings that switch off the account's plugins and claude.ai connectors }
 function createArmy(deps) {
   const runs = new Map();     // run id -> run
@@ -172,9 +172,9 @@ function createArmy(deps) {
     const run = w.run;
     const cfg = {
       mcpServers: {
-        'claude-in-zen': {
+        'claudefox': {
           type: 'stdio', command: process.execPath, args: [deps.mcpServer],
-          env: { CLAUDE_IN_ZEN_CLIENT: `Army worker ${w.id}`, CLAUDE_IN_ZEN_ARMY_TOKEN: w.token },
+          env: { CLAUDEFOX_CLIENT: `Army worker ${w.id}`, CLAUDEFOX_ARMY_TOKEN: w.token },
           alwaysLoad: true,
         },
       },

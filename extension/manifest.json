@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "default_locale": "en",
-  "name": "Claude in Zen",
+  "name": "Claudefox",
   "version": "0.11.0",
   "description": "Personal-use agent bridge that lets a Claude session read and act on pages in Zen. Not affiliated with or endorsed by Anthropic or Zen.",
   "browser_specific_settings": {
@@ -58,7 +58,7 @@
     "persistent": true
   },
   "sidebar_action": {
-    "default_title": "Claude in Zen",
+    "default_title": "Claudefox",
     "default_panel": "panel.html",
     "default_icon": {
       "16": "icons/icon.svg",
@@ -68,7 +68,7 @@
     "open_at_install": true
   },
   "browser_action": {
-    "default_title": "Claude in Zen",
+    "default_title": "Claudefox",
     "default_area": "navbar",
     "default_icon": {
       "16": "icons/icon.svg",
@@ -81,7 +81,7 @@
       "suggested_key": {
         "default": "Alt+Shift+C"
       },
-      "description": "Toggle the Claude in Zen panel"
+      "description": "Toggle the Claudefox panel"
     },
     "stop-claude": {
       "suggested_key": {

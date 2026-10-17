@@ -4,7 +4,7 @@
 // Claude reach further: a tool that runs a program on this PC, a plugin install, a folder for local pages, Unsafe mode
 // and file tools. One question at a time; no answer within two minutes counts as no, and so does Stop.
 //
-// CLAUDE_IN_ZEN_CONFIRM (tests, with CLAUDE_IN_ZEN_TEST=1): a program run instead of the window, with the same environment variables; it prints
+// CLAUDEFOX_CONFIRM (tests, with CLAUDEFOX_TEST=1): a program run instead of the window, with the same environment variables; it prints
 // "yes" or "no". Without it, only Windows has the window: elsewhere every question is a no.
 
 const path = require('path');
@@ -27,9 +27,9 @@ function createConfirm(deps) {
   function runOne(q) {
     return new Promise(resolve => {
       const lang = T.getLang();   // a text may be a string or { en, pt_BR }: the language at the moment the window opens
-      const env = { ...process.env, CIZ_Q_TITLE: String(T.pick(q.title, lang) || 'Claude in Zen').slice(0, 120), CIZ_Q_TEXT: cleanText(T.pick(q.text, lang) || '').slice(0, 3000),
-        CIZ_Q_YES: String(T.pick(q.yes, lang) || 'Yes').slice(0, 40), CIZ_Q_NO: String(T.pick(q.no, lang) || 'No').slice(0, 40) };
-      const testExe = testHook('CLAUDE_IN_ZEN_CONFIRM');
+      const env = { ...process.env, CFX_Q_TITLE: String(T.pick(q.title, lang) || 'Claudefox').slice(0, 120), CFX_Q_TEXT: cleanText(T.pick(q.text, lang) || '').slice(0, 3000),
+        CFX_Q_YES: String(T.pick(q.yes, lang) || 'Yes').slice(0, 40), CFX_Q_NO: String(T.pick(q.no, lang) || 'No').slice(0, 40) };
+      const testExe = testHook('CLAUDEFOX_CONFIRM');
       let exe, args;
       if (testExe) { exe = testExe; args = []; }
       else if (process.platform === 'win32') { exe = 'powershell.exe'; args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-STA', '-File', SCRIPT]; }
@@ -40,7 +40,7 @@ function createConfirm(deps) {
         done = true;
         clearTimeout(timer);
         open.delete(child);
-        log.info(`confirm "${env.CIZ_Q_TITLE}": ${r.ok ? 'yes' : r.error}`);
+        log.info(`confirm "${env.CFX_Q_TITLE}": ${r.ok ? 'yes' : r.error}`);
         resolve(r);
       };
       try {

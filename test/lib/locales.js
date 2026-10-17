@@ -26,7 +26,7 @@ function pseudo() {
 
 // Names the add-on never translates (contract C7), then anything that is only symbols, punctuation or digits, key
 // names, slash commands, web addresses and the two language names, which are shown in their own language everywhere.
-const NAMES = ['Claude', 'Claude Code', 'claude\\.ai', 'Claude in Zen', 'Claudefox', 'Zen', 'Firefox', 'Anthropic', 'Opus 5\\.5',
+const NAMES = ['Claude', 'Claude Code', 'claude\\.ai', 'Claudefox', 'Zen', 'Firefox', 'Anthropic', 'Opus 5\\.5',
   'Sonnet', 'Haiku 5\\.5', 'Caveman', 'vidIQ', 'Desktop Commander', 'MCP', '2FA'];
 const SKIP_TEXT = new RegExp('^(?:'
   + '(?:' + NAMES.join('|') + ')'

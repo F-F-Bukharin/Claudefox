@@ -35,7 +35,7 @@ function applyWall(w) {
   $('wallFrom').value = w.from;
   $('wallTo').value = w.to;
   // The page text takes the ink for this wallpaper (lib/wall.js); the default wallpaper keeps the theme's own.
-  const ink = window.cizWallInk ? cizWallInk.inkFor(w, root.dataset.theme) : null;
+  const ink = window.cfxWallInk ? cfxWallInk.inkFor(w, root.dataset.theme) : null;
   if (ink) root.dataset.wallInk = ink; else delete root.dataset.wallInk;
 }
 function wallNote(text) { $('wallNote').textContent = text; $('wallNote').hidden = !text; }
@@ -51,7 +51,7 @@ function measureWall(dataUrl) {
     small.height = 16;
     const ctx = small.getContext('2d');
     ctx.drawImage(img, 0, 0, 16, 16);
-    const avg = window.cizWallInk ? cizWallInk.averageHex(ctx.getImageData(0, 0, 16, 16).data) : null;
+    const avg = window.cfxWallInk ? cfxWallInk.averageHex(ctx.getImageData(0, 0, 16, 16).data) : null;
     if (avg && wall.image === dataUrl) setWall({ avg });
   };
   img.src = dataUrl;
@@ -92,14 +92,14 @@ function pictureToWall(file) {
     small.height = 16;
     const sctx = small.getContext('2d');
     sctx.drawImage(canvas, 0, 0, 16, 16);
-    const avg = window.cizWallInk ? cizWallInk.averageHex(sctx.getImageData(0, 0, 16, 16).data) : null;
+    const avg = window.cfxWallInk ? cfxWallInk.averageHex(sctx.getImageData(0, 0, 16, 16).data) : null;
     const kept = setWall({ mode: 'picture', image: canvas.toDataURL('image/jpeg', 0.82), avg: avg || '' });
     wallNote(kept ? '' : t('set_pictureTooBig'));
   };
   img.onerror = () => { URL.revokeObjectURL(url); wallNote(t('set_pictureOpenFail')); };
   img.src = url;
 }
-$('version').textContent = 'Claude in Zen v' + browser.runtime.getManifest().version;
+$('version').textContent = 'Claudefox v' + browser.runtime.getManifest().version;
 // Local pages: Claude's question about a folder (answered in the helper's confirm window), and the allowed folders in
 // Profile > Permissions.
 const FILE_ACCESS_OFF = t('set_fileAccessOff');
@@ -440,7 +440,7 @@ function renderLog(log) {
     const e = log[i];
     const li = document.createElement('li');
     const t = document.createElement('time');
-    t.textContent = new Date(e.t).toLocaleTimeString(cizI18n.lang() === 'pt_BR' ? 'pt-BR' : [], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    t.textContent = new Date(e.t).toLocaleTimeString(cfxI18n.lang() === 'pt_BR' ? 'pt-BR' : [], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const span = document.createElement('span');
     span.className = e.kind;
     span.textContent = e.text;
@@ -514,7 +514,7 @@ function loadMod(m) {
   });
 }
 
-// Settings > Saving files: a made file is downloaded now (the default), or kept in the output folder in Claude in Zen's data folder.
+// Settings > Saving files: a made file is downloaded now (the default), or kept in the output folder in Claudefox's data folder.
 const OUTPUT_NOTES = { download: t('set_outDownload'), store: t('set_outStore') };
 function renderOutput(s) {
   const mode = s.outputMode === 'store' ? 'store' : 'download';

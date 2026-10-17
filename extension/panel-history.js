@@ -122,7 +122,7 @@ async function histExport(id) {
   const md = histMarkdown(meta.title, meta.created, got['chat:' + id]);
   const url = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
   const name = meta.title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'chat';
-  try { await browser.downloads.download({ url, filename: `Claude in Zen/${name}.md`, conflictAction: 'uniquify', saveAs: false }); }
+  try { await browser.downloads.download({ url, filename: `Claudefox/${name}.md`, conflictAction: 'uniquify', saveAs: false }); }
   catch (e) { $('composerHint').textContent = t('hist_saveFailed', e && e.message || e); }
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
@@ -168,7 +168,7 @@ function histRow(c) {
   li.dataset.id = c.id;
   const open = el('button', 'hist-open');
   open.type = 'button';
-  open.append(el('span', 'hist-title', c.title), el('span', 'hist-date', new Date(c.updated).toLocaleString(cizI18n.lang() === 'pt_BR' ? 'pt-BR' : [], { dateStyle: 'medium', timeStyle: 'short' })));
+  open.append(el('span', 'hist-title', c.title), el('span', 'hist-date', new Date(c.updated).toLocaleString(cfxI18n.lang() === 'pt_BR' ? 'pt-BR' : [], { dateStyle: 'medium', timeStyle: 'short' })));
   open.disabled = !!busyMsg() && !(histCur && histCur.id === c.id);
   if (open.disabled) open.title = t('hist_stillAnswering');
   open.addEventListener('click', () => histOpen(c.id));

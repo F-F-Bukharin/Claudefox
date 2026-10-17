@@ -18,14 +18,16 @@ const tabs = [
   { id: 1, windowId: 1, active: true, title: 'Shop', url: 'https://shop.example/', status: 'complete' },
   { id: 2, windowId: 1, active: false, title: 'Sign in', url: 'https://accounts.google.com/signin/v2', status: 'complete' },
   { id: 3, windowId: 1, active: false, title: 'Config', url: 'about:config', status: 'complete' },
-  { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/H/Mods/claude-in-zen/claude-in-zen.xpi', status: 'complete' },
-  { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/H/notes/claude-in-zen-notes.txt', status: 'complete' },
+  { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/H/Mods/claudefox/claudefox.xpi', status: 'complete' },
+  { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/H/notes/claudefox-notes.txt', status: 'complete' },
   { id: 6, windowId: 1, active: false, title: 'Lista 3 - Google Docs', url: 'https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit', status: 'complete' },
 ];
 const webRequest = { onBeforeRequest: ev(), onSendHeaders: ev(), onHeadersReceived: ev(), onBeforeRedirect: ev(), onCompleted: ev(), onErrorOccurred: ev() };
 const removed = [];
 const injected = [];
 let native = null;   // the fake helper port
+const nativeTries = [];        // the helper names connectNative was asked for, in order
+let nativeHosts = {};          // name -> 'throw' | 'missing' for the fallback checks; every other name connects
 const connectEv = ev();
 const winCreated = ev();
 let normalWindows = [{ id: 1, type: 'normal' }];   // the Zen windows open now
@@ -42,11 +44,15 @@ const browser = {
     onConnect: connectEv,
     onMessage: ev(),
     getManifest: () => JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')),
-    connectNative: () => {
+    connectNative: name => {
+      nativeTries.push(name);
+      const how = nativeHosts[name];   // 'throw' | 'missing' (the port closes at once, as Firefox does for a host it cannot find) | anything else: connects
+      if (how === 'throw') throw new Error(`No such native application ${name}`);
       const onMsg = ev(), onDisc = ev();
-      native = { sent: [], onMessage: onMsg, onDisconnect: onDisc, disconnected: false,
+      native = { name, sent: [], onMessage: onMsg, onDisconnect: onDisc, disconnected: false,
         postMessage(m) { if (this.disconnected) throw new Error('closed'); this.sent.push(m); },
         disconnect() { this.disconnected = true; } };
+      if (how === 'missing') setTimeout(() => onDisc.fire({ error: { message: `No such native application ${name}` } }), 0);
       return native;
     },
   },
@@ -76,7 +82,7 @@ const fetch = async url => {
   return { status: 200, ok: true, json: async () => ({ account: { email_address: claudeEmail, full_name: 'F', uuid: 'u-1' } }) };
 };
 
-const ctx = vm.createContext({ CIZ_LOCALES: require('./lib/locales').load(), browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, Blob: require('buffer').Blob, btoa: s => Buffer.from(s, 'binary').toString('base64'), setTimeout, clearTimeout, setInterval: () => 0, Promise });
+const ctx = vm.createContext({ CFX_LOCALES: require('./lib/locales').load(), browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, Blob: require('buffer').Blob, btoa: s => Buffer.from(s, 'binary').toString('base64'), setTimeout, clearTimeout, setInterval: () => 0, Promise });
 ctx.window = ctx;
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ext, 'manifest.json'), 'utf8')).background.scripts;   // the real load order
 for (const f of SCRIPTS) {
@@ -90,7 +96,7 @@ const panel = { name: 'panel', onMessage: panelOnMsg, onDisconnect: ev(), postMe
 const fromPanel = async m => { panelOnMsg.fire(m); await tick(); };
 const helperSays = async m => { native.onMessage.fire(m); await tick(); };
 const g = name => vm.runInContext(name, ctx);   // top-level const/let live in the script scope, not on the global
-const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
+const call = (tool, args) => ctx.cfxDebug.call(tool, args || {});
 
 // The helper's confirm window answers (host/lib/confirm.js): the last question the add-on sent gets this answer.
 const answerConfirm = async ok => {
@@ -110,33 +116,33 @@ const answerConfirm = async ok => {
     let r = await call('tabs_list');
     check('tools refused before sign-in', !r.ok && /Not signed in/.test(r.error));
     await fromPanel({ type: 'signIn' });
-    check('sign-in from the claude.ai session', g('cizState').get().signedIn && g('cizState').get().account.email === 'f.work@example.com');
+    check('sign-in from the claude.ai session', g('cfxState').get().signedIn && g('cfxState').get().account.email === 'f.work@example.com');
     check('sign-in is remembered, without cookies', local.rememberedAccount && local.rememberedAccount.email === 'f.work@example.com' && Object.keys(local.rememberedAccount).sort().join() === 'at,email,name,uuid');
 
     // a fresh start (new session storage) signs back in on its own
     const ctx2 = vm.createContext({ browser: Object.assign({}, browser, { storage: { local: browser.storage.local, session: (() => { const s2 = {}; return {
       get: async keys => Object.fromEntries((Array.isArray(keys) ? keys : [keys]).filter(k => k in s2).map(k => [k, s2[k]])),
       set: async o => Object.assign(s2, JSON.parse(JSON.stringify(o))) }; })() } }),
-      fetch, CIZ_LOCALES: require('./lib/locales').load(), console, URL, URLSearchParams, AbortController, TextEncoder, setTimeout, clearTimeout, setInterval: () => 0, Promise });
+      fetch, CFX_LOCALES: require('./lib/locales').load(), console, URL, URLSearchParams, AbortController, TextEncoder, setTimeout, clearTimeout, setInterval: () => 0, Promise });
     ctx2.window = ctx2;
     const nativeBefore = native;
     for (const f of SCRIPTS) vm.runInContext(fs.readFileSync(path.join(ext, f), 'utf8'), ctx2, { filename: f });
     await tick(80);
-    check('restart signs back in from the remembered account', vm.runInContext('cizState', ctx2).get().signedIn === true);
+    check('restart signs back in from the remembered account', vm.runInContext('cfxState', ctx2).get().signedIn === true);
     native = nativeBefore;
 
     await helperSays({ type: 'hello', version: '0.4.0', clients: [] });
-    check('helper connected, Claude Code status asked', g('cizState').get().native === 'connected' && native.sent.some(m => m.type === 'claude_status'));
+    check('helper connected, Claude Code status asked', g('cfxState').get().native === 'connected' && native.sent.some(m => m.type === 'claude_status'));
     await fromPanel({ type: 'checkClaude' });
     await helperSays({ type: 'claude_status', installed: true, loggedIn: true, email: 'f.work@example.com', configDirectory: 'C:\\x\\claude' });
-    check('check link logs what it found', g('cizState').log().some(e => /signed in as f.work@example.com \(profile: C:\\x\\claude\)/.test(e.text)));
+    check('check link logs what it found', g('cfxState').log().some(e => /signed in as f.work@example.com \(profile: C:\\x\\claude\)/.test(e.text)));
     // The tools list reaches the panel with the helper's reason for a blocked shell; a refused switch is logged.
     await helperSays({ type: 'tools', plugins: [{ id: 'desktop-commander@test', label: 'Desktop Commander', local: true, on: false, blocked: 'It gives Claude a shell.',
       servers: [{ name: 'plugin:desktop-commander:desktop-commander', label: 'desktop-commander', transport: 'stdio', local: true, on: false, blocked: 'It gives Claude a shell.' }] }], connectors: [], added: [] });
     await helperSays({ type: 'tool_result', action: 'set', ok: false, error: 'Desktop Commander: It gives Claude a shell.', name: 'desktop-commander@test', label: 'Desktop Commander' });
-    const tl = g('cizState').get().tools;
+    const tl = g('cfxState').get().tools;
     check('tools: a blocked shell keeps its reason on the way to the panel, and a refused switch is logged', tl && tl.plugins[0].blocked === 'It gives Claude a shell.' && tl.plugins[0].servers[0].blocked === 'It gives Claude a shell.'
-      && !tl.plugins[0].on && g('cizState').log().some(e => e.kind === 'error' && /^Desktop Commander: It gives Claude a shell\.$/.test(e.text)), JSON.stringify(tl && tl.plugins[0]));
+      && !tl.plugins[0].on && g('cfxState').log().some(e => e.kind === 'error' && /^Desktop Commander: It gives Claude a shell\.$/.test(e.text)), JSON.stringify(tl && tl.plugins[0]));
 
     r = await call('tabs_list');
     check('tabs_list works', r.ok && r.result.length === 6);
@@ -164,14 +170,14 @@ const answerConfirm = async ok => {
     await helperSays({ type: 'chat_event', id: 'zzz', event: { kind: 'text', text: 'stray' } });
     check('stream reaches the panel, strays dropped', panelIn.some(m => m.type === 'chatEvent' && m.event.text === 'Hel') && !panelIn.some(m => m.type === 'chatEvent' && m.id === 'zzz'));
     await helperSays({ type: 'chat_done', id: 'p1', ok: true, sessionId: 'abc' });
-    check('session kept for follow-ups', g('cizState').get().chatSession === 'abc');
+    check('session kept for follow-ups', g('cfxState').get().chatSession === 'abc');
     await fromPanel({ type: 'chat', id: 'p3', text: 'more' });
     check('follow-up resumes the session', native.sent.find(m => m.type === 'chat' && m.id === 'p3').resume === 'abc');
     await fromPanel({ type: 'chatCancel', id: 'p3' });
     check('cancel is passed on', native.sent.some(m => m.type === 'chat_cancel' && m.id === 'p3'));
     await helperSays({ type: 'chat_done', id: 'p3', ok: false, error: 'Claude AI usage limit reached', limit: true });
 
-    // Improve Claude in Zen (the + menu): an empty message is fine; it runs Opus max with no tab and no files. The
+    // Improve Claudefox (the + menu): an empty message is fine; it runs Opus max with no tab and no files. The
     // proposal reaches the panel, and Apply and Discard go to the helper.
     await fromPanel({ type: 'chat', id: 'imp1', text: '', improve: true });
     const imp = native.sent.find(m => m.type === 'chat' && m.id === 'imp1');
@@ -187,7 +193,7 @@ const answerConfirm = async ok => {
     check('Discard goes to the helper as self_discard', native.sent.some(m => m.type === 'self_discard' && m.id === 'abc123def456'));
     check('limit flag reaches the panel', panelIn.some(m => m.type === 'chatDone' && m.id === 'p3' && m.limit));
     await fromPanel({ type: 'newChat' });
-    check('/clear drops the session', g('cizState').get().chatSession === '');
+    check('/clear drops the session', g('cfxState').get().chatSession === '');
 
     // update when linked to the project folder: a plain reload
     let reloaded = 0; browser.runtime.reload = () => { reloaded++; };
@@ -204,19 +210,19 @@ const answerConfirm = async ok => {
     await helperSays({ type: 'accounts', login: null, accounts: [
       { id: 'main', email: 'me@example.com', loggedIn: true, active: true },
       { id: 'a1', email: 'other@example.com', loggedIn: true, active: false }] });
-    check('the accounts list is kept for the panel', g('cizState').get().accounts.length === 2 && g('cizState').get().accounts[1].email === 'other@example.com');
+    check('the accounts list is kept for the panel', g('cfxState').get().accounts.length === 2 && g('cfxState').get().accounts[1].email === 'other@example.com');
     await fromPanel({ type: 'accountUse', id: 'a1', retry: 'try that again' });
     check('switch asks the helper', native.sent.some(m => m.type === 'account_use' && m.id === 'a1'));
-    check('a switch in progress is marked for the panel', g('cizState').get().accountBusy === 'a1');
+    check('a switch in progress is marked for the panel', g('cfxState').get().accountBusy === 'a1');
     await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: true, email: 'other@example.com' });
     check('switch done: logged, conversation reset, message retried',
-      g('cizState').get().chatSession === '' && g('cizState').log().some(e => /Chat now uses other@example.com/.test(e.text))
+      g('cfxState').get().chatSession === '' && g('cfxState').log().some(e => /Chat now uses other@example.com/.test(e.text))
       && panelIn.some(m => m.type === 'retry' && m.text === 'try that again'));
-    check('a finished switch clears the mark and says which account the chat uses', g('cizState').get().accountBusy === '' && g('cizState').get().accountNote.ok === true && /now uses other@example.com/.test(g('cizState').get().accountNote.text));
+    check('a finished switch clears the mark and says which account the chat uses', g('cfxState').get().accountBusy === '' && g('cfxState').get().accountNote.ok === true && /now uses other@example.com/.test(g('cfxState').get().accountNote.text));
     await fromPanel({ type: 'accountUse', id: 'a1' });
     await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: false, error: 'Claude is still answering. Switch accounts after it finishes.' });
-    check('a refused switch is shown in Profile too', g('cizState').get().accountBusy === '' && g('cizState').get().accountNote.ok === false && /still answering/.test(g('cizState').get().accountNote.text));
-    const addonEmail = () => (g('cizState').get().account || {}).email;
+    check('a refused switch is shown in Profile too', g('cfxState').get().accountBusy === '' && g('cfxState').get().accountNote.ok === false && /still answering/.test(g('cfxState').get().accountNote.text));
+    const addonEmail = () => (g('cfxState').get().account || {}).email;
     claudeEmail = 'other@example.com';
     await fromPanel({ type: 'accountUse', id: 'a1' });
     await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: true, email: 'other@example.com' });
@@ -238,35 +244,35 @@ const answerConfirm = async ok => {
     claudeEmail = 'f.work@example.com';
     await fromPanel({ type: 'accountUse', id: 'a1' });
     await helperSays({ type: 'account_result', action: 'use', id: 'a1', ok: true, email: 'other@example.com' });
-    check('the chat switch leaves the add-on as the account claude.ai is on, and says the note', addonEmail() === 'f.work@example.com' && g('cizState').get().accountNote.ok === true);
+    check('the chat switch leaves the add-on as the account claude.ai is on, and says the note', addonEmail() === 'f.work@example.com' && g('cfxState').get().accountNote.ok === true);
     await fromPanel({ type: 'accountAdd' });
     check('add asks the helper', native.sent.some(m => m.type === 'account_add'));
     await helperSays({ type: 'account_result', action: 'login_started', id: 'a2', ok: true, isNew: true });
-    check('an open sign-in window reaches the panel', (g('cizState').get().accountLogin || {}).id === 'a2');
+    check('an open sign-in window reaches the panel', (g('cfxState').get().accountLogin || {}).id === 'a2');
     await helperSays({ type: 'account_result', action: 'login', id: 'a2', ok: true, email: 'third@example.com' });
-    check('a finished sign-in clears it and says who', g('cizState').get().accountLogin === null && g('cizState').log().some(e => /Signed in as third@example.com/.test(e.text)));
+    check('a finished sign-in clears it and says who', g('cfxState').get().accountLogin === null && g('cfxState').log().some(e => /Signed in as third@example.com/.test(e.text)));
 
     // Choose folder: a folder window answers, and the folder picked becomes the file tools folder
     await fromPanel({ type: 'pickFolder' });
-    check('Choose folder asks the helper for a folder window', native.sent.some(m => m.type === 'pick_folder') && g('cizState').get().folderPicking === true);
+    check('Choose folder asks the helper for a folder window', native.sent.some(m => m.type === 'pick_folder') && g('cfxState').get().folderPicking === true);
     await helperSays({ type: 'pick_folder_result', ok: true, path: '', cancelled: true });
-    check('a cancelled folder window changes nothing', g('cizState').get().folderPicking === false && g('cizState').get().filesFolder !== 'C:\\Users\\F\\Notes');
+    check('a cancelled folder window changes nothing', g('cfxState').get().folderPicking === false && g('cfxState').get().filesFolder !== 'C:\\Users\\F\\Notes');
     await fromPanel({ type: 'pickFolder' });
     await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\F\\Notes', cancelled: false });
-    check('the folder picked becomes the file tools folder', g('cizState').get().filesFolder === 'C:\\Users\\F\\Notes' && g('cizState').get().folderPicking === false);
+    check('the folder picked becomes the file tools folder', g('cfxState').get().filesFolder === 'C:\\Users\\F\\Notes' && g('cfxState').get().folderPicking === false);
     await fromPanel({ type: 'pickFolder' });
     await helperSays({ type: 'pick_folder_result', ok: false, error: 'The folder window did not finish. Type the path instead.' });
-    check('a folder window that fails says so and stops waiting', g('cizState').get().folderPicking === false && g('cizState').log().some(e => /did not finish/.test(e.text)));
+    check('a folder window that fails says so and stops waiting', g('cfxState').get().folderPicking === false && g('cfxState').log().some(e => /did not finish/.test(e.text)));
 
     // file tools setting (sign-out check is at the end)
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'notes' });
-    check('relative folder refused', g('cizState').get().filesEnabled === false);
+    check('relative folder refused', g('cfxState').get().filesEnabled === false);
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'C:\\Users\\F\\notes' });
-    const waitingFiles = g('cizState').get();
+    const waitingFiles = g('cfxState').get();
     check('file tools wait for the helper\'s confirm window before they go on', waitingFiles.filesEnabled === false && waitingFiles.confirmPending && waitingFiles.confirmPending.kind === 'files');
     const fq = await answerConfirm(true);
-    check('a yes in the confirm window turns file tools on for that folder and mode', g('cizState').get().filesEnabled && g('cizState').get().filesMode === 'write'
-      && fq.kind === 'files' && fq.mode === 'write' && fq.folder === 'C:\\Users\\F\\notes' && g('cizState').get().confirmPending === null, JSON.stringify(fq));
+    check('a yes in the confirm window turns file tools on for that folder and mode', g('cfxState').get().filesEnabled && g('cfxState').get().filesMode === 'write'
+      && fq.kind === 'files' && fq.mode === 'write' && fq.folder === 'C:\\Users\\F\\notes' && g('cfxState').get().confirmPending === null, JSON.stringify(fq));
     await fromPanel({ type: 'setPlus', value: true });
     await fromPanel({ type: 'chat', id: 'pp', text: 'plus' });
     check('Speed Plus sends speedplus', native.sent.find(m => m.type === 'chat' && m.id === 'pp').model === 'speedplus');
@@ -281,77 +287,77 @@ const answerConfirm = async ok => {
     await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\F\\Other', cancelled: false });
     const pickAsk = await answerConfirm(false);
     check('a picked folder asks the confirm window while file tools are on', !!pickAsk && pickAsk.kind === 'files' && pickAsk.folder === 'C:\\Users\\F\\Other' && pickAsk.mode === 'write', JSON.stringify(pickAsk));
-    check('a no for the picked folder keeps file tools on, for the old folder', g('cizState').get().filesEnabled === true && g('cizState').get().filesFolder === 'C:\\Users\\F\\notes' && g('cizState').get().filesMode === 'write'
-      && g('cizState').get().confirmPending === null, JSON.stringify([g('cizState').get().filesEnabled, g('cizState').get().filesFolder]));
-    check('the log says the old folder was kept', g('cizState').log().some(e => /Kept C:\\Users\\F\\notes/.test(e.text) && /C:\\Users\\F\\Other/.test(e.text)), g('cizState').log().slice(-3).map(e => e.text).join(' | '));
+    check('a no for the picked folder keeps file tools on, for the old folder', g('cfxState').get().filesEnabled === true && g('cfxState').get().filesFolder === 'C:\\Users\\F\\notes' && g('cfxState').get().filesMode === 'write'
+      && g('cfxState').get().confirmPending === null, JSON.stringify([g('cfxState').get().filesEnabled, g('cfxState').get().filesFolder]));
+    check('the log says the old folder was kept', g('cfxState').log().some(e => /Kept C:\\Users\\F\\notes/.test(e.text) && /C:\\Users\\F\\Other/.test(e.text)), g('cfxState').log().slice(-3).map(e => e.text).join(' | '));
     await fromPanel({ type: 'pickFolder' });
     await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\F\\Other', cancelled: false });
     await answerConfirm(true);
-    check('a yes for the picked folder moves file tools to it', g('cizState').get().filesEnabled === true && g('cizState').get().filesFolder === 'C:\\Users\\F\\Other');
+    check('a yes for the picked folder moves file tools to it', g('cfxState').get().filesEnabled === true && g('cfxState').get().filesFolder === 'C:\\Users\\F\\Other');
 
     // The helper says what it allowed, and the switches follow it (a restarted helper has forgotten them).
     await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: { mode: 'read', folder: 'C:\\Users\\F\\Mirror' } });
-    check('confirmed_state with files turns file tools on for that mode and folder', g('cizState').get().filesEnabled === true && g('cizState').get().filesMode === 'read' && g('cizState').get().filesFolder === 'C:\\Users\\F\\Mirror');
+    check('confirmed_state with files turns file tools on for that mode and folder', g('cfxState').get().filesEnabled === true && g('cfxState').get().filesMode === 'read' && g('cfxState').get().filesFolder === 'C:\\Users\\F\\Mirror');
     await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: null });
-    check('confirmed_state with no files turns file tools off and keeps the remembered mode and folder', g('cizState').get().filesEnabled === false && g('cizState').get().filesMode === 'read' && g('cizState').get().filesFolder === 'C:\\Users\\F\\Mirror');
-    check('the log says the helper did not keep the file tools', g('cizState').log().some(e => /File tools are off: the helper restarted and did not keep them/.test(e.text)));
-    const logLen = g('cizState').log().length;
+    check('confirmed_state with no files turns file tools off and keeps the remembered mode and folder', g('cfxState').get().filesEnabled === false && g('cfxState').get().filesMode === 'read' && g('cfxState').get().filesFolder === 'C:\\Users\\F\\Mirror');
+    check('the log says the helper did not keep the file tools', g('cfxState').log().some(e => /File tools are off: the helper restarted and did not keep them/.test(e.text)));
+    const logLen = g('cfxState').log().length;
     await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: null });
-    check('a state that changes nothing logs nothing', g('cizState').log().length === logLen);
+    check('a state that changes nothing logs nothing', g('cfxState').log().length === logLen);
     await helperSays({ type: 'error', error: 'A reply was too large to send.' });
-    check('an error from the helper is logged', g('cizState').log().some(e => e.kind === 'error' && e.text === 'Helper: A reply was too large to send.'));
+    check('an error from the helper is logged', g('cfxState').log().some(e => e.kind === 'error' && e.text === 'Helper: A reply was too large to send.'));
 
     // Unsafe mode: Claude may read the Google sign-in tab only while it is on
     await fromPanel({ type: 'setUnsafe', value: true });
     await answerConfirm(false);
-    check('a no in the confirm window keeps Unsafe mode off', g('cizState').get().unsafe === false && g('cizState').get().confirmPending === null);
+    check('a no in the confirm window keeps Unsafe mode off', g('cfxState').get().unsafe === false && g('cfxState').get().confirmPending === null);
     await fromPanel({ type: 'setUnsafe', value: true });
     const uq = await answerConfirm(true);
-    check('Unsafe mode turns on from the panel after a yes in the confirm window', g('cizState').get().unsafe === true && uq.kind === 'unsafe');
+    check('Unsafe mode turns on from the panel after a yes in the confirm window', g('cfxState').get().unsafe === true && uq.kind === 'unsafe');
     r = await call('read_page', { tab_id: 2 });
     check('Unsafe mode lets Claude read the Google sign-in tab', r.ok && injected.includes(2));
     r = await call('get_page_text', { tab_id: 3 });
     check('Unsafe mode still refuses about: pages', !r.ok && /browser page.*screenshot shows it/.test(r.error));
     await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: null });
-    check('confirmed_state with Unsafe mode off turns it off, and says why', g('cizState').get().unsafe === false && g('cizState').log().some(e => /Unsafe mode is off: the helper restarted and did not keep it/.test(e.text)));
+    check('confirmed_state with Unsafe mode off turns it off, and says why', g('cfxState').get().unsafe === false && g('cfxState').log().some(e => /Unsafe mode is off: the helper restarted and did not keep it/.test(e.text)));
     await fromPanel({ type: 'setUnsafe', value: true });
     await answerConfirm(true);
     await helperSays({ type: 'confirmed_state', unsafe: true, trusted: false, files: null });
-    check('confirmed_state with Unsafe mode on keeps it on', g('cizState').get().unsafe === true);
+    check('confirmed_state with Unsafe mode on keeps it on', g('cfxState').get().unsafe === true);
 
     // ---- watch switch (Task 9): the switch, the saved option and the card messages (the helper decides; see lib/watchgate.js)
     await fromPanel({ type: 'setWatch', value: true });
     const wq0 = await answerConfirm(false);
-    check('watch: a no in the confirm window keeps watching off and leaves no question open', g('cizState').get().watch === false && g('cizState').get().confirmPending === null && (wq0 || {}).kind === 'watch');
+    check('watch: a no in the confirm window keeps watching off and leaves no question open', g('cfxState').get().watch === false && g('cfxState').get().confirmPending === null && (wq0 || {}).kind === 'watch');
     await fromPanel({ type: 'setWatch', value: true });
     const wq = await answerConfirm(true);
-    check('watch: a yes in the confirm window turns watching on for this session', g('cizState').get().watch === true && (wq || {}).kind === 'watch');
-    check('watch: the log says it is on for this session', g('cizState').log().some(e => e.text === 'Watch videos on for this session.'));
+    check('watch: a yes in the confirm window turns watching on for this session', g('cfxState').get().watch === true && (wq || {}).kind === 'watch');
+    check('watch: the log says it is on for this session', g('cfxState').log().some(e => e.text === 'Watch videos on for this session.'));
     await fromPanel({ type: 'setWatch', value: false });
-    check('watch: the switch off sends watch_off to the helper and clears the flag', native.sent.some(m => m.type === 'watch_off') && g('cizState').get().watch === false);
+    check('watch: the switch off sends watch_off to the helper and clears the flag', native.sent.some(m => m.type === 'watch_off') && g('cfxState').get().watch === false);
     await fromPanel({ type: 'setWatchOnLoad', value: true });
     const ol0 = await answerConfirm(false);
-    check('watch: a no to saving On leaves the saved option as it was and sends no watch_set_on_load', g('cizState').get().watchOnLoad === null && (ol0 || {}).kind === 'watch_on_load' && !native.sent.some(m => m.type === 'watch_set_on_load'));
+    check('watch: a no to saving On leaves the saved option as it was and sends no watch_set_on_load', g('cfxState').get().watchOnLoad === null && (ol0 || {}).kind === 'watch_on_load' && !native.sent.some(m => m.type === 'watch_set_on_load'));
     await fromPanel({ type: 'setWatchOnLoad', value: true });
     const ol = await answerConfirm(true);
     await helperSays({ type: 'watch_state', watch: false, watchOnLoad: true });
-    check("watch: a yes to saving On takes the option from the helper's reply", g('cizState').get().watchOnLoad === true && (ol || {}).kind === 'watch_on_load');
+    check("watch: a yes to saving On takes the option from the helper's reply", g('cfxState').get().watchOnLoad === true && (ol || {}).kind === 'watch_on_load');
     await fromPanel({ type: 'setWatchOnLoad', value: false });
-    check('watch: turning the option off is sent at once and sets it to false', native.sent.some(m => m.type === 'watch_set_on_load' && m.value === false) && g('cizState').get().watchOnLoad === false);
+    check('watch: turning the option off is sent at once and sets it to false', native.sent.some(m => m.type === 'watch_set_on_load' && m.value === false) && g('cfxState').get().watchOnLoad === false);
     check('watch: the panel load asked the helper for the watch state, once', native.sent.filter(m => m.type === 'watch_load').length === 1);
     await helperSays({ type: 'watch_ask', id: 'w1', source: 'clip.mp4' });
-    check('watch: a card from the helper sets the waiting question', (g('cizState').get().watchAsk || {}).id === 'w1' && (g('cizState').get().watchAsk || {}).source === 'clip.mp4');
+    check('watch: a card from the helper sets the waiting question', (g('cfxState').get().watchAsk || {}).id === 'w1' && (g('cfxState').get().watchAsk || {}).source === 'clip.mp4');
     await fromPanel({ type: 'watchShown', id: 'w1' });
     await fromPanel({ type: 'watchAnswer', id: 'w1', allow: true });
     check('watch: the card shown and the answer reach the helper with the same id', native.sent.some(m => m.type === 'watch_shown' && m.id === 'w1') && native.sent.some(m => m.type === 'watch_answer' && m.id === 'w1' && m.allow === true));
     await helperSays({ type: 'watch_ask_done', id: 'other' });
-    check('watch: a done for another card is ignored', (g('cizState').get().watchAsk || {}).id === 'w1');
+    check('watch: a done for another card is ignored', (g('cfxState').get().watchAsk || {}).id === 'w1');
     await helperSays({ type: 'watch_ask_done', id: 'w1' });
-    check('watch: the helper ends the card', g('cizState').get().watchAsk === null);
+    check('watch: the helper ends the card', g('cfxState').get().watchAsk === null);
     await fromPanel({ type: 'setWatch', value: true });
     await answerConfirm(true);
     await helperSays({ type: 'watch_ask', id: 'w2', source: 'clip2.mp4' });
-    check('watch: switched on again, with a card waiting (checked at Stop)', g('cizState').get().watch === true && (g('cizState').get().watchAsk || {}).id === 'w2');
+    check('watch: switched on again, with a card waiting (checked at Stop)', g('cfxState').get().watch === true && (g('cfxState').get().watchAsk || {}).id === 'w2');
 
     // Google Docs: read through the export, with the user's session
     r = await call('get_page_text', { tab_id: 6 });
@@ -380,83 +386,118 @@ const answerConfirm = async ok => {
     r = await call('console_log', { tab_id: 1 });
     check('console log starts listening on the tab', r.ok && injected.includes(1) && /listening/i.test(r.result.text));
     r = await call('console_log', { tab_id: 2 });
-    check('console log follows the Google sign-in rule', r.ok === g('cizState').get().unsafe);
+    check('console log follows the Google sign-in rule', r.ok === g('cfxState').get().unsafe);
 
     // Stop
     const port = native;
     const waiting = call('wait_for', { tab_id: 1, text: 'never shows', timeout_ms: 60000 });
     await tick(100);
-    check('a long page action shows as pending', g('cizState').get().pending === 1);
+    check('a long page action shows as pending', g('cfxState').get().pending === 1);
     const tStop = Date.now();
     await fromPanel({ type: 'stop' });
-    const s = g('cizState').get();
+    const s = g('cfxState').get();
     check('Stop ends the open answer in the panel', panelIn.some(m => m.type === 'chatDone' && m.id === 'p4' && m.error === 'Stopped.'));
     check('Stop disconnects the helper and turns file tools off', port.disconnected && s.agent === 'stopped' && s.filesEnabled === false);
     check('Stop turns Unsafe mode off too', s.unsafe === false);
     check('watch switch: Stop turns watching off, ends the card and sends watch_off to the helper', s.watch === false && s.watchAsk === null && port.sent.filter(m => m.type === 'watch_off').length === 2);
-    check('Stop forgets the network log', !g('cizNet').size && !g('cizConsoleTabs').size);
+    check('Stop forgets the network log', !g('cfxNet').size && !g('cfxConsoleTabs').size);
     const w = await waiting;
     check('Stop aborts the running page action at once', !w.ok && w.error === 'Stopped' && Date.now() - tStop < 500 && s.pending === 0, `${Date.now() - tStop} ms`);
     r = await call('tabs_list');
     check('tools refused while stopped', !r.ok && /stopped/.test(r.error));
     await fromPanel({ type: 'setFiles', value: true, mode: 'read', folder: 'C:\\x' });
-    check('file tools cannot be turned on while stopped', g('cizState').get().filesEnabled === false);
+    check('file tools cannot be turned on while stopped', g('cfxState').get().filesEnabled === false);
     await fromPanel({ type: 'start' });
-    check('Start reconnects the helper', g('cizState').get().agent === 'active' && native !== port);
+    check('Start reconnects the helper', g('cfxState').get().agent === 'active' && native !== port);
     // Opening Zen turns the agent on; a Stop lasts while Zen stays open
     await fromPanel({ type: 'stop' });
     normalWindows.push({ id: 2, type: 'normal' }); winCreated.fire({ id: 2, type: 'normal' }); await tick(30);
-    check('a second window keeps a Stop', g('cizState').get().agent === 'stopped');
+    check('a second window keeps a Stop', g('cfxState').get().agent === 'stopped');
     normalWindows = normalWindows.filter(w => w.id !== 2);
     winCreated.fire({ id: 7, type: 'popup' }); await tick(30);
-    check('a popup window does not turn the agent on', g('cizState').get().agent === 'stopped');
+    check('a popup window does not turn the agent on', g('cfxState').get().agent === 'stopped');
     const beforeOpen = native;
     normalWindows = [{ id: 3, type: 'normal' }];   // Zen was closed and is opened again
     winCreated.fire({ id: 3, type: 'normal' }); await tick(30);
-    check('opening Zen again turns the agent on by itself', g('cizState').get().agent === 'active' && native !== beforeOpen && !native.disconnected);
-    check('opening Zen is logged', g('cizState').log().some(e => /Zen opened: the agent is on/.test(e.text)));
+    check('opening Zen again turns the agent on by itself', g('cfxState').get().agent === 'active' && native !== beforeOpen && !native.disconnected);
+    check('opening Zen is logged', g('cfxState').log().some(e => /Zen opened: the agent is on/.test(e.text)));
     const beforeSecond = native;
     normalWindows.push({ id: 4, type: 'normal' }); winCreated.fire({ id: 4, type: 'normal' }); await tick(30);
-    check('a second window does not reconnect the helper', native === beforeSecond && g('cizState').get().agent === 'active');
+    check('a second window does not reconnect the helper', native === beforeSecond && g('cfxState').get().agent === 'active');
     // Settings > Saving files: "Store in output folder" keeps a made file through the helper. Without the helper, or when Save as is asked, the file downloads as before.
     const downloads = [];
     browser.downloads = { download: async o => { downloads.push(o); return downloads.length; } };
-    const made = await g('cizFiles').add({ name: 'notes.txt', content: 'Olá, mundo', title: 'Notes', source: 'Claude', conv: 'c-out', msg: 'm-out' });
+    const made = await g('cfxFiles').add({ name: 'notes.txt', content: 'Olá, mundo', title: 'Notes', source: 'Claude', conv: 'c-out', msg: 'm-out' });
     await fromPanel({ type: 'setOutput', value: 'store' });
-    check('the output setting is kept', g('cizState').get().outputMode === 'store' && local.outputMode === 'store');
+    check('the output setting is kept', g('cfxState').get().outputMode === 'store' && local.outputMode === 'store');
     let sentAt = native.sent.length;
     await fromPanel({ type: 'downloadFile', id: made.id });
     const saveMsg = native.sent.slice(sentAt).find(m => m.type === 'save_output');
     check('a stored file goes to the helper with its bytes', !!saveMsg && saveMsg.name === 'notes.txt' && Buffer.from(saveMsg.data, 'base64').toString('utf8') === 'Olá, mundo', saveMsg ? saveMsg.name : 'no save_output sent');
     check('nothing is downloaded while the helper stores it', downloads.length === 0);
-    await helperSays({ type: 'output_saved', req: saveMsg.req, ok: true, name: 'notes.txt', path: 'C:\\Users\\H\\AppData\\Local\\claude-in-zen\\output\\notes.txt' });
+    await helperSays({ type: 'output_saved', req: saveMsg.req, ok: true, name: 'notes.txt', path: 'C:\\Users\\H\\AppData\\Local\\claudefox\\output\\notes.txt' });
     check('the stored path reaches the panel', panelIn.some(m => m.type === 'outputSaved' && m.name === 'notes.txt' && /output\\notes\.txt$/.test(m.path)));
-    check('a stored file is logged, and not downloaded', g('cizState').log().some(e => /Stored notes\.txt in the output folder/.test(e.text)) && downloads.length === 0);
+    check('a stored file is logged, and not downloaded', g('cfxState').log().some(e => /Stored notes\.txt in the output folder/.test(e.text)) && downloads.length === 0);
     sentAt = native.sent.length;
     await fromPanel({ type: 'downloadFile', id: made.id });   // the helper takes the file...
     const inFlight = native.sent.slice(sentAt).some(m => m.type === 'save_output');
     native.onDisconnect.fire({ error: null });   // ...then stops before it answers
     await tick();
-    check('a helper that stops before it answers means a download', inFlight && downloads.length === 1 && downloads[0].filename === 'Claude in Zen/notes.txt' && downloads[0].saveAs === false, downloads.map(d => d.filename).join(','));
-    check('the fallback says why', g('cizState').log().some(e => /Could not store notes\.txt \(the helper stopped\), so it was downloaded instead/.test(e.text)));
+    check('a helper that stops before it answers means a download', inFlight && downloads.length === 1 && downloads[0].filename === 'Claudefox/notes.txt' && downloads[0].saveAs === false, downloads.map(d => d.filename).join(','));
+    check('the fallback says why', g('cfxState').log().some(e => /Could not store notes\.txt \(the helper stopped\), so it was downloaded instead/.test(e.text)));
     const realConnect = browser.runtime.connectNative;
-    browser.runtime.connectNative = () => { throw new Error('No such native application claude_in_zen'); };
+    browser.runtime.connectNative = () => { throw new Error('No such native application claudefox'); };
     await fromPanel({ type: 'downloadFile', id: made.id });
     await tick();
     browser.runtime.connectNative = realConnect;
-    check('with no helper installed the file is downloaded', downloads.length === 2 && downloads[1].filename === 'Claude in Zen/notes.txt');
+    check('with no helper installed the file is downloaded', downloads.length === 2 && downloads[1].filename === 'Claudefox/notes.txt');
     await fromPanel({ type: 'setOutput', value: 'download' });
     await fromPanel({ type: 'downloadFile', id: made.id });
     await tick();
-    check('download now (the default) saves to Claude in Zen, as before', downloads.length === 3 && downloads[2].filename === 'Claude in Zen/notes.txt' && downloads[2].saveAs === false && local.outputMode === 'download');
+    check('download now (the default) saves to Claudefox, as before', downloads.length === 3 && downloads[2].filename === 'Claudefox/notes.txt' && downloads[2].saveAs === false && local.outputMode === 'download');
     await fromPanel({ type: 'setOutput', value: 'store' });
     const savesBefore = native.sent.filter(m => m.type === 'save_output').length;
     await fromPanel({ type: 'downloadFile', id: made.id, saveAs: true });
     await tick();
     check('Save as asks where to put the file, even in store mode', downloads.length === 4 && downloads[3].saveAs === true && native.sent.filter(m => m.type === 'save_output').length === savesBefore);
+    // D3: the add-on connects to the helper `claudefox`; when that registration is missing it tries the old one once and says to re-run setup.
+    const RERUN = 'Re-run Set up Claudefox.bat to finish the update.';
+    const roundOn = async hosts => {   // a fresh connect with the helpers in `hosts` missing; returns the names tried
+      g('disconnectNative')('test'); await tick();
+      nativeHosts = hosts; nativeTries.length = 0; await g('cfxState').set({ nativeNotice: '', native: 'unknown' });
+      g('connectNative')(); await tick(60);
+      return nativeTries.slice();
+    };
+    check('the helper names: the new one is claudefox, the fallback is the old registration', g('CFX').NATIVE_HOST === 'claudefox' && g('CFX').NATIVE_HOST_OLD === 'claude_in_zen');
+    let tried = await roundOn({});
+    await helperSays({ type: 'hello', version: '0.11.0', clients: [] });
+    check('with claudefox registered it connects to it only, and shows no notice', tried.join() === 'claudefox' && g('cfxState').get().native === 'connected' && g('cfxState').get().nativeNotice === '', tried.join());
+    const noticesBefore = g('cfxState').log().filter(e => e.text === RERUN).length;   // the "no helper installed" download check above fell back once already
+    tried = await roundOn({ claudefox: 'missing' });
+    check('claudefox not found (the port closes at once): it tries claude_in_zen, once, and the old helper is the port in use', tried.join() === 'claudefox,claude_in_zen' && native.name === 'claude_in_zen', tried.join());
+    check('and while it tries, the notice is up and nothing says "not installed" yet', g('cfxState').get().nativeNotice === RERUN && g('cfxState').get().native !== 'missing', g('cfxState').get().native);
+    await helperSays({ type: 'hello', version: '0.10.0', clients: [] });
+    check('the old helper connects, the add-on works, and the notice stays', g('cfxState').get().native === 'connected' && g('cfxState').get().hostVersion === '0.10.0' && g('cfxState').get().nativeNotice === RERUN);
+    check('the notice is logged once per fallback', g('cfxState').log().filter(e => e.text === RERUN).length === noticesBefore + 1, String(g('cfxState').log().filter(e => e.text === RERUN).length - noticesBefore));
+    tried = await roundOn({ claudefox: 'throw' });
+    check('claudefox refused outright (connectNative throws): the same fallback and notice', tried.join() === 'claudefox,claude_in_zen' && native.name === 'claude_in_zen' && g('cfxState').get().nativeNotice === RERUN, tried.join());
+    await helperSays({ type: 'hello', version: '0.11.0', clients: [] });
+    tried = await roundOn({});
+    await helperSays({ type: 'hello', version: '0.11.0', clients: [] });
+    check('once claudefox is registered again, the next connection clears the notice', tried.join() === 'claudefox' && g('cfxState').get().nativeNotice === '' && g('cfxState').get().native === 'connected');
+    tried = await roundOn({ claudefox: 'missing', claude_in_zen: 'missing' });
+    check('both missing: each is tried once, no loop, and the helper shows as not installed with the notice', tried.join() === 'claudefox,claude_in_zen' && g('cfxState').get().native === 'missing' && g('cfxState').get().nativeNotice === RERUN
+      && g('cfxState').get().nativeDetail === 'helper not installed', JSON.stringify([tried, g('cfxState').get().native, g('cfxState').get().nativeDetail]));
+    await tick(1800);   // longer than the first retry delay: a "not installed" helper is not retried on its own
+    check('both missing: it does not keep retrying', nativeTries.length === 2, nativeTries.join());
+    tried = await roundOn({ claudefox: 'throw', claude_in_zen: 'throw' });
+    check('both refuse: the helper-unreachable handling applies, with the same notice', tried.join() === 'claudefox,claude_in_zen' && g('cfxState').get().native === 'error' && g('cfxState').get().nativeNotice === RERUN
+      && /No such native application claude_in_zen/.test(g('cfxState').get().nativeDetail), JSON.stringify([g('cfxState').get().native, g('cfxState').get().nativeDetail]));
+    nativeHosts = {};
+    g('disconnectNative')('test'); await tick();
     await fromPanel({ type: 'setOutput', value: 'download' });
     await fromPanel({ type: 'signOut' });
-    check('signing out forgets the remembered account', !local.rememberedAccount && !g('cizState').get().signedIn);
+    check('signing out forgets the remembered account', !local.rememberedAccount && !g('cfxState').get().signedIn);
   } catch (e) {
     check('no unexpected errors', false, e.stack);
   } finally {

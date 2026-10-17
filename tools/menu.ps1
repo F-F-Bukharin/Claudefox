@@ -1,7 +1,7 @@
-# Claude in Zen menu: one window for every developer step.
+# Claudefox menu: one window for every developer step.
 # Recommended ticks the steps most people need. Custom starts with nothing ticked.
 # Nothing runs until you press Run. Then only the ticked steps run, one after another, in list order.
-# Start it with "Claude in Zen menu.bat". It needs Windows PowerShell 5.1, which comes with Windows.
+# Start it with "Claudefox menu.bat". It needs Windows PowerShell 5.1, which comes with Windows.
 # Steps that run hidden write their output to the log. Steps that wait for you open their own window.
 
 if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne [System.Threading.ApartmentState]::STA) {
@@ -46,7 +46,7 @@ function Test-ClaudeSignedIn {
     $keep[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
   }
   try {
-    $env:CLAUDE_CONFIG_DIR = Join-Path $env:LOCALAPPDATA 'claude-in-zen\claude'
+    $env:CLAUDE_CONFIG_DIR = Join-Path $env:LOCALAPPDATA 'claudefox\claude'
     Remove-Item Env:ANTHROPIC_API_KEY, Env:ANTHROPIC_AUTH_TOKEN -ErrorAction SilentlyContinue
     & $exe auth status --text *> $null
     if ($LASTEXITCODE -eq 0) { return 'yes' }
@@ -106,7 +106,7 @@ function Test-XpiPref {
 # Waits while Zen is open. Returns $false when the user skips the step.
 function Wait-ZenClosed {
   while (Test-ZenOpen) {
-    $answer = [System.Windows.Forms.MessageBox]::Show($script:form, 'Zen is open. Close every Zen window, then press OK. Cancel skips this step.', 'Claude in Zen', [System.Windows.Forms.MessageBoxButtons]::OKCancel, [System.Windows.Forms.MessageBoxIcon]::Warning)
+    $answer = [System.Windows.Forms.MessageBox]::Show($script:form, 'Zen is open. Close every Zen window, then press OK. Cancel skips this step.', 'Claudefox', [System.Windows.Forms.MessageBoxButtons]::OKCancel, [System.Windows.Forms.MessageBoxIcon]::Warning)
     if ($answer -ne [System.Windows.Forms.DialogResult]::OK) { return $false }
   }
   return $true
@@ -138,14 +138,14 @@ $script:steps = @(
     Title = 'Install the helper'
     Recommended = $true
     NeedsZen = $false
-    Detail = 'Registers the helper that lets the add-on start Claude Code, for this Windows user only (no admin). Makes: %LOCALAPPDATA%\claude-in-zen (the launcher and the manifest). Needs Node.js.'
+    Detail = 'Registers the helper that lets the add-on start Claude Code, for this Windows user only (no admin). Makes: %LOCALAPPDATA%\claudefox (the launcher and the manifest). Needs Node.js.'
     Jobs = @( (New-PsJob (Join-Path $root 'host\install.ps1') '' @(0)) )
   },
   @{
     Title = 'Sign in to Claude Code'
     Recommended = $true
     NeedsZen = $false
-    Detail = 'Checks first, and skips when you are already signed in. Otherwise a window opens: sign in with your Claude account (Pro plan) and click Authorize. Makes: %LOCALAPPDATA%\claude-in-zen\claude, the add-on''s own Claude Code profile.'
+    Detail = 'Checks first, and skips when you are already signed in. Otherwise a window opens: sign in with your Claude account (Pro plan) and click Authorize. Makes: %LOCALAPPDATA%\claudefox\claude, the add-on''s own Claude Code profile.'
     Before = {
       $r = Test-ClaudeSignedIn
       if ($r -eq 'yes') { return @{ Status = 'done'; Note = 'Already signed in.' } }
@@ -194,7 +194,7 @@ $script:steps = @(
     Title = 'Build the add-on file (.xpi)'
     Recommended = $false
     NeedsZen = $false
-    Detail = 'Packs extension\ into build\claude-in-zen.xpi. Makes: the build folder.'
+    Detail = 'Packs extension\ into build\claudefox.xpi. Makes: the build folder.'
     Jobs = @( (New-PsJob (Join-Path $tools 'build-xpi.ps1') '' @(0)) )
   },
   @{
@@ -221,7 +221,7 @@ $script:steps = @(
     Title = 'Build the zip for friends'
     Recommended = $false
     NeedsZen = $false
-    Detail = 'Writes build\friends\Claudefox-v<version>.zip (the add-on is called Claudefox there), with the signed build for this version when there is one (otherwise an unsigned one, and the log says so). Friends get the setup file, not this menu.'
+    Detail = 'Writes build\friends\Claudefox-v<version>.zip with the signed build for this version when there is one (otherwise an unsigned one, and the log says so). Friends get the setup file, not this menu.'
     Jobs = @( (New-PsJob (Join-Path $tools 'build-friends.ps1') '' @(0)) )
   },
   @{
@@ -249,7 +249,7 @@ $script:steps = @(
     Title = 'Remove the helper'
     Recommended = $false
     NeedsZen = $false
-    Detail = 'Removes the helper registration and its launcher from %LOCALAPPDATA%\claude-in-zen. Claude Code keeps its sign-in.'
+    Detail = 'Removes the helper registration and its launcher from %LOCALAPPDATA%\claudefox. Claude Code keeps its sign-in.'
     Jobs = @( (New-PsJob (Join-Path $root 'host\install.ps1') '-Uninstall' @(0)) )
   }
 )
@@ -405,8 +405,8 @@ function Start-JobProcess($job) {
     if ($job.Args) { $sp['ArgumentList'] = $job.Args }
     if (-not $job.Visible) {
       $id = [guid]::NewGuid().ToString('N')
-      $script:outFile = Join-Path $env:TEMP ('claude-in-zen-menu-' + $id + '.out.txt')
-      $script:errFile = Join-Path $env:TEMP ('claude-in-zen-menu-' + $id + '.err.txt')
+      $script:outFile = Join-Path $env:TEMP ('claudefox-menu-' + $id + '.out.txt')
+      $script:errFile = Join-Path $env:TEMP ('claudefox-menu-' + $id + '.err.txt')
       $sp['WindowStyle'] = 'Hidden'
       $sp['RedirectStandardOutput'] = $script:outFile
       $sp['RedirectStandardError'] = $script:errFile
@@ -526,7 +526,7 @@ function Finish-Run {
 # ---- the window -------------------------------------------------------------------
 
 $script:form = New-Object System.Windows.Forms.Form
-$script:form.Text = 'Claude in Zen'
+$script:form.Text = 'Claudefox'
 $script:form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
 $script:form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
 $script:form.MaximizeBox = $false
@@ -534,7 +534,7 @@ $script:form.ClientSize = New-Object System.Drawing.Size(600, 700)
 $script:form.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 
 $title = New-Object System.Windows.Forms.Label
-$title.Text = 'Claude in Zen setup'
+$title.Text = 'Claudefox setup'
 $title.Font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Bold)
 Place $title 16 12 568 30
 

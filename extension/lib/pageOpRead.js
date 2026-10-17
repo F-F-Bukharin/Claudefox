@@ -1,9 +1,9 @@
 'use strict';
 // The page operations that only read the page: read, text, analyze, selection, find, viewport, exists, ctype.
-// Each is a declaration in the script cizPageCode (pageOp.js) injects into the tab. env is what cizPageEnv returns
+// Each is a declaration in the script cfxPageCode (pageOp.js) injects into the tab. env is what cfxPageEnv returns
 // (the helpers and constants) and args is the call's arguments.
 
-function cizOpRead(env, args) {
+function cfxOpRead(env, args) {
   const { INTERACTIVE, HEADINGS, clamp, isVisible, labelOf, refOf, describe, page } = env;
   const max = clamp(args.max_chars, 1000, 200000, 20000);
   const sel = args.filter === 'interactive' ? INTERACTIVE : INTERACTIVE + ', ' + HEADINGS;
@@ -21,11 +21,11 @@ function cizOpRead(env, args) {
   return page({ text: lines.join('\n') || '(no visible headings or controls)', truncated });
 }
 
-function cizOpText(env, args) {
+function cfxOpText(env, args) {
   const { clamp, page, mainRoot, markdown, metaInfo, words, st } = env;
   const max = clamp(args.max_chars, 1000, 200000, 40000);
   const start = clamp(args.start_at, 0, 50000000, 0);
-  // The converted text is kept in window.__cizSt for 60 s per URL, format and scope, and only while the page looks the same
+  // The converted text is kept in window.__cfxSt for 60 s per URL, format and scope, and only while the page looks the same
   // (element count and text length): reading the same page again, or in pieces, converts it once. A Markdown conversion that
   // was cut short is redone when a longer one is needed. Nothing but this text is kept.
   const kept = (kind, scope, limit, make) => {
@@ -99,7 +99,7 @@ function cizOpText(env, args) {
   return page({ text: head + (body || '(no readable text on this page)'), truncated: more, next_start: more ? start + body.length : null });
 }
 
-function cizOpAnalyze(env, args) {
+function cfxOpAnalyze(env, args) {
   const { squash, isVisible, labelOf, page, mainRoot, markdown, metaInfo, words, structuredData,
       notices } = env;
   const mi = metaInfo();
@@ -170,14 +170,14 @@ function cizOpAnalyze(env, args) {
   return page({ text: L.join('\n'), truncated: false });
 }
 
-function cizOpSelection(env, args) {
+function cfxOpSelection(env, args) {
   const { clamp, page, selectionText } = env;
   const text = selectionText();
   const max = clamp(args.max_chars, 100, 100000, 20000);
   return page({ text: text ? text.slice(0, max) : 'Nothing is selected on this page.', truncated: text.length > max, selected: !!text });
 }
 
-function cizOpFind(env, args) {
+function cfxOpFind(env, args) {
   const { INTERACTIVE, HEADINGS, clamp, isVisible, labelOf, roleOf, describe, page, words } = env;
   const terms = String(args.query || '').toLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) throw new Error('Give some words to look for.');
@@ -193,11 +193,11 @@ function cizOpFind(env, args) {
   return page({ text: out.length ? out.join('\n') : 'No matches.', truncated: false });
 }
 
-function cizOpViewport(env, args) {
+function cfxOpViewport(env, args) {
   return { width: window.innerWidth, height: window.innerHeight, scroll_y: Math.round(window.scrollY) };
 }
 
-function cizOpExists(env, args) {
+function cfxOpExists(env, args) {
   if (args.selector) {
     try { return !!document.querySelector(String(args.selector)); } catch (e) { throw new Error('Not a valid CSS selector.'); }
   }
@@ -205,6 +205,6 @@ function cizOpExists(env, args) {
   return !!t && String((document.body && document.body.innerText) || '').toLowerCase().includes(t);
 }
 
-function cizOpCtype(env, args) {
+function cfxOpCtype(env, args) {
   return String(document.contentType || '');
 }

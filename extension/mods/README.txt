@@ -1,7 +1,7 @@
 Mods
 
-This folder holds mods: small changes to the panel. Improve Claude in Zen makes them when you ask for one, and you
-can write one by hand. An improve run changes only the mods in this folder. The core of Claude in Zen, everything
+This folder holds mods: small changes to the panel. Improve Claudefox makes them when you ask for one, and you
+can write one by hand. An improve run changes only the mods in this folder. The core of Claudefox, everything
 else in extension\ and host\, is never changed by it.
 
 A mod is a folder whose name is 2 to 40 lowercase letters, digits or dashes, for example
@@ -29,4 +29,4 @@ needs a yes in the helper's confirm window, a Windows window outside Zen that no
 tools, a folder for local pages, a tool that runs a program, and a plugin install.
 
 Mod folders are not in git unless you add them on purpose (git add -f), because they are made on this PC.
-Notes on earlier improve runs are kept in %LOCALAPPDATA%\claude-in-zen\memory.
+Notes on earlier improve runs are kept in %LOCALAPPDATA%\claudefox\memory.

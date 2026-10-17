@@ -8,7 +8,7 @@ const OUT = require('../lib/output');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-output-'));
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-output-'));
 const dir = path.join(root, 'extension', 'output');
 const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 

@@ -31,7 +31,7 @@ async function open(lang) {
     storage: { session: { get: async () => ({}), set: async () => {} }, local: { get: async () => ({}), set: async () => {} } },
     tabs: { query: async () => [{ title: 'T', url: 'https://x' }], onActivated: { addListener() {} }, onUpdated: { addListener() {} } },
   };
-  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
   w.eval(fs.readFileSync(EXT + 'lib/wall.js', 'utf8'));
   evalPanel(dom, EXT, panelFiles, { lang });
   await new Promise(r => setTimeout(r, 50));

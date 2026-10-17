@@ -3,20 +3,20 @@
 // record, no I/O, so the rules can be checked on their own. The helper runs checkCall before it forwards a worker's
 // call to the add-on and noteResult on the add-on's answer.
 
-// The single list of tools a worker gets. The tool server (zen-mcp.js) publishes exactly these in worker mode.
+// The single list of tools a worker gets. The tool server (claudefox-mcp.js) publishes exactly these in worker mode.
 const WORKER_TOOLS = ['navigate', 'get_page_text', 'read_page', 'find', 'analyze_page', 'scroll', 'wait_for', 'click', 'hover',
   'fill', 'type_text', 'press_key', 'screenshot', 'tab_open', 'tab_close'];
 
 const num = (k, d) => (Number(process.env[k]) > 0 ? Math.min(d, Number(process.env[k])) : d);
 // Each limit can be lowered for tests through its environment variable, and never raised above its default.
 const LIMITS = {
-  calls: num('CLAUDE_IN_ZEN_ARMY_CALLS', 40),        // tool calls per worker
-  navs: num('CLAUDE_IN_ZEN_ARMY_NAVS', 6),           // page loads per worker (navigate and tab_open)
-  pages: num('CLAUDE_IN_ZEN_ARMY_PAGES', 15),        // page loads per message: every worker of every run, first tabs too
-  extraTabs: num('CLAUDE_IN_ZEN_ARMY_EXTRA_TABS', 3), // tabs a worker may have besides its first one (4 in all, 20 a run)
-  softMs: num('CLAUDE_IN_ZEN_ARMY_SOFT_MS', 150000), // after this, tools refuse and the worker writes its report
-  hardMs: num('CLAUDE_IN_ZEN_ARMY_HARD_MS', 180000), // after this, the worker is killed
-  runMs: num('CLAUDE_IN_ZEN_ARMY_RUN_MS', 360000),   // the whole run
+  calls: num('CLAUDEFOX_ARMY_CALLS', 40),        // tool calls per worker
+  navs: num('CLAUDEFOX_ARMY_NAVS', 6),           // page loads per worker (navigate and tab_open)
+  pages: num('CLAUDEFOX_ARMY_PAGES', 15),        // page loads per message: every worker of every run, first tabs too
+  extraTabs: num('CLAUDEFOX_ARMY_EXTRA_TABS', 3), // tabs a worker may have besides its first one (4 in all, 20 a run)
+  softMs: num('CLAUDEFOX_ARMY_SOFT_MS', 150000), // after this, tools refuse and the worker writes its report
+  hardMs: num('CLAUDEFOX_ARMY_HARD_MS', 180000), // after this, the worker is killed
+  runMs: num('CLAUDEFOX_ARMY_RUN_MS', 360000),   // the whole run
 };
 
 const BUDGET = 'Budget reached: stop using tools and write your report now.';

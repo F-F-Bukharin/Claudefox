@@ -1,9 +1,9 @@
 'use strict';
-// Claude in Zen: small Markdown renderer for replies and file previews. Builds DOM nodes (never HTML
+// Claudefox: small Markdown renderer for replies and file previews. Builds DOM nodes (never HTML
 // strings), so nothing in a reply can run as code. Links: http(s) opens a tab, zen://tab/<id> switches
 // to a tab, zen://file/<id> opens a file Claude made. onLink(kind, value) handles the click.
 
-function cizMarkdown(target, src, onLink) {
+function cfxMarkdown(target, src, onLink) {
   const doc = target.ownerDocument;
   const el = (tag, cls, text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   target.textContent = '';
@@ -97,7 +97,7 @@ function cizMarkdown(target, src, onLink) {
     if (/^\s*>/.test(line)) {
       const q = [];
       while (i < lines.length && /^\s*>/.test(lines[i])) q.push(lines[i++].replace(/^\s*>\s?/, ''));
-      cizMarkdown(target.appendChild(el('blockquote')), q.join('\n'), onLink);
+      cfxMarkdown(target.appendChild(el('blockquote')), q.join('\n'), onLink);
       continue;
     }
     if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) { list(target, /^\s*/.exec(line)[0].length); continue; }

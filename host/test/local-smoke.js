@@ -12,7 +12,7 @@ const path = require('path');
 
 if (process.platform === 'win32') { console.log('SKIP  local-smoke runs on Linux/macOS only'); process.exit(0); }
 
-const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-local-')));
+const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-local-')));
 const HOST_DIR = path.join(__dirname, '..');
 const home = path.join(tmp, 'home');
 const files = path.join(tmp, 'files');
@@ -43,7 +43,7 @@ const zenRuns = () => { try { return fs.readFileSync(zenLog, 'utf8').trim().spli
 // The fake confirm window: it writes each question down and says no to anything about the denied folder.
 const qLog = path.join(tmp, 'questions.log');
 const confirmExe = path.join(tmp, 'confirm');
-fs.writeFileSync(confirmExe, `#!${process.execPath}\nconst t = process.env.CIZ_Q_TEXT || '';\nrequire('fs').appendFileSync(${JSON.stringify(qLog)}, JSON.stringify({ text: t, yes: process.env.CIZ_Q_YES, no: process.env.CIZ_Q_NO }) + '\\n');\nprocess.stdout.write(t.includes(${JSON.stringify(denied)}) ? 'no' : 'yes');\n`, { mode: 0o755 });
+fs.writeFileSync(confirmExe, `#!${process.execPath}\nconst t = process.env.CFX_Q_TEXT || '';\nrequire('fs').appendFileSync(${JSON.stringify(qLog)}, JSON.stringify({ text: t, yes: process.env.CFX_Q_YES, no: process.env.CFX_Q_NO }) + '\\n');\nprocess.stdout.write(t.includes(${JSON.stringify(denied)}) ? 'no' : 'yes');\n`, { mode: 0o755 });
 const questions = () => { try { return fs.readFileSync(qLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
 const asked = folder => questions().filter(q => q.text.includes(`\n\n${folder}\n\n`)).length;
 
@@ -53,9 +53,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const base = path.join(tmp, 'base');
 fs.mkdirSync(base);
-const env = { ...process.env, HOME: home, LOCALAPPDATA: base, APPDATA: path.join(home, 'AppData', 'Roaming'), CLAUDE_IN_ZEN_PIPE: path.join(base, 'h.sock'),
-  CLAUDE_IN_ZEN_CLAUDE: path.join(tmp, 'no-claude'), CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_ZEN_EXE: zen, CLAUDE_IN_ZEN_CONFIRM: confirmExe, MOZ_TEST_VAR: '1' };
-let proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+const env = { ...process.env, HOME: home, LOCALAPPDATA: base, APPDATA: path.join(home, 'AppData', 'Roaming'), CLAUDEFOX_PIPE: path.join(base, 'h.sock'),
+  CLAUDEFOX_CLAUDE: path.join(tmp, 'no-claude'), CLAUDEFOX_TEST: '1', CLAUDEFOX_ZEN_EXE: zen, CLAUDEFOX_CONFIRM: confirmExe, MOZ_TEST_VAR: '1' };
+let proc = spawn(process.execPath, [path.join(HOST_DIR, 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
 
 // ---- this test plays the add-on
 const asks = [];        // local_tab messages from the helper
@@ -95,7 +95,7 @@ proc.stdout.on('data', onOut);
 // ---- a client on the pipe, like the tool server
 function client() {
   return new Promise((resolve, reject) => {
-    const sock = net.connect(env.CLAUDE_IN_ZEN_PIPE);
+    const sock = net.connect(env.CLAUDEFOX_PIPE);
     const waits = new Map();
     let seq = 1, lb = '';
     sock.setEncoding('utf8');
@@ -108,7 +108,7 @@ function client() {
         else if (m.type === 'result' && waits.has(m.id)) { waits.get(m.id)(m); waits.delete(m.id); }
       }
     });
-    sock.on('connect', () => sock.write(JSON.stringify({ type: 'hello', token: fs.readFileSync(path.join(base, 'claude-in-zen', 'pipe-token'), 'utf8').trim(), client: 'test' }) + '\n'));
+    sock.on('connect', () => sock.write(JSON.stringify({ type: 'hello', token: fs.readFileSync(path.join(base, 'claudefox', 'pipe-token'), 'utf8').trim(), client: 'test' }) + '\n'));
   });
 }
 
@@ -116,7 +116,7 @@ function client() {
   let c = null;
   try {
     toHelper({ type: 'hello', version: 'test' });
-    for (let i = 0; i < 100 && !(fs.existsSync(path.join(base, 'claude-in-zen', 'pipe-token')) && fs.existsSync(env.CLAUDE_IN_ZEN_PIPE)); i++) await sleep(50);
+    for (let i = 0; i < 100 && !(fs.existsSync(path.join(base, 'claudefox', 'pipe-token')) && fs.existsSync(env.CLAUDEFOX_PIPE)); i++) await sleep(50);
     for (let i = 0; i < 20 && !c; i++) { try { c = await client(); } catch { await sleep(100); } }
 
     check('on connect the helper sends its allowed folders (none yet)', grantLists.length === 1 && !lastGrants().length, JSON.stringify(grantLists));
@@ -128,7 +128,7 @@ function client() {
       && q0 && asked(game) === 1 && q0.yes === 'Allow this folder' && q0.no === 'Deny', JSON.stringify([r, run, q0]));
     check('the panel hears about the question while the window is open, and when it is over', shown[0] === game && shown[1] === '', JSON.stringify(shown));
     check('the helper sends the new list of allowed folders, and writes no file (they last one session)', JSON.stringify(lastGrants()) === JSON.stringify([game])
-      && !fs.existsSync(path.join(base, 'claude-in-zen', 'local-grants.json')));
+      && !fs.existsSync(path.join(base, 'claudefox', 'local-grants.json')));
     check('zen starts without the MOZ_ variables Zen gave the helper', run && !run.moz.length, run && run.moz.join(','));
     check('the add-on is asked which tab shows the page', asks[0] && asks[0].type === 'local_tab' && asks[0].url === run.argv[1]);
 
@@ -256,11 +256,11 @@ function client() {
     proc.stdout.off('data', onOut);
     proc.kill();
     await new Promise(res => proc.on('exit', res));
-    const oldGrants = path.join(base, 'claude-in-zen', 'local-grants.json');
+    const oldGrants = path.join(base, 'claudefox', 'local-grants.json');
     fs.mkdirSync(path.dirname(oldGrants), { recursive: true });
     fs.writeFileSync(oldGrants, JSON.stringify([game, other]));   // what an older version saved
     grantLists.length = 0; buf = Buffer.alloc(0);
-    proc = spawn(process.execPath, [path.join(HOST_DIR, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+    proc = spawn(process.execPath, [path.join(HOST_DIR, 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
     proc.stdout.on('data', onOut);
     toHelper({ type: 'hello', version: 'test' });
     await nextMsg(() => grantLists.length > 0);
@@ -272,7 +272,7 @@ function client() {
     check('only browsers are started to show a page', lp.isBrowserExe('C:\\Program Files\\Mozilla Firefox\\firefox.exe') && lp.isBrowserExe('C:\\Program Files\\Zen Browser\\zen.exe')
       && !lp.isBrowserExe('C:\\Windows\\System32\\cmd.exe') && !lp.isBrowserExe('C:\\x\\firefox.exe.bat') && !lp.isBrowserExe('') && !lp.isBrowserExe('C:\\x\\node.exe'));
     const saved = { local: process.env.LOCALAPPDATA, pf: process.env.ProgramFiles, pf86: process.env['ProgramFiles(x86)'] };
-    const apps = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-apps-'));
+    const apps = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-apps-'));
     fs.mkdirSync(path.join(apps, 'Mozilla Firefox'));
     fs.writeFileSync(path.join(apps, 'Mozilla Firefox', 'firefox.exe'), '');
     process.env.LOCALAPPDATA = apps; delete process.env.ProgramFiles; delete process.env['ProgramFiles(x86)'];
@@ -282,19 +282,19 @@ function client() {
     if (saved.pf86 !== undefined) process.env['ProgramFiles(x86)'] = saved.pf86;
     fs.rmSync(apps, { recursive: true, force: true });
     check('without Zen, Firefox is found where it is usually installed', ff === path.join(apps, 'Mozilla Firefox', 'firefox.exe') && zz === '', JSON.stringify({ ff, zz }));
-    // The override browser counts only with CLAUDE_IN_ZEN_TEST=1: unset, or any other value, the real browser is found.
-    const keep = process.env.CLAUDE_IN_ZEN_ZEN_EXE, keepFlag = process.env.CLAUDE_IN_ZEN_TEST;
-    process.env.CLAUDE_IN_ZEN_ZEN_EXE = '/opt/test/firefox';
-    delete process.env.CLAUDE_IN_ZEN_TEST;
+    // The override browser counts only with CLAUDEFOX_TEST=1: unset, or any other value, the real browser is found.
+    const keep = process.env.CLAUDEFOX_ZEN_EXE, keepFlag = process.env.CLAUDEFOX_TEST;
+    process.env.CLAUDEFOX_ZEN_EXE = '/opt/test/firefox';
+    delete process.env.CLAUDEFOX_TEST;
     const unset = await lp.findBrowser();
-    process.env.CLAUDE_IN_ZEN_TEST = '0';
+    process.env.CLAUDEFOX_TEST = '0';
     const zero = await lp.findBrowser();
-    process.env.CLAUDE_IN_ZEN_TEST = '1';
+    process.env.CLAUDEFOX_TEST = '1';
     const fb = await lp.findBrowser();
-    if (keep === undefined) delete process.env.CLAUDE_IN_ZEN_ZEN_EXE; else process.env.CLAUDE_IN_ZEN_ZEN_EXE = keep;
-    if (keepFlag === undefined) delete process.env.CLAUDE_IN_ZEN_TEST; else process.env.CLAUDE_IN_ZEN_TEST = keepFlag;
+    if (keep === undefined) delete process.env.CLAUDEFOX_ZEN_EXE; else process.env.CLAUDEFOX_ZEN_EXE = keep;
+    if (keepFlag === undefined) delete process.env.CLAUDEFOX_TEST; else process.env.CLAUDEFOX_TEST = keepFlag;
     check('the test override names the browser', fb === '/opt/test/firefox', fb);
-    check('without CLAUDE_IN_ZEN_TEST=1 the override is ignored', unset !== '/opt/test/firefox' && zero !== '/opt/test/firefox', JSON.stringify([unset, zero]));
+    check('without CLAUDEFOX_TEST=1 the override is ignored', unset !== '/opt/test/firefox' && zero !== '/opt/test/firefox', JSON.stringify([unset, zero]));
 
     // Allowed folders last one session: kept in memory, no file written. An old file is deleted, and `note` says so.
     const grantFile = path.join(tmp, 'grants', 'local-grants.json');

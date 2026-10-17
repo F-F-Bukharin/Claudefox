@@ -19,13 +19,13 @@ const w = dom.window; const sent = []; let onMsg;
 w.browser = { runtime: { connect: () => ({ postMessage: m => sent.push(m), onMessage: { addListener: f => onMsg = f } }), getManifest: () => ({ version: '0.4.0' }) },
   storage: { session: { get: async () => ({}), set: async () => {} } },
   tabs: { query: async () => [{ title: 'T', url: 'https://x' }], onActivated: { addListener() {} }, onUpdated: { addListener() {} } } };
-w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;'); w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8')); evalPanel(dom, dir, panelFiles);
+w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;'); w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8')); evalPanel(dom, dir, panelFiles);
 const $ = id => w.document.getElementById(id);
 const base = { agent: 'active', signedIn: false, native: 'missing', claude: null, debugPort: 'off', pending: 0, chatModel: 'speed', filesMode: 'read', filesFolder: '' };
 const state = s => onMsg({ type: 'state', state: s, log: [] });
 const sentOf = t => sent.filter(m => m.type === t);
 const INSTALL = 'https://docs.claude.com/en/docs/claude-code/setup';
-const SETUP_STEPS = 'Close Zen? No: just double-click Set up Claudefox.bat (or Set up Claude in Zen.bat), then press retry in Settings.';
+const SETUP_STEPS = 'Close Zen? No: just double-click Set up Claudefox.bat, then press retry in Settings.';
 // Adds a failed answer with this error text and the limit flag to the chat; returns the text of its limit card.
 function limitCard(error) {
   w.eval(`chat.push(${JSON.stringify({ role: 'assistant', id: 'lim' + Math.random().toString(36).slice(2), text: '', steps: [], pending: false, error, limit: true })}); renderChat();`);
@@ -83,12 +83,12 @@ async function commandAndBat() {
   try { for (const f of manifest.background.scripts) vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), ctx, { filename: f }); } catch (e) { loaded = false; console.log('  ' + e.message); }
   ok('the background scripts load in a vm with a stub browser', loaded);
   if (loaded) {
-    await vm.runInContext('cizState.load()', ctx);
-    await vm.runInContext("cizState.set({ agent: 'active' })", ctx);
+    await vm.runInContext('cfxState.load()', ctx);
+    await vm.runInContext("cfxState.set({ agent: 'active' })", ctx);
     listeners.forEach(f => f('some-other-command'));
-    const kept = vm.runInContext('cizState.get().agent', ctx);
+    const kept = vm.runInContext('cfxState.get().agent', ctx);
     listeners.forEach(f => f('stop-claude'));
-    const after = vm.runInContext('cizState.get().agent', ctx);
+    const after = vm.runInContext('cfxState.get().agent', ctx);
     ok('the stop-claude command runs Stop: the agent stops, another command does not', listeners.length > 0 && kept === 'active' && after === 'stopped', kept + ' -> ' + after);
   }
   const bat = fs.readFileSync(path.join(root, 'tools', 'Sign in Claude Code.bat'), 'utf8');

@@ -64,13 +64,13 @@ function fakeMain(cfg) {
 // A helper process on its own data folder, with a fake claude baked to that folder. opts: { noStream, env, before(dir) }.
 function startHelper(opts) {
   const o = opts || {};
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-sess-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-sess-'));
   const fake = path.join(dir, 'claude');
   fs.writeFileSync(fake, `#!${process.execPath}\n(${fakeMain.toString()})(${JSON.stringify({ dir, sid: SID, noStream: !!o.noStream })});\n`, { mode: 0o755 });
-  fs.mkdirSync(path.join(dir, 'claude-in-zen'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'claudefox'), { recursive: true });
   if (o.before) o.before(dir);
-  const env = { ...process.env, LOCALAPPDATA: dir, CLAUDE_IN_ZEN_PIPE: path.join(dir, 's.sock'), CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fake, ...(o.env || {}) };
-  const proc = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+  const env = { ...process.env, LOCALAPPDATA: dir, CLAUDEFOX_PIPE: path.join(dir, 's.sock'), CLAUDEFOX_TEST: '1', CLAUDEFOX_CLAUDE: fake, ...(o.env || {}) };
+  const proc = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
   const inbox = []; let waiters = []; let hbuf = Buffer.alloc(0);
   const H = { dir, proc };
   H.send = msg => { const body = Buffer.from(JSON.stringify(msg)); const head = Buffer.alloc(4); head.writeUInt32LE(body.length, 0); proc.stdin.write(Buffer.concat([head, body])); };
@@ -98,7 +98,7 @@ function startHelper(opts) {
   const lines = f => { try { return fs.readFileSync(path.join(dir, f), 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
   H.spawns = () => lines('spawns');
   H.msgs = () => lines('msgs');
-  H.log = () => { try { return fs.readFileSync(path.join(dir, 'claude-in-zen', 'logs', 'host.log'), 'utf8'); } catch { return ''; } };
+  H.log = () => { try { return fs.readFileSync(path.join(dir, 'claudefox', 'logs', 'host.log'), 'utf8'); } catch { return ''; } };
   // One message to the helper, resolved with its chat_done.
   H.chat = async (id, fields) => { H.send({ type: 'chat', id, text: id, resume: '', ...(fields || {}) }); return H.next(m => m.type === 'chat_done' && m.id === id, 15000); };
   H.hello = async () => { H.send({ type: 'hello', version: 'test' }); await H.next(m => m.type === 'hello'); await H.next(m => m.type === 'confirmed_state'); };
@@ -110,7 +110,7 @@ const text = (H, id) => H.events(id).filter(e => e.kind === 'text').map(e => e.t
 
 // One process serves the whole chat, and respawns when it must.
 async function partOne() {
-  const A = startHelper({ env: { CLAUDE_IN_ZEN_IDLE_MS: '1500' } });
+  const A = startHelper({ env: { CLAUDEFOX_IDLE_MS: '1500' } });
   try {
     await A.hello();
     const d1 = await A.chat('m1');
@@ -186,7 +186,7 @@ async function partPlugins() {
       fs.mkdirSync(path.join(dir, 'late'));
       fs.writeFileSync(path.join(dir, 'plugins'), JSON.stringify([{ id: 'late@test', version: '1.0.0', scope: 'user', enabled: true, installPath: path.join(dir, 'late') }]));
       fs.writeFileSync(path.join(dir, 'plugdelay'), '2500');
-      fs.writeFileSync(path.join(dir, 'claude-in-zen', 'tools.json'), JSON.stringify({
+      fs.writeFileSync(path.join(dir, 'claudefox', 'tools.json'), JSON.stringify({
         on: { plugins: ['late@test'], servers: [] }, decided: ['late@test'], cat: { main: { plugins: [], servers: [], scanned: 1, checked: 0 } },
       }));
     },
@@ -198,7 +198,7 @@ async function partPlugins() {
     check('plugins: a stale list does not delay the message', d1.ok && took < 1800, `${took} ms`);
     check('plugins: the first turn used the cached list', B.spawns().length === 1 && !(B.spawns()[0].settings.enabledPlugins || {})['late@test']);
     check('plugins: the refresh ran in the background', (() => { try { return fs.readFileSync(path.join(B.dir, 'plugcalls'), 'utf8').trim().split('\n').length >= 1; } catch { return false; } })());
-    for (let i = 0; i < 60 && !(() => { try { return JSON.parse(fs.readFileSync(path.join(B.dir, 'claude-in-zen', 'tools.json'), 'utf8')).cat.main.plugins.length === 1; } catch { return false; } })(); i++) await sleep(100);
+    for (let i = 0; i < 60 && !(() => { try { return JSON.parse(fs.readFileSync(path.join(B.dir, 'claudefox', 'tools.json'), 'utf8')).cat.main.plugins.length === 1; } catch { return false; } })(); i++) await sleep(100);
     const d2 = await B.chat('b2', { resume: SID });
     const sp = B.spawns();
     check('plugins: the next turn sees the refreshed list (and respawns for it)', d2.ok && sp.length === 2 && sp[1].settings.enabledPlugins['late@test'] === true && sp[1].pid !== sp[0].pid);

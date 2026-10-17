@@ -19,8 +19,8 @@ const tabs = [
   { id: 1, windowId: 1, active: true, title: 'Shop', url: 'https://shop.example/', status: 'complete' },
   { id: 2, windowId: 1, active: false, title: 'Sign in', url: 'https://accounts.google.com/signin/v2', status: 'complete' },
   { id: 3, windowId: 1, active: false, title: 'Config', url: 'about:config', status: 'complete' },
-  { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/H/Mods/claude-in-zen/claude-in-zen.xpi', status: 'complete' },
-  { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/H/notes/claude-in-zen-notes.txt', status: 'complete' },
+  { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/H/Mods/claudefox/claudefox.xpi', status: 'complete' },
+  { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/H/notes/claudefox-notes.txt', status: 'complete' },
   { id: 6, windowId: 1, active: false, title: 'Lista 3 - Google Docs', url: 'https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit', status: 'complete' },
 ];
 const webRequest = { onBeforeRequest: ev(), onSendHeaders: ev(), onHeadersReceived: ev(), onBeforeRedirect: ev(), onCompleted: ev(), onErrorOccurred: ev() };
@@ -91,7 +91,7 @@ const panel = { name: 'panel', onMessage: panelOnMsg, onDisconnect: ev(), postMe
 const fromPanel = async m => { panelOnMsg.fire(m); await tick(); };
 const helperSays = async m => { native.onMessage.fire(m); await tick(); };
 const g = name => vm.runInContext(name, ctx);   // top-level const/let live in the script scope, not on the global
-const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
+const call = (tool, args) => ctx.cfxDebug.call(tool, args || {});
 
 (async () => {
   await tick(60);   // the add-on has booted: the agent is off, so no helper port yet
@@ -103,14 +103,14 @@ const call = (tool, args) => ctx.cizDebug.call(tool, args || {});
   const types = () => (native ? native.sent.map(m => m.type).join(',') : 'no port');
   check('the helper is connected: hello, then the saved watch_load', types() === 'hello,watch_load', types());
   await helperSays({ type: 'watch_state', watch: true, watchOnLoad: true });
-  check('after a Zen restart the saved On reaches the switch', g('cizState').get().watch === true && g('cizState').get().watchOnLoad === true);
+  check('after a Zen restart the saved On reaches the switch', g('cfxState').get().watch === true && g('cfxState').get().watchOnLoad === true);
   connectEv.fire({ name: 'panel', onMessage: ev(), onDisconnect: ev(), postMessage: () => {} });   // a panel that opens with the helper up
   await tick();
   check('a panel that opens with the helper up is asked at once', native.sent.filter(m => m.type === 'watch_load').length === 2, types());
-  await vm.runInContext("cizState.set({ agent: 'stopped' })", ctx);
+  await vm.runInContext("cfxState.set({ agent: 'stopped' })", ctx);
   native.onDisconnect.fire({});   // Stop
   await tick();
-  await vm.runInContext("cizState.set({ agent: 'active' })", ctx);
+  await vm.runInContext("cfxState.set({ agent: 'active' })", ctx);
   vm.runInContext('connectNative()', ctx);   // Start, with the panel still open
   await tick(20);
   check('Start after Stop sends hello and no watch_load, as before', types() === 'hello', types());

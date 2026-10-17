@@ -6,9 +6,9 @@
 // it, and tells the panel while the window is open. Army workers never get here: lib/pageTools.js refuses them on every
 // non-web page first.
 
-const CIZ_FILE_ACCESS_OFF = "Zen keeps add-ons out of files on this computer. Turn on 'Access local files on your computer' for Claude in Zen: about:addons -> Claude in Zen -> Permissions and data.";
+const CFX_FILE_ACCESS_OFF = "Zen keeps add-ons out of files on this computer. Turn on 'Access local files on your computer' for Claudefox: about:addons -> Claudefox -> Permissions and data.";
 
-const cizLocal = {
+const cfxLocal = {
   ASK_MS: 150000,   // how long a question waits (the helper's window gives the user 120 s; tests lower it)
   TAB_MS: 10000,    // how long local_tab waits for Zen to show the file (tests lower it)
   _asks: new Map(), // questions sent to the helper: id -> { folder, waiters, timer }
@@ -16,42 +16,42 @@ const cizLocal = {
 
   async init() {
     try { await browser.storage.local.remove('localGrants'); } catch {}   // the helper keeps the list now
-    await cizState.set({ localGrants: [], grantAsk: null });
+    await cfxState.set({ localGrants: [], grantAsk: null });
     await this.fileAccess();
   },
 
-  grants() { return (cizState.get().localGrants || []).slice(); },
-  granted(folder) { return this.grants().some(g => cizInFolder(folder, g)); },
+  grants() { return (cfxState.get().localGrants || []).slice(); },
+  granted(folder) { return this.grants().some(g => cfxInFolder(folder, g)); },
 
   // The helper's list, sent when it connects and whenever it changes.
   setGrants(list) {
     const out = [];
     for (const f of Array.isArray(list) ? list : []) {
-      const n = cizNormFolder(f);
-      if (n && !out.some(g => cizSamePath(g, n))) out.push(n);
+      const n = cfxNormFolder(f);
+      if (n && !out.some(g => cfxSamePath(g, n))) out.push(n);
     }
-    return cizState.set({ localGrants: out });
+    return cfxState.set({ localGrants: out });
   },
 
   // The helper's window is asking about this folder ('' once it is answered): the panel says so.
   setQuestion(folder) {
-    const f = cizNormFolder(folder);
-    return cizState.set({ grantAsk: f ? { folder: f } : null });
+    const f = cfxNormFolder(folder);
+    return cfxState.set({ grantAsk: f ? { folder: f } : null });
   },
 
   // A file: tab outside the allowed folders: the helper asks the user. Resolves { ok } or { ok: false, error } with the
   // text Claude sees. A second ask for the same folder joins the open one.
   ask(folder) {
-    const f = cizNormFolder(folder);
+    const f = cfxNormFolder(folder);
     if (!f) return Promise.resolve({ ok: false, error: 'That is not a full folder path on this computer.' });
     if (this.granted(f)) return Promise.resolve({ ok: true });
-    for (const a of this._asks.values()) if (cizSamePath(a.folder, f)) return new Promise(r => a.waiters.push(r));
+    for (const a of this._asks.values()) if (cfxSamePath(a.folder, f)) return new Promise(r => a.waiters.push(r));
     return new Promise(resolve => {
       const id = 'l' + (++this._seq);
       const a = { folder: f, waiters: [resolve] };
       a.timer = setTimeout(() => this._settle(id, { ok: false, error: `No answer about ${f}, so Claude did not look.` }), this.ASK_MS);
       this._asks.set(id, a);
-      cizState.addLog('info', `Claude asks to look in ${f}. Answer in the Claude in Zen window.`);
+      cfxState.addLog('info', `Claude asks to look in ${f}. Answer in the Claudefox window.`);
       if (!sendNative({ type: 'local_ask', id, folder: f })) this._settle(id, { ok: false, error: 'The helper is not connected, so nobody can allow that folder now.' });
     });
   },
@@ -65,16 +65,16 @@ const cizLocal = {
 
   // Profile, Permissions: Remove. The helper forgets the folder and sends the new list.
   remove(folder) {
-    const f = cizNormFolder(folder);
+    const f = cfxNormFolder(folder);
     if (!f) return;
-    if (!sendNative({ type: 'local_grant_remove', folder: f })) return cizState.addLog('error', 'Removing a folder needs the helper. Press Start, then try again.');
-    return cizState.addLog('info', `Removed ${f}: Claude asks again before looking there.`);
+    if (!sendNative({ type: 'local_grant_remove', folder: f })) return cfxState.addLog('error', 'Removing a folder needs the helper. Press Start, then try again.');
+    return cfxState.addLog('info', `Removed ${f}: Claude asks again before looking there.`);
   },
 
   // Stop, or the helper went away: every open question counts as no.
   cancelAll() {
     for (const id of [...this._asks.keys()]) this._settle(id, { ok: false, error: 'Stopped, so Claude did not look.' });
-    return cizState.set({ grantAsk: null });
+    return cfxState.set({ grantAsk: null });
   },
 
   _settle(id, result) {
@@ -99,21 +99,21 @@ const cizLocal = {
       if (allowed === true) v = 'yes';
       else if (allowed === false && gecko) v = 'no';   // with no version to go by, a false may be the old wrong answer
     }
-    if (cizState.get().fileAccess !== v) await cizState.set({ fileAccess: v });
+    if (cfxState.get().fileAccess !== v) await cfxState.set({ fileAccess: v });
     return v;
   },
 
   // The tab that shows a file: URL (the helper opened it with zen.exe -new-tab). Paths are compared decoded, Windows
   // ones without case. The newest such tab wins; it waits for the page to load until TAB_MS.
   async findTab(url) {
-    const want = cizFilePath(url);
+    const want = cfxFilePath(url);
     if (!want) return { ok: false, error: 'That is not a file: URL on this computer.' };
     const end = Date.now() + this.TAB_MS;
     let hit = null;
     for (;;) {
       let tabs = [];
       try { tabs = await browser.tabs.query({}); } catch {}
-      const found = tabs.filter(t => { const p = cizFilePath(t.url || ''); return p && cizSamePath(p, want); }).sort((x, y) => y.id - x.id)[0];
+      const found = tabs.filter(t => { const p = cfxFilePath(t.url || ''); return p && cfxSamePath(p, want); }).sort((x, y) => y.id - x.id)[0];
       if (found) hit = found;
       if ((hit && hit.status === 'complete') || Date.now() >= end) break;
       await new Promise(r => setTimeout(r, 200));

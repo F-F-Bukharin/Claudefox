@@ -33,7 +33,7 @@ function panel(store = new Map()) {
     setItem: (k, v) => { store.set(k, String(v)); },
     removeItem: k => { store.delete(k); },
   } });
-  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
   evalPanel(dom, EXT, panelFiles);
   const base = { agent: 'active', signedIn: false, native: 'connected', claude: null, debugPort: 'off', pending: 0, chatModel: 'speed', filesMode: 'read', filesFolder: '', modsKnown: false, mods: [] };
   return {

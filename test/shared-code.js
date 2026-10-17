@@ -34,7 +34,7 @@ const names = (src, re) => {
   return m ? [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1]) : [];
 };
 const guardList = names(read('host/lib/armyguard.js'), /const WORKER_TOOLS = \[([^\]]*)\]/);
-const addonList = names(read('extension/lib/army.js'), /const CIZ_ARMY_TOOLS = new Set\(\[([^\]]*)\]\)/);
+const addonList = names(read('extension/lib/army.js'), /const CFX_ARMY_TOOLS = new Set\(\[([^\]]*)\]\)/);
 check('both worker tool lists are found in their source', guardList.length > 0 && addonList.length > 0, `guard ${guardList.length}, add-on ${addonList.length}`);
 check('the helper and the add-on allow the same worker tools', same([...guardList].sort(), [...addonList].sort()),
   `only in guard: ${guardList.filter(t => !addonList.includes(t))}  only in add-on: ${addonList.filter(t => !guardList.includes(t))}`);

@@ -53,7 +53,7 @@ const browser = {
   windows: { update: async () => {}, onCreated: ev(), onRemoved: winRemoved, getAll: async () => [{ id: 1, type: 'normal' }, { id: 2, type: 'normal' }] },
 };
 const fetch = async () => ({ status: 200, ok: true, json: async () => ({ account: { email_address: 'f.work@example.com', full_name: 'F', uuid: 'u-1' } }) });
-const ctx = vm.createContext({ CIZ_LOCALES: require('./lib/locales').load(), browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, Blob: require('buffer').Blob, btoa: s => Buffer.from(s, 'binary').toString('base64'), setTimeout: (fn, ms, ...a) => ms === 30 * 60 * 1000 ? longTimers.push(fn) : setTimeout(fn, ms, ...a), clearTimeout, setInterval: () => 0, Promise });
+const ctx = vm.createContext({ CFX_LOCALES: require('./lib/locales').load(), browser, fetch, console, URL, URLSearchParams, AbortController, TextEncoder, Blob: require('buffer').Blob, btoa: s => Buffer.from(s, 'binary').toString('base64'), setTimeout: (fn, ms, ...a) => ms === 30 * 60 * 1000 ? longTimers.push(fn) : setTimeout(fn, ms, ...a), clearTimeout, setInterval: () => 0, Promise });
 ctx.window = ctx;
 for (const f of JSON.parse(fs.readFileSync(EXT + 'manifest.json', 'utf8')).background.scripts) vm.runInContext(fs.readFileSync(EXT + f, 'utf8'), ctx, { filename: f });
 const g = name => vm.runInContext(name, ctx);
@@ -78,7 +78,7 @@ function makePanel(windowId) {
     downloads: { download: async () => 1 },
   };
   w.URL.createObjectURL = () => 'blob:x'; w.URL.revokeObjectURL = () => {};
-  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
   w.eval(fs.readFileSync(EXT + 'lib/wall.js', 'utf8'));
   evalPanel(dom, EXT, panelFiles);
   connectEv.fire(P.bg);
@@ -153,7 +153,7 @@ function makePanel(windowId) {
   ok('an unknown name still says unknown command', /Unknown command \/nonesuch/.test(A.text()));
 
   // ---- scheduled runs
-  await g('cizState').set({ unsafe: true, trusted: true, filesEnabled: true, filesMode: 'write', filesFolder: 'C:/x' });
+  await g('cfxState').set({ unsafe: true, trusted: true, filesEnabled: true, filesMode: 'write', filesFolder: 'C:/x' });
   const fire = async n => { alarmEv.fire({ name: 'macro:' + n }); await wait(80); };
   const lastNote = () => (notes[notes.length - 1] || {}).message || '';
   await fire('morning');
@@ -167,9 +167,9 @@ function makePanel(windowId) {
   r = await call('create_file', { name: 'x.md', content: 'x' });
   ok('file tools are refused too', r.ok === false && r.error === 'Scheduled macros only read pages.', JSON.stringify(r));
   r = await call('read_page', { tab_id: 10 });
-  ok('a read outside its sites is refused with no card', r.ok === false && r.error === "Outside this scheduled macro's sites: evil.example." && !g('cizState').get().siteAsk, JSON.stringify(r));
+  ok('a read outside its sites is refused with no card', r.ok === false && r.error === "Outside this scheduled macro's sites: evil.example." && !g('cfxState').get().siteAsk, JSON.stringify(r));
   r = await call('read_page', { tab_id: 9 });
-  ok('a read inside its sites runs', !/Outside this|Scheduled macros/.test(r.error || '') && !g('cizState').get().siteAsk, JSON.stringify(r));
+  ok('a read inside its sites runs', !/Outside this|Scheduled macros/.test(r.error || '') && !g('cfxState').get().siteAsk, JSON.stringify(r));
   await helperSays({ type: 'chat_event', id: s1.id, event: { kind: 'text', text: 'Digest: all quiet' } });
   await helperSays({ type: 'chat_done', id: s1.id, ok: true, sessionId: '22222222-2222-2222-2222-222222222222' });
   await wait(60);
@@ -177,17 +177,17 @@ function makePanel(windowId) {
   const ent = ck && local[ck].find(x => x.group === 'Scheduled');
   ok('the result goes to history under Scheduled', ent && /morning/.test(ent.title) && JSON.stringify(local['chat:' + ent.id]).includes('Digest: all quiet'), JSON.stringify(local[ck]));
   ok('a notification says it finished', lastNote() === 'Claudefox: morning finished', lastNote());
-  ok('a scheduled turn leaves the chat\'s own session alone', g('cizState').get().chatSession !== '22222222-2222-2222-2222-222222222222');
+  ok('a scheduled turn leaves the chat\'s own session alone', g('cfxState').get().chatSession !== '22222222-2222-2222-2222-222222222222');
   $('histBtn').click(); await wait(120);
   ok('the History drawer shows a Scheduled group', /Scheduled/.test($('histList').textContent) && /morning/.test($('histList').textContent), $('histList').textContent);
   $('histClose').click();
 
   // skipped: stopped
   const before = chatsToHelper().length, nBefore = notes.length;
-  await g('cizState').set({ agent: 'stopped' });
+  await g('cfxState').set({ agent: 'stopped' });
   await fire('morning');
-  ok('a run is skipped while stopped, and logged', chatsToHelper().length === before && notes.length === nBefore + 1 && /^Claudefox: morning skipped: .*stopped/i.test(lastNote()) && g('cizState').log().some(l => /morning/.test(l.text) && /skipped/i.test(l.text)), lastNote());
-  await g('cizState').set({ agent: 'active' });
+  ok('a run is skipped while stopped, and logged', chatsToHelper().length === before && notes.length === nBefore + 1 && /^Claudefox: morning skipped: .*stopped/i.test(lastNote()) && g('cfxState').log().some(l => /morning/.test(l.text) && /skipped/i.test(l.text)), lastNote());
+  await g('cfxState').set({ agent: 'active' });
   // skipped: usage limit within 2 hours
   await fire('hourly');
   c = chatsToHelper();

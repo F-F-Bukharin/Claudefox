@@ -72,5 +72,5 @@
     return n ? hex([Math.round(r / n), Math.round(g / n), Math.round(b / n)]) : null;
   }
 
-  root.cizWallInk = { inkFor: inkFor, averageHex: averageHex, contrast: contrast, rgb: rgb, PAGE: PAGE, INK: INK, WASH: WASH };
+  root.cfxWallInk = { inkFor: inkFor, averageHex: averageHex, contrast: contrast, rgb: rgb, PAGE: PAGE, INK: INK, WASH: WASH };
 })(typeof window !== 'undefined' ? window : globalThis);

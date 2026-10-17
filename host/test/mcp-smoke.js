@@ -6,19 +6,19 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-mcp-'));
-const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\claude-in-zen-mcp-${process.pid}` : path.join(tmp, 'mcp.sock');
-// The fake confirm window (the helper runs CLAUDE_IN_ZEN_CONFIRM, read only with CLAUDE_IN_ZEN_TEST=1, with the question in
-// CIZ_Q_TEXT): it saves each question and says no, so the test can read what the window would have said. POSIX only: it is
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-mcp-'));
+const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\claude-in-claudefox-mcp-${process.pid}` : path.join(tmp, 'mcp.sock');
+// The fake confirm window (the helper runs CLAUDEFOX_CONFIRM, read only with CLAUDEFOX_TEST=1, with the question in
+// CFX_Q_TEXT): it saves each question and says no, so the test can read what the window would have said. POSIX only: it is
 // a script with a shebang, as local-smoke.js makes its own.
 const qLog = path.join(tmp, 'questions.log');
 const confirmExe = path.join(tmp, 'confirm');
-fs.writeFileSync(confirmExe, `#!${process.execPath}\nrequire('fs').appendFileSync(${JSON.stringify(qLog)}, JSON.stringify({ text: process.env.CIZ_Q_TEXT || '' }) + '\\n');\nprocess.stdout.write('no');\n`, { mode: 0o755 });
-const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: pipe, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLIENT: 'mcp-smoke', CLAUDE_IN_ZEN_CONFIRM: confirmExe };
+fs.writeFileSync(confirmExe, `#!${process.execPath}\nrequire('fs').appendFileSync(${JSON.stringify(qLog)}, JSON.stringify({ text: process.env.CFX_Q_TEXT || '' }) + '\\n');\nprocess.stdout.write('no');\n`, { mode: 0o755 });
+const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDEFOX_PIPE: pipe, CLAUDEFOX_TEST: '1', CLAUDEFOX_CLIENT: 'mcp-smoke', CLAUDEFOX_CONFIRM: confirmExe };
 const hostDir = path.join(__dirname, '..');
 // Two folders for local_files to ask about: new ones, kept outside the helper's data folder. The real spelling of the
 // path is the one the helper shows in its window (on macOS the temp folder is a link).
-const sites = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-mcp-sites-')));
+const sites = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-mcp-sites-')));
 const folderA = path.join(sites, 'a'), folderB = path.join(sites, 'b');
 fs.mkdirSync(folderA);
 fs.mkdirSync(folderB);
@@ -34,7 +34,7 @@ const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PA
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ---- helper with a fake add-on on its native messaging side
-const helper = spawn(process.execPath, [path.join(hostDir, 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+const helper = spawn(process.execPath, [path.join(hostDir, 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
 let hbuf = Buffer.alloc(0);
 const fakeAddon = {
   tabs_list: () => [{ id: 1, title: 'Docs', url: 'https://example.com/docs', active: true }],
@@ -63,7 +63,7 @@ helper.stdout.on('data', chunk => {
 toHelper({ type: 'hello', version: 'fake' });
 
 // ---- tool server driven over MCP
-const mcp = spawn(process.execPath, [path.join(hostDir, 'zen-mcp.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+const mcp = spawn(process.execPath, [path.join(hostDir, 'claudefox-mcp.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
 let mbuf = '';
 const replies = new Map();
 mcp.stdout.setEncoding('utf8');
@@ -91,7 +91,7 @@ function rpc(method, params, ms = 8000) {
   try {
     await sleep(300);
     const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
-    check('initialize', init.result && init.result.serverInfo.name === 'claude-in-zen' && init.result.protocolVersion === '2025-06-18');
+    check('initialize', init.result && init.result.serverInfo.name === 'claudefox' && init.result.protocolVersion === '2025-06-18');
     mcp.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
 
     const list = await rpc('tools/list', {});

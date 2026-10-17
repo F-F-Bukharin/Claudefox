@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded captions and isolated per-run media downloads through yt-dlp.
 
-Vendored from claude-video v0.3.2 (MIT, Bradley Bonanno), trimmed for Claude in Zen. See NOTICE.md.
+Vendored from claude-video v0.3.2 (MIT, Bradley Bonanno), trimmed for Claudefox. See NOTICE.md.
 """
 from __future__ import annotations
 

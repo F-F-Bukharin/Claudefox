@@ -43,7 +43,7 @@ function panel(lang, store) {
   };
   w.URL.createObjectURL = () => 'blob:settings-text';
   w.URL.revokeObjectURL = () => {};
-  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
   w.eval(fs.readFileSync(EXT + 'lib/wall.js', 'utf8'));
   evalPanel(dom, EXT, panelFiles, { lang });
   const send = state => onMsg({ type: 'state', state: { ...base, ...state }, log: [] });

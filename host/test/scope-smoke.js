@@ -10,10 +10,10 @@ const net = require('net');
 const os = require('os');
 const path = require('path');
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-scope-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-scope-'));
 // Everything the helper and the hook read or write lives under tmp: the data folder (LOCALAPPDATA) and the test pipes.
 process.env.LOCALAPPDATA = tmp;
-process.env.CLAUDE_IN_ZEN_TEST = '1';
+process.env.CLAUDEFOX_TEST = '1';
 const S = require('../lib/sites');
 const A = require('../lib/chatargs');
 const P = require('../lib/paths');
@@ -111,7 +111,7 @@ async function hookTests() {
   });
   await new Promise(r => fake.listen(hookPipe, r));
   const runHook = (input, env) => new Promise(resolve => {
-    const child = spawn(process.execPath, [hookPath], { env: { ...process.env, CLAUDE_IN_ZEN_PIPE: hookPipe, ...env }, stdio: ['pipe', 'ignore', 'pipe'] });
+    const child = spawn(process.execPath, [hookPath], { env: { ...process.env, CLAUDEFOX_PIPE: hookPipe, ...env }, stdio: ['pipe', 'ignore', 'pipe'] });
     let err = '';
     child.stdin.on('error', () => {});
     child.stderr.on('data', d => { err += d; });
@@ -128,7 +128,7 @@ async function hookTests() {
   check('hook: a refused address exits 2 with the reason as one stderr line', no.code === 2 && no.err === NOT_SITE('no.example') + '\n', JSON.stringify(no));
   const bad = await runHook('{not json');
   check('hook: bad input exits 2 with the could-not-check line', bad.code === 2 && bad.err === NO_CHECK + '\n', JSON.stringify(bad));
-  const gone = await runHook({ session_id: 'S1', tool_input: { url: 'https://ok.example/' } }, { CLAUDE_IN_ZEN_PIPE: path.join(tmp, 'none.sock') });
+  const gone = await runHook({ session_id: 'S1', tool_input: { url: 'https://ok.example/' } }, { CLAUDEFOX_PIPE: path.join(tmp, 'none.sock') });
   check('hook: no helper running exits 2 with the could-not-check line', gone.code === 2 && gone.err === NO_CHECK + '\n', JSON.stringify(gone));
   silent = true;
   const t0 = Date.now();
@@ -161,9 +161,9 @@ process.stdin.on('end', () => {
   setInterval(() => {}, 1000);
 });
 `, { mode: 0o755 });
-  const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDE_IN_ZEN_PIPE: realPipe, CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fakeClaude };
+  const env = { ...process.env, LOCALAPPDATA: tmp, CLAUDEFOX_PIPE: realPipe, CLAUDEFOX_TEST: '1', CLAUDEFOX_CLAUDE: fakeClaude };
   delete env.ANTHROPIC_API_KEY;
-  helper = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+  helper = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
   helper.stdin.on('error', () => {});
   const inbox = [];
   const waiters = [];

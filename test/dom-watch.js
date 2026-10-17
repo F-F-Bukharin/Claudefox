@@ -17,7 +17,7 @@ w.browser = {
   storage: { session: { get: async () => ({}), set: async () => {} } },
   tabs: { query: async () => [{ title: 'T', url: 'https://x' }], onActivated: { addListener() {} }, onUpdated: { addListener() {} } },
 };
-w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+w.eval(fs.readFileSync(dir + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
 w.eval(fs.readFileSync(dir + 'lib/wall.js', 'utf8'));
 evalPanel(dom, dir, panelFiles);
 

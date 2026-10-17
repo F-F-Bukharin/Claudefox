@@ -11,7 +11,7 @@ const { uploadFile, MAX_UPLOAD_BYTES } = require('../lib/upload');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { if (cond) pass++; else fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
 const MB = 1024 * 1024;
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cizup-'));   // a temp folder of this test, removed at the end
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfxup-'));   // a temp folder of this test, removed at the end
 const granted = path.join(dir, 'granted'), other = path.join(dir, 'other');
 fs.mkdirSync(granted); fs.mkdirSync(other);
 fs.writeFileSync(path.join(granted, 'hello.txt'), 'hello world');

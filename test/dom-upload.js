@@ -32,7 +32,7 @@ async function panelPart() {
     storage: { session: { get: async () => ({}), set: async () => {} } },
     tabs: { query: async () => [{ title: 'T', url: 'https://x' }], onActivated: { addListener() {} }, onUpdated: { addListener() {} } },
   };
-  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cizMarkdown=cizMarkdown;');
+  w.eval(fs.readFileSync(EXT + 'lib/markdown.js', 'utf8') + '\n;window.cfxMarkdown=cfxMarkdown;');
   w.eval(fs.readFileSync(EXT + 'lib/wall.js', 'utf8'));
   evalPanel(dom, EXT, panelFiles);
   const $ = id => w.document.getElementById(id);
@@ -61,53 +61,53 @@ async function panelPart() {
 async function addonPart() {
   const timers = [], inPage = [];
   const fire = ms => { for (const t of timers) if (t.ms === ms && !t.cancelled && !t.done) { t.done = true; t.fn(); } };
-  const cizState = { value: { trusted: false, unsafe: false }, get() { return this.value; }, set(p) { Object.assign(this.value, p); return this.value; } };
-  const ctx = vm.createContext({ URL, cizState, browser: { runtime: { getManifest: () => ({ version: '0.11.0' }) } },
+  const cfxState = { value: { trusted: false, unsafe: false }, get() { return this.value; }, set(p) { Object.assign(this.value, p); return this.value; } };
+  const ctx = vm.createContext({ URL, cfxState, browser: { runtime: { getManifest: () => ({ version: '0.11.0' }) } },
     setTimeout: (fn, ms) => { const t = { fn, ms }; timers.push(t); return t; }, clearTimeout: t => { if (t) t.cancelled = true; } });
   vm.runInContext(fs.readFileSync(EXT + 'lib/policy.js', 'utf8') + '\n' + fs.readFileSync(EXT + 'lib/pageTools.js', 'utf8')
-    + '\n;this.CIZ_TOOLS = CIZ_TOOLS;'
-    + ' this.cizUploadGate = typeof cizUploadGate === "undefined" ? undefined : cizUploadGate;'
-    + ' this.cizDialogNote = typeof cizDialogNote === "undefined" ? undefined : cizDialogNote;', ctx);
-  ctx.cizPageTab = async () => ({ id: 5, url: 'https://example.com/form', title: 'Form' });
-  ctx.cizInPage = async (tab, op, args) => { inPage.push({ op, args }); return { attached: args.name }; };
+    + '\n;this.CFX_TOOLS = CFX_TOOLS;'
+    + ' this.cfxUploadGate = typeof cfxUploadGate === "undefined" ? undefined : cfxUploadGate;'
+    + ' this.cfxDialogNote = typeof cfxDialogNote === "undefined" ? undefined : cfxDialogNote;', ctx);
+  ctx.cfxPageTab = async () => ({ id: 5, url: 'https://example.com/form', title: 'Form' });
+  ctx.cfxInPage = async (tab, op, args) => { inPage.push({ op, args }); return { attached: args.name }; };
   const refusal = p => p.then(() => null, e => e.message);
   const ask = id => ({ ask: true, id, selector: '#up', name: 'a.txt', type: 'text/plain', size: 2, parts: 1 });
   await step('with Automatic off, the card waits in the add-on state with the name and the site', async () => {
-    const p = ctx.CIZ_TOOLS.upload_attach(ask('u0')); await tick();
-    const s = cizState.value.uploadAsk;
-    ctx.cizUploadGate.answer('u0', false);
+    const p = ctx.CFX_TOOLS.upload_attach(ask('u0')); await tick();
+    const s = cfxState.value.uploadAsk;
+    ctx.cfxUploadGate.answer('u0', false);
     await refusal(p);
-    return cizState.value.trusted === false && cizState.value.unsafe === false && !!s && s.id === 'u0' && s.name === 'a.txt' && s.site === 'example.com';
+    return cfxState.value.trusted === false && cfxState.value.unsafe === false && !!s && s.id === 'u0' && s.name === 'a.txt' && s.site === 'example.com';
   });
   // The ask resolves { accepted } with no card, or stays waiting (a card is up): the race tells which.
   const askNoCard = async id => {
-    const p = ctx.CIZ_TOOLS.upload_attach(ask(id));
+    const p = ctx.CFX_TOOLS.upload_attach(ask(id));
     const first = await Promise.race([p.then(v => v, e => ({ error: e.message })), wait(60).then(() => 'waiting')]);
-    const card = cizState.value.uploadAsk;
-    if (first === 'waiting') { ctx.cizUploadGate.answer(id, false); await refusal(p); }
+    const card = cfxState.value.uploadAsk;
+    if (first === 'waiting') { ctx.cfxUploadGate.answer(id, false); await refusal(p); }
     return { first, card };
   };
   await step('Automatic mode: the upload is accepted with no card, and the bytes attach', async () => {
-    cizState.value.trusted = true;
+    cfxState.value.trusted = true;
     const r = await askNoCard('a1');
-    await ctx.CIZ_TOOLS.upload_part({ id: 'a1', index: 0, data: 'aGk=' });
+    await ctx.CFX_TOOLS.upload_part({ id: 'a1', index: 0, data: 'aGk=' });
     const before = inPage.length;
-    const done = await ctx.CIZ_TOOLS.upload_attach({ attach: true, id: 'a1' });
-    cizState.value.trusted = false;
+    const done = await ctx.CFX_TOOLS.upload_attach({ attach: true, id: 'a1' });
+    cfxState.value.trusted = false;
     return r.first && r.first.accepted === true && r.card === null && inPage.length === before + 1 && done.attached === 'a.txt';
   });
   await step('Unsafe mode: the upload is accepted with no card', async () => {
-    cizState.value.unsafe = true;
+    cfxState.value.unsafe = true;
     const r = await askNoCard('a2');
-    cizState.value.unsafe = false;
+    cfxState.value.unsafe = false;
     return r.first && r.first.accepted === true && r.card === null;
   });
   await step('Automatic mode in a scheduled macro\'s turn still shows the card', async () => {
-    cizState.value.trusted = true;
-    ctx.cizSiteGate = { scheduled: () => true };
+    cfxState.value.trusted = true;
+    ctx.cfxSiteGate = { scheduled: () => true };
     const r = await askNoCard('a3');
-    delete ctx.cizSiteGate;
-    cizState.value.trusted = false;
+    delete ctx.cfxSiteGate;
+    cfxState.value.trusted = false;
     return r.first === 'waiting' && !!r.card && r.card.id === 'a3';
   });
   await step('Automatic off again: the card is back', async () => {
@@ -115,43 +115,43 @@ async function addonPart() {
     return r.first === 'waiting' && !!r.card && r.card.id === 'a4';
   });
   await step('Deny refuses with "The user did not allow this upload." and clears the card', async () => {
-    const p = ctx.CIZ_TOOLS.upload_attach(ask('u1')); await tick();
-    ctx.cizUploadGate.answer('u1', false);
-    return (await refusal(p)) === REFUSED && cizState.value.uploadAsk === null;
+    const p = ctx.CFX_TOOLS.upload_attach(ask('u1')); await tick();
+    ctx.cfxUploadGate.answer('u1', false);
+    return (await refusal(p)) === REFUSED && cfxState.value.uploadAsk === null;
   });
   await step('no card shown within 5 s refuses', async () => {
-    const p = ctx.CIZ_TOOLS.upload_attach(ask('u2')); await tick();
+    const p = ctx.CFX_TOOLS.upload_attach(ask('u2')); await tick();
     fire(5000);
     return (await refusal(p)) === REFUSED;
   });
   await step('no answer within 120 s of the card showing refuses', async () => {
-    const p = ctx.CIZ_TOOLS.upload_attach(ask('u3')); await tick();
-    ctx.cizUploadGate.shown('u3'); fire(120000);
+    const p = ctx.CFX_TOOLS.upload_attach(ask('u3')); await tick();
+    ctx.cfxUploadGate.shown('u3'); fire(120000);
     return (await refusal(p)) === REFUSED;
   });
   await step('Stop cancels a waiting card: the upload is refused and the card clears', async () => {
-    const p = ctx.CIZ_TOOLS.upload_attach(ask('u4')); await tick();
-    ctx.cizUploadGate.cancel();
-    return (await refusal(p)) === REFUSED && cizState.value.uploadAsk === null;
+    const p = ctx.CFX_TOOLS.upload_attach(ask('u4')); await tick();
+    ctx.cfxUploadGate.cancel();
+    return (await refusal(p)) === REFUSED && cfxState.value.uploadAsk === null;
   });
   await step('Allow sends the part and attaches it in the page with name, type and base64', async () => {
     inPage.length = 0;
-    const p = ctx.CIZ_TOOLS.upload_attach(ask('u5')); await tick();
-    ctx.cizUploadGate.answer('u5', true);
+    const p = ctx.CFX_TOOLS.upload_attach(ask('u5')); await tick();
+    ctx.cfxUploadGate.answer('u5', true);
     const accepted = await p;
-    await ctx.CIZ_TOOLS.upload_part({ id: 'u5', index: 0, data: 'aGk=' });
-    const done = await ctx.CIZ_TOOLS.upload_attach({ attach: true, id: 'u5' });
+    await ctx.CFX_TOOLS.upload_part({ id: 'u5', index: 0, data: 'aGk=' });
+    const done = await ctx.CFX_TOOLS.upload_attach({ attach: true, id: 'u5' });
     return accepted.accepted === true && inPage.length === 1 && inPage[0].op === 'attach' && inPage[0].args.name === 'a.txt'
       && inPage[0].args.type === 'text/plain' && inPage[0].args.data === 'aGk=' && done.attached === 'a.txt';
   });
   await step('several parts: the add-on sends attachpart, attachpart, then attach by id', async () => {
     const before = inPage.length;
-    const p = ctx.CIZ_TOOLS.upload_attach(Object.assign(ask('u6'), { parts: 2 })); await tick();
-    ctx.cizUploadGate.answer('u6', true);
+    const p = ctx.CFX_TOOLS.upload_attach(Object.assign(ask('u6'), { parts: 2 })); await tick();
+    ctx.cfxUploadGate.answer('u6', true);
     await p;
-    await ctx.CIZ_TOOLS.upload_part({ id: 'u6', index: 0, data: 'aGVsbG8g' });
-    await ctx.CIZ_TOOLS.upload_part({ id: 'u6', index: 1, data: 'd29ybGQ=' });
-    const done = await ctx.CIZ_TOOLS.upload_attach({ attach: true, id: 'u6' });
+    await ctx.CFX_TOOLS.upload_part({ id: 'u6', index: 0, data: 'aGVsbG8g' });
+    await ctx.CFX_TOOLS.upload_part({ id: 'u6', index: 1, data: 'd29ybGQ=' });
+    const done = await ctx.CFX_TOOLS.upload_attach({ attach: true, id: 'u6' });
     const calls = inPage.slice(before);
     return calls.map(c => c.op).join() === 'attachpart,attachpart,attach' && calls[0].args.index === 0 && calls[0].args.data === 'aGVsbG8g'
       && calls[1].args.index === 1 && calls[1].args.data === 'd29ybGQ=' && calls[2].args.id === 'u6' && calls[2].args.name === 'a.txt'
@@ -159,39 +159,39 @@ async function addonPart() {
   });
   await step('attach refuses when the tab moved to another site, and attaches nothing', async () => {
     const before = inPage.length;
-    const p = ctx.CIZ_TOOLS.upload_attach(ask('u7')); await tick();
-    ctx.cizUploadGate.answer('u7', true);
+    const p = ctx.CFX_TOOLS.upload_attach(ask('u7')); await tick();
+    ctx.cfxUploadGate.answer('u7', true);
     await p;
-    await ctx.CIZ_TOOLS.upload_part({ id: 'u7', index: 0, data: 'aGk=' });
-    const was = ctx.cizPageTab;
-    ctx.cizPageTab = async () => ({ id: 5, url: 'https://evil.example/login', title: 'Other' });
-    const why = await refusal(ctx.CIZ_TOOLS.upload_attach({ attach: true, id: 'u7' }));
-    ctx.cizPageTab = was;
-    const again = await refusal(ctx.CIZ_TOOLS.upload_attach({ attach: true, id: 'u7' }));
+    await ctx.CFX_TOOLS.upload_part({ id: 'u7', index: 0, data: 'aGk=' });
+    const was = ctx.cfxPageTab;
+    ctx.cfxPageTab = async () => ({ id: 5, url: 'https://evil.example/login', title: 'Other' });
+    const why = await refusal(ctx.CFX_TOOLS.upload_attach({ attach: true, id: 'u7' }));
+    ctx.cfxPageTab = was;
+    const again = await refusal(ctx.CFX_TOOLS.upload_attach({ attach: true, id: 'u7' }));
     return /another site/.test(why || '') && inPage.length === before && again === REFUSED;
   });
-  await step('a part for an upload that was not allowed is refused', async () => (await refusal(ctx.CIZ_TOOLS.upload_part({ id: 'nope', index: 0, data: 'aGk=' }))) === REFUSED);
+  await step('a part for an upload that was not allowed is refused', async () => (await refusal(ctx.CFX_TOOLS.upload_part({ id: 'nope', index: 0, data: 'aGk=' }))) === REFUSED);
   await step('a click result that showed a dialog gets the note line', async () => {
-    const out = ctx.cizDialogNote({ clicked: 'button "Go"', dialog: { kind: 'confirm', text: 'Delete it?', answered: 'Cancel' } });
+    const out = ctx.cfxDialogNote({ clicked: 'button "Go"', dialog: { kind: 'confirm', text: 'Delete it?', answered: 'Cancel' } });
     return out.note === 'The page showed a confirm: "Delete it?" (answered Cancel).';
   });
-  await step('a result without a dialog gets no note', async () => ctx.cizDialogNote({ clicked: 'x' }).note === undefined);
+  await step('a result without a dialog gets no note', async () => ctx.cfxDialogNote({ clicked: 'x' }).note === undefined);
 }
 
-// The page side: lib/pageOp.js, pageOpRead.js and pageOpAct.js as the add-on injects them (cizPageCode), in jsdom. attach puts
+// The page side: lib/pageOp.js, pageOpRead.js and pageOpAct.js as the add-on injects them (cfxPageCode), in jsdom. attach puts
 // the file on a file field with a DataTransfer and fires input and change. In a click, an Enter or a submitting type, the
 // page's alert, confirm and prompt are answered at once and reported in the result; they are the page's own again 1 s later.
 async function pageSidePart() {
   const src = fs.readFileSync(EXT + 'lib/policy.js', 'utf8') + '\n' + ['pageOp.js', 'pageOpRead.js', 'pageOpAct.js'].map(f => fs.readFileSync(EXT + 'lib/' + f, 'utf8')).join('\n');
   const pctx = vm.createContext({ URL });
-  vm.runInContext(src + ';this.cizPageCode = cizPageCode;', pctx);
+  vm.runInContext(src + ';this.cfxPageCode = cfxPageCode;', pctx);
   const dom = new JSDOM('<h1>Form</h1><input type="file" id="up"><button id="go">Go</button><button id="ask">Ask</button><button id="name">Name</button>',
     { url: 'https://shop.example/', runScripts: 'outside-only' });
   const w = dom.window;
   w.Element.prototype.getBoundingClientRect = () => ({ width: 10, height: 10 });
   Object.defineProperty(w.HTMLElement.prototype, 'innerText', { get() { return this.textContent; } });
   w.Element.prototype.scrollIntoView = () => {};
-  const run = (op, args) => w.eval(pctx.cizPageCode(op, args));
+  const run = (op, args) => w.eval(pctx.cfxPageCode(op, args));
   const origAlert = w.alert, origConfirm = w.confirm, origPrompt = w.prompt;
   // jsdom has no DataTransfer and its file list is read-only: a stand-in DataTransfer, and the assignment recorded.
   let assigned = null;

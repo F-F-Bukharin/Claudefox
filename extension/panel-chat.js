@@ -1,5 +1,5 @@
 'use strict';
-// Sidebar panel, the chat composer: Speed or Quality and the army, the current tab, the text bar, attachments, the + menu, slash commands, sending, and Improve Claude in Zen.
+// Sidebar panel, the chat composer: Speed or Quality and the army, the current tab, the text bar, attachments, the + menu, slash commands, sending, and Improve Claudefox.
 
 // One button flips Speed and Quality. The + on its left (Speed mode only) turns Speed Plus (Haiku at max effort) on and off.
 function toggleMode() {
@@ -533,10 +533,10 @@ async function tabsToText(text) {
   return { text: out, sites };
 }
 
-// ------------------------------------------------------------ improve Claude in Zen (the + menu)
+// ------------------------------------------------------------ improve Claudefox (the + menu)
 // Claude edits a copy of the add-on, and the reply ends with a card: Apply writes the change into the add-on,
 // Discard drops it. Nothing changes in the add-on until Apply.
-const IMPROVE_EMPTY = 'Improve Claude in Zen: pick one change that helps most.';
+const IMPROVE_EMPTY = 'Improve Claudefox: pick one change that helps most.';
 let improveOn = false;
 function startImprove() {
   if (state.agent === 'stopped' || !state.signedIn) { addMsg({ role: 'system', text: t('chat_improveNeedsStart') }); return; }

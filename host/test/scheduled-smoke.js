@@ -49,18 +49,18 @@ function fakeChat(cfg) {
 }
 
 function startHelper() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ciz-sched-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-sched-'));
   const fake = path.join(dir, 'claude');
   fs.writeFileSync(fake, `#!${process.execPath}\n(${fakeChat.toString()})(${JSON.stringify({ dir, sid: SID })});\n`, { mode: 0o755 });
-  fs.mkdirSync(path.join(dir, 'claude-in-zen'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'claudefox'), { recursive: true });
   // One plugin and one tool server the user switched on (tools.json is fresh, so no scan replaces it).
-  fs.writeFileSync(path.join(dir, 'claude-in-zen', 'tools.json'), JSON.stringify({
+  fs.writeFileSync(path.join(dir, 'claudefox', 'tools.json'), JSON.stringify({
     on: { plugins: ['p@test'], servers: ['srvx'] }, decided: ['p@test'],
     cat: { main: { plugins: [{ id: 'p@test', name: 'p', label: 'P', servers: [], skills: false }],
       servers: [{ name: 'srvx', kind: 'server', label: 'srvx', transport: 'http', target: '', local: false, status: 'connected' }], scanned: Date.now(), checked: 0 } },
   }));
-  const env = { ...process.env, LOCALAPPDATA: dir, CLAUDE_IN_ZEN_PIPE: path.join(dir, 's.sock'), CLAUDE_IN_ZEN_TEST: '1', CLAUDE_IN_ZEN_CLAUDE: fake };
-  const proc = spawn(process.execPath, [path.join(__dirname, '..', 'claude-in-zen-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+  const env = { ...process.env, LOCALAPPDATA: dir, CLAUDEFOX_PIPE: path.join(dir, 's.sock'), CLAUDEFOX_TEST: '1', CLAUDEFOX_CLAUDE: fake };
+  const proc = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
   const inbox = []; let waiters = []; let hbuf = Buffer.alloc(0);
   const H = { dir, proc };
   H.send = msg => { const body = Buffer.from(JSON.stringify(msg)); const head = Buffer.alloc(4); head.writeUInt32LE(body.length, 0); proc.stdin.write(Buffer.concat([head, body])); };
@@ -86,7 +86,7 @@ function startHelper() {
   };
   H.events = id => inbox.filter(m => m.type === 'chat_event' && m.id === id).map(m => m.event);
   H.spawns = () => { try { return fs.readFileSync(path.join(dir, 'spawns'), 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
-  H.log = () => { try { return fs.readFileSync(path.join(dir, 'claude-in-zen', 'logs', 'host.log'), 'utf8'); } catch { return ''; } };
+  H.log = () => { try { return fs.readFileSync(path.join(dir, 'claudefox', 'logs', 'host.log'), 'utf8'); } catch { return ''; } };
   H.chat = async (id, fields) => { H.send({ type: 'chat', id, text: id, resume: '', ...(fields || {}) }); return H.next(m => m.type === 'chat_done' && m.id === id, 15000); };
   H.hello = async () => { H.send({ type: 'hello', version: 'test' }); await H.next(m => m.type === 'hello'); await H.next(m => m.type === 'confirmed_state'); };
   H.stop = () => { try { proc.kill(); } catch {} for (const s of H.spawns()) if (alive(s.pid)) { try { process.kill(s.pid, 'SIGKILL'); } catch {} } };
@@ -100,7 +100,7 @@ function pipeCall(H, tool, args) {
     let buf = '', sent = false;
     const timer = setTimeout(() => { sock.destroy(); reject(new Error('no answer over the pipe')); }, 5000);
     sock.on('error', e => { clearTimeout(timer); reject(e); });
-    sock.on('connect', () => sock.write(JSON.stringify({ type: 'hello', token: fs.readFileSync(path.join(H.dir, 'claude-in-zen', 'pipe-token'), 'utf8').trim(), client: 'test' }) + '\n'));
+    sock.on('connect', () => sock.write(JSON.stringify({ type: 'hello', token: fs.readFileSync(path.join(H.dir, 'claudefox', 'pipe-token'), 'utf8').trim(), client: 'test' }) + '\n'));
     sock.on('data', d => {
       buf += d;
       let i;
@@ -137,7 +137,7 @@ const flag = (argv, name) => { const i = argv.indexOf(name); return i < 0 ? null
     const tools = flag(s.argv, '--tools') || '', allowed = flag(s.argv, '--allowedTools') || '';
     check('scheduled turn: it gets its own process (the strict toolbox needs one)', H.spawns().length === 2 && s.pid !== n.pid);
     check('scheduled turn: every plugin is off and connectors are disabled', s.settings && s.settings.enabledPlugins && s.settings.enabledPlugins['p@test'] === false && s.settings.disableClaudeAiConnectors === true, JSON.stringify(s.settings));
-    check('scheduled turn: only the Zen tool server loads (strict config), the other server is not allowed', s.argv.includes('--strict-mcp-config') && !/srvx/.test(allowed) && /mcp__claude-in-zen/.test(allowed), allowed);
+    check('scheduled turn: only the Zen tool server loads (strict config), the other server is not allowed', s.argv.includes('--strict-mcp-config') && !/srvx/.test(allowed) && /mcp__claudefox/.test(allowed), allowed);
     check('scheduled turn: no file tools at all (not even Read)', !/(^|,)(Read|Glob|Grep|Edit|Write)(,|$)/.test(tools) && !s.argv.includes('--add-dir'), tools);
     check('scheduled turn: not the army lead', !/mcp-army/.test(flag(s.argv, '--mcp-config') || ''), flag(s.argv, '--mcp-config'));
     for (const tool of ['local_files', 'read_document', 'local_file_read', 'local_page_open', 'watch_video', 'download_image', 'army_start']) {

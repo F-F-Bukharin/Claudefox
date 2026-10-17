@@ -52,8 +52,8 @@ const win = () => process.platform === 'win32';
 const appDir = () => process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
 const localDir = () => process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
 
-// Claude in Zen's own code: the folder this helper runs from, with the add-on, its mods and the tools. File tools may
-// read it but never change it, whatever folder the user picks; changes go through Improve Claude in Zen, which works
+// Claudefox's own code: the folder this helper runs from, with the add-on, its mods and the tools. File tools may
+// read it but never change it, whatever folder the user picks; changes go through Improve Claudefox, which works
 // on a copy and needs the user's Apply.
 const OWN = path.resolve(__dirname, '..', '..');
 
@@ -139,7 +139,7 @@ function within(child, parent) {
   return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
-// Why a folder may not be used for file tools, or '' when it may. mode 'write': also not inside Claude in Zen's code.
+// Why a folder may not be used for file tools, or '' when it may. mode 'write': also not inside Claudefox's code.
 function folderProblem(folder, mode) {
   const f = real(folder);
   for (const place of protectedPlaces()) {
@@ -147,9 +147,9 @@ function folderProblem(folder, mode) {
       return 'it holds browser, password or Claude sign-in data, which Claude never reads';
     }
   }
-  if (within(f, P.BASE) && !within(f, P.WORKSPACE)) return "it is Claude in Zen's own data folder";
+  if (within(f, P.BASE) && !within(f, P.WORKSPACE)) return "it is Claudefox's own data folder";
   if (tooBroad(f)) return `${path.resolve(folder)} is too broad for Claude: pick a folder inside it`;
-  if (mode === 'write' && (within(f, OWN) || within(f, real(OWN)))) return "it holds Claude in Zen's own code, which file tools never change (use Read only, or Improve Claude in Zen)";
+  if (mode === 'write' && (within(f, OWN) || within(f, real(OWN)))) return "it holds Claudefox's own code, which file tools never change (use Read only, or Improve Claudefox)";
   return '';
 }
 
@@ -159,7 +159,7 @@ function secretFile(file) {
   return SECRET_FILES.some(pat => new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', win() ? 'i' : '').test(base));
 }
 
-// True when a path may be read by Claude in Zen's own tools (read_document, attachments): inside one of the allowed
+// True when a path may be read by Claudefox's own tools (read_document, attachments): inside one of the allowed
 // folders and outside every protected place and secret file.
 function readable(file, allowedFolders) {
   const f = real(file);
