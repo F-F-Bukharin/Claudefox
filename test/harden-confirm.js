@@ -86,10 +86,14 @@ async function main() {
   check('without CLAUDEFOX_TEST the confirm override is ignored: the fake window never runs', !unset.ok && !fs.existsSync(dump)
     && unset.error === 'This system has no confirm window, so the answer is no.', JSON.stringify(unset));
   process.env.CLAUDEFOX_TEST = '1';
+  // The fake window is a script with a #! line, which Windows cannot start as a program: this check runs on Linux and macOS.
+  if (process.platform === 'win32') console.log('SKIP  the window text check needs a #! script (Linux/macOS)');
+  else {
   const confirm = confirmLib.createConfirm({ killTree: () => {} });
   const answer = await confirm.ask({ title: 'T', text: 'run\x1b[2J this\nnext\x00line', yes: 'Y', no: 'N' });
   check('the window gets its text without control characters', answer.ok && fs.existsSync(dump) && fs.readFileSync(dump, 'utf8') === 'run[2J this\nnextline',
     fs.existsSync(dump) ? JSON.stringify(fs.readFileSync(dump, 'utf8')) : 'no text');
+  }
   delete process.env.CLAUDEFOX_CONFIRM;
   delete process.env.CLAUDEFOX_TEST;
 

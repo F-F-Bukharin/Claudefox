@@ -84,7 +84,7 @@ check('chat settings: the guard deny rules stay', Array.isArray(written.permissi
 let silent = false;
 const seen = [];
 async function hookTests() {
-  const hookPipe = path.join(tmp, 'hook.sock');
+  const hookPipe = process.platform === 'win32' ? `\\\\.\\pipe\\cfx-scope-${process.pid}` : path.join(tmp, 'hook.sock');   // Windows: a named pipe
   const TOKEN = crypto.randomBytes(16).toString('hex');
   fs.mkdirSync(path.dirname(P.TOKEN_FILE), { recursive: true });
   fs.writeFileSync(P.TOKEN_FILE, TOKEN);

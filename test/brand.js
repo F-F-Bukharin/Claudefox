@@ -21,8 +21,9 @@ if (!fs.existsSync(path.join(root, 'tools', 'brand.js'))) { console.log('SKIP  t
 
 function copy(from, to) {
   fs.mkdirSync(path.dirname(to), { recursive: true });
-  if (fs.statSync(from).isDirectory()) for (const n of fs.readdirSync(from)) copy(path.join(from, n), path.join(to, n));
-  else fs.copyFileSync(from, to);
+  if (fs.statSync(from).isDirectory()) {
+    for (const n of fs.readdirSync(from)) if (n !== '__pycache__' && !n.endsWith('.pyc')) copy(path.join(from, n), path.join(to, n));   // Python's caches never travel
+  } else fs.copyFileSync(from, to);
 }
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -204,7 +205,7 @@ const scanFiles = [];
 const gather = rel => {
   for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
     const r = `${rel}/${e.name}`;
-    if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '.git') gather(r); } else scanFiles.push(r);
+    if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '.git' && e.name !== '__pycache__') gather(r); } else if (!e.name.endsWith('.pyc')) scanFiles.push(r);
   }
 };
 SCANNED.forEach(gather);

@@ -6,6 +6,8 @@ build/*
 .diag/
 _restore.tgz
 node_modules/
+__pycache__/
+*.pyc
 *.log
 web-ext-artifacts/
 

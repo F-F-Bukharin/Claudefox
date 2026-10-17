@@ -10,7 +10,8 @@ const SCRIPT = path.join(ROOT, 'host', 'vendor', 'claude-video', 'watch.py');
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
 
-if (spawnSync('python3', ['--version'], { encoding: 'utf8' }).error || spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).error) {
+const pyv = spawnSync('python3', ['--version'], { encoding: 'utf8' });   // Windows' Store alias runs but prints no version
+if (pyv.error || pyv.status !== 0 || !/^Python 3\./.test(`${pyv.stdout || ''}${pyv.stderr || ''}`.trim()) || spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).error) {
   console.log('SKIP python3 or ffmpeg is not installed');
   process.exit(0);
 }

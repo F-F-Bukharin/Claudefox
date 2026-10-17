@@ -49,6 +49,8 @@ function New-ClaudefoxStage([string]$Root, [string]$Stage) {
   Copy-Item (Join-Path $Root 'host\lib\*.js') (Join-Path $Stage 'host\lib')
   # The trimmed claude-video engine of the watch tool (its LICENSE and NOTICE.md come along).
   Copy-Item (Join-Path $Root 'host\vendor\claude-video') (Join-Path $Stage 'host\vendor\claude-video') -Recurse
+  # Python's own caches (__pycache__, made when the engine ran on this PC) never travel.
+  Get-ChildItem (Join-Path $Stage 'host\vendor\claude-video') -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
   # The tests: Improve runs them on a copy of the add-on, so the friends' zip carries them too.
   Copy-Item (Join-Path $Root 'test') (Join-Path $Stage 'test') -Recurse
   Copy-Item (Join-Path $Root 'host\test') (Join-Path $Stage 'host\test') -Recurse

@@ -17,7 +17,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-mcp-'));
 madeDirs.push(tmp);
-const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\claude-in-claudefox-mcp-${process.pid}` : path.join(tmp, 'mcp.sock');
+const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\claudefox-mcp-${process.pid}` : path.join(tmp, 'mcp.sock');
 // The fake confirm window (the helper runs CLAUDEFOX_CONFIRM, read only with CLAUDEFOX_TEST=1, with the question in
 // CFX_Q_TEXT): it saves each question and says no, so the test can read what the window would have said. POSIX only: it is
 // a script with a shebang, as local-smoke.js makes its own.

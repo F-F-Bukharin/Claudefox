@@ -23,7 +23,9 @@ for (const f of KEPT) {
   check(`${f}: no removed-engine or setup.py text`, !/setup\.py|whisperx|groq|openai|gemini|WATCH_/i.test(text));
   check(`${f}: reads no environment, home folder or .env`, !/environ|Path\.home|expanduser|\.env\b/.test(text));
 }
-const py = spawnSync('python3', ['-I', '-B', '-c', `import sys; sys.path.insert(0, ${JSON.stringify(VENDOR)}); import watch, download, frames, transcribe, config, runtime; print('imports ok')`], { encoding: 'utf8' });
+// Windows' python3 alias (the Microsoft Store stub) runs and says "Python was not found": only a real Python prints its version.
+const hasPython = (r => !r.error && r.status === 0 && /^Python 3\./.test(`${r.stdout || ''}${r.stderr || ''}`.trim()))(spawnSync('python3', ['--version'], { encoding: 'utf8' }));
+const py = !hasPython ? { error: new Error('no python3') } : spawnSync('python3', ['-I', '-B', '-c', `import sys; sys.path.insert(0, ${JSON.stringify(VENDOR)}); import watch, download, frames, transcribe, config, runtime; print('imports ok')`], { encoding: 'utf8' });
 if (!py.error) check('the vendored modules import under python3 -I', py.status === 0 && /imports ok/.test(py.stdout), (py.stderr || '').trim().split('\n').pop());
 
 // section wiring (Task 7): the host hooks the permission card, the saved option and the handler
