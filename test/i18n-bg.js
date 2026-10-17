@@ -20,6 +20,7 @@ const area = (o, ls) => ({
   remove: async k => { for (const x of [].concat(k)) delete o[x]; },
 });
 const menuCreated = [], menuUpdated = [], notes = [];
+const captured = [];   // the tab ids captureTab was asked for (the screenshot checks read it)
 let native = null;
 const missingHosts = new Set();   // helper names connectNative refuses (the fallback notice check)
 const connectEv = ev(), panelIn = [];
@@ -41,7 +42,7 @@ const browser = {
   menus: { create: i => { menuCreated.push(i); }, update: (id, o) => { menuUpdated.push([id, o]); return Promise.resolve(); }, onClicked: ev() },
   notifications: { create: (id, o) => { notes.push(o); return Promise.resolve(id); } },
   tabs: { query: async () => [], get: async () => { throw new Error('no tab'); }, create: async () => ({ id: 9 }), update: async () => ({}), remove: async () => {},
-    executeScript: async () => [], onActivated: ev(), onUpdated: ev(), onCreated: ev(), onRemoved: ev() },
+    executeScript: async () => [], captureTab: async id => { captured.push(id); return 'data:image/png;base64,AAAA'; }, onActivated: ev(), onUpdated: ev(), onCreated: ev(), onRemoved: ev() },
   webRequest: { onBeforeRequest: ev(), onSendHeaders: ev(), onHeadersReceived: ev(), onBeforeRedirect: ev(), onCompleted: ev(), onErrorOccurred: ev() },
   windows: { update: async () => {}, onCreated: ev(), getAll: async () => [] },
 };
@@ -62,16 +63,17 @@ async function chatError(state, extra) {
   const done = panelIn.find(m => m.type === 'chatDone' && m.id === id);
   return done && done.error;
 }
-// The panel's screenshot request for a tab at url: the error the panel is told (undefined when it has none).
-async function snapError(url) {
+// The panel's screenshot request for a tab at url: the reply the panel is sent (its error, or the picture's data).
+async function snapReply(url) {
   browser.tabs.query = async () => [{ id: 7, url, title: 'Page' }];
   const req = 'r' + (++seq);
   panelIn.length = 0;
   panel.onMessage.fire({ type: 'snapTab', req });
   await tick();
-  const m = panelIn.find(x => x.type === 'snap' && x.req === req);
-  return m && m.error;
+  return panelIn.find(x => x.type === 'snap' && x.req === req) || {};
 }
+// The error the panel is told for that tab (undefined when it has none).
+async function snapError(url) { return (await snapReply(url)).error; }
 const menuTitles = () => ['ask-selection', 'ask-page', 'ask-link'].map(id => {
   const up = menuUpdated.filter(u => u[0] === id).pop();
   return up ? up[1].title : (menuCreated.find(m => m.id === id) || {}).title;
@@ -95,9 +97,23 @@ const menuTitles = () => ['ask-selection', 'ask-page', 'ask-link'].map(id => {
     ok('en: Claude Code not signed in', /^Claude Code is not signed in\./.test(await chatError({ claude: { installed: true, loggedIn: false } })));
     // A tab that cannot be captured says why: in English here, as the add-on always showed it.
     const TAB_QUERY = browser.tabs.query, TAB_GET = browser.tabs.get;
-    ok('en: a tab that cannot be captured says why, in English', await snapError('about:config') === "This tab can't be captured: about: pages are off-limits.");
+    ok('en: a tab that cannot be captured says why, in English', await snapError('moz-extension://x/page.html') === "This tab can't be captured: moz-extension: pages are off-limits.");
     ok('en: the Google sign-in reason, in English', await snapError('https://accounts.google.com/signin')
       === "This tab can't be captured: Google sign-in pages are hands-off (the user can turn on Unsafe mode in Settings).");
+    // The screenshot tool's rule (it only looks): an about: page can be captured, but not a page that lists saved passwords.
+    ok('en: an about: page is captured, as the screenshot tool captures it', (await snapReply('about:config')).data === 'AAAA');
+    ok('en: a page that shows saved passwords is refused, in English', await snapError('about:logins') === "This tab can't be captured: that page shows saved passwords.");
+    // A file: page in a folder the user allowed is captured; one outside is refused with the folder reason, before any capture.
+    await g('cfxState').set({ localGrants: ['C:\\Users\\F\\Notes'] });
+    ok('a file: page in an allowed folder can be captured', (await snapReply('file:///C:/Users/F/Notes/page.html')).data === 'AAAA');
+    captured.length = 0;
+    ok('a file: page outside the allowed folders is refused with the folder reason, before any capture',
+      await snapError('file:///C:/Users/F/Other/page.html') === "This tab can't be captured: the user has not allowed Claude to look in C:\\Users\\F\\Other." && captured.length === 0);
+    await g('cfxState').set({ localGrants: [] });
+    // Google sign-in: refused without Unsafe mode (above), and captured with it.
+    await g('cfxState').set({ unsafe: true });
+    ok('a Google sign-in page is captured in Unsafe mode', (await snapReply('https://accounts.google.com/signin')).data === 'AAAA');
+    await g('cfxState').set({ unsafe: false });
     browser.tabs.query = TAB_QUERY;
     await g('cfxState').set({ agent: 'stopped' });
     notes.length = 0;
@@ -121,8 +137,9 @@ const menuTitles = () => ['ask-selection', 'ask-page', 'ask-link'].map(id => {
     // The panel's text for a tab that cannot be captured: each reason in Portuguese, with its argument (the folder, the protocol),
     // and no English reason left in it.
     const ENGLISH_REASON = /hands-off|off-limits|unparseable|has not allowed|saved passwords|Unsafe|Settings/;
-    for (const [url, key, arg] of [['https://accounts.google.com/signin', 'bg_reasonGoogle', ''], ['about:config', 'bg_reasonProtocol', 'about:'],
-      ['file:///C:/Users/x/a.html', 'bg_reasonFolder', 'C:\\Users\\x'], ['file://server/share/a.html', 'bg_reasonFileShare', ''], ['', 'bg_reasonUnparseable', '']]) {
+    for (const [url, key, arg] of [['https://accounts.google.com/signin', 'bg_reasonGoogle', ''], ['moz-extension://x/a.html', 'bg_reasonProtocol', 'moz-extension:'],
+      ['file:///C:/Users/x/a.html', 'bg_reasonFolder', 'C:\\Users\\x'], ['file://server/share/a.html', 'bg_reasonFileShare', ''], ['', 'bg_reasonUnparseable', ''],
+      ['about:logins', 'bg_reasonPasswords', '']]) {
       const got = await snapError(url);
       const want = pt.bg_snapBlocked.message.replace('$1', (pt[key] || { message: '' }).message.replace('$1', arg));
       ok(`pt_BR: a tab that cannot be captured (${key}) says why in Portuguese, with no English`, got === want && !ENGLISH_REASON.test(got), JSON.stringify(got));

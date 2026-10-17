@@ -237,12 +237,13 @@ function cfxBlockText(gate) {
 }
 
 // The + menu's "Screenshot of this tab": a PNG of the current tab, attached to the next message.
+// The screenshot tool's gate (pageTools.js): a screenshot only looks, so the view rule, with Unsafe mode and the allowed folders.
 async function snapTab(port, req, windowId) {
   const reply = m => { try { port.postMessage(Object.assign({ type: 'snap', req }, m)); } catch {} };
   try {
     const [tab] = await browser.tabs.query(typeof windowId === 'number' ? { active: true, windowId } : { active: true, lastFocusedWindow: true });
     if (!tab) return reply({ error: t('bg_snapNoTab') });
-    const gate = cfxUrlBlocked(tab.url || '', { unsafe: !!cfxState.get().unsafe });
+    const gate = cfxViewBlocked(tab.url || '', cfxGateOpts());
     if (gate.blocked) return reply({ error: t('bg_snapBlocked', cfxBlockText(gate)) });
     const data = await browser.tabs.captureTab(tab.id, { format: 'png' });
     let host = 'tab';
