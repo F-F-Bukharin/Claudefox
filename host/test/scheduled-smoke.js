@@ -11,6 +11,15 @@ const path = require('path');
 
 if (process.platform === 'win32') { console.log('SKIP  scheduled-smoke runs on Linux/macOS only'); process.exit(0); }
 
+// The temp folder this test makes is removed however it ends (passing, failed checks, an exception or an early exit), and
+// the helper and the Claude Code processes it starts are stopped first, so nothing writes into the folder meanwhile.
+const madeDirs = [], helpers = [];
+process.on('exit', () => {
+  for (const H of helpers.splice(0)) { try { H.proc.kill('SIGKILL'); } catch {} try { H.stop(); } catch {} }
+  for (const d of madeDirs.splice(0)) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));   // Ctrl-C or a kill cleans up too
+
 const SID = '11111111-2222-3333-4444-555555555555';
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + String(extra).slice(0, 200) : ''}`); };
@@ -50,6 +59,7 @@ function fakeChat(cfg) {
 
 function startHelper() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-sched-'));
+  madeDirs.push(dir);
   const fake = path.join(dir, 'claude');
   fs.writeFileSync(fake, `#!${process.execPath}\n(${fakeChat.toString()})(${JSON.stringify({ dir, sid: SID })});\n`, { mode: 0o755 });
   fs.mkdirSync(path.join(dir, 'claudefox'), { recursive: true });
@@ -90,6 +100,7 @@ function startHelper() {
   H.chat = async (id, fields) => { H.send({ type: 'chat', id, text: id, resume: '', ...(fields || {}) }); return H.next(m => m.type === 'chat_done' && m.id === id, 15000); };
   H.hello = async () => { H.send({ type: 'hello', version: 'test' }); await H.next(m => m.type === 'hello'); await H.next(m => m.type === 'confirmed_state'); };
   H.stop = () => { try { proc.kill(); } catch {} for (const s of H.spawns()) if (alive(s.pid)) { try { process.kill(s.pid, 'SIGKILL'); } catch {} } };
+  helpers.push(H);
   return H;
 }
 

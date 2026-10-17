@@ -8,7 +8,17 @@ const os = require('os');
 const net = require('net');
 const path = require('path');
 
+// The temp folder this test makes is removed however it ends (passing, failed checks, an exception or an early exit), and
+// the helper it starts is stopped first, so nothing writes into the folder meanwhile.
+const madeDirs = [], helpers = [];
+process.on('exit', () => {
+  for (const h of helpers.splice(0)) { try { h.kill('SIGKILL'); } catch {} }
+  for (const d of madeDirs.splice(0)) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));   // Ctrl-C or a kill cleans up too
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-smoke-'));
+madeDirs.push(tmp);
 const pipe = process.platform === 'win32'
   ? `\\\\.\\pipe\\claudefox-smoke-${process.pid}`
   : path.join(tmp, 'smoke.sock');
@@ -20,6 +30,7 @@ const check = (name, ok, extra) => { results.push([name, !!ok]); console.log(`${
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const child = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+helpers.push(child);
 
 // Framed reader for the helper's stdout.
 const inbox = [];

@@ -4,9 +4,19 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+// The temp folders this test makes are removed however it ends (passing, failed checks, an exception or an early exit), and
+// the processes it starts (watch runs, the tool server) are stopped first, so nothing writes into the folders meanwhile.
+const madeDirs = [], procs = [], stops = [];
+process.on('exit', () => {
+  for (const stop of stops.splice(0)) { try { stop(); } catch {} }
+  for (const c of procs.splice(0)) { try { c.kill('SIGKILL'); } catch {} }
+  for (const d of madeDirs.splice(0)) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));   // Ctrl-C or a kill cleans up too
+const makeDir = prefix => { const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); madeDirs.push(d); return d; };
 // The data folder goes to a temp folder before any helper module loads (paths are read at require time): a watch run
 // is listed in children.json, which must never land in the real data folder.
-process.env.LOCALAPPDATA = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-watch-data-'));
+process.env.LOCALAPPDATA = makeDir('cfx-watch-data-');
 
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
@@ -14,7 +24,7 @@ const deepEqual = (a, b) => { try { assert.deepStrictEqual(a, b); return true; }
 
 const { checkSource, checkQuestion, checkTime, buildArgv, buildEnv } = require('../lib/watchvideo');
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-watch-'));
+const tmp = makeDir('cfx-watch-');
 try {
   // section args
   const videoFile = path.join(tmp, 'clip.mp4');
@@ -71,9 +81,10 @@ async function goneWithin(pid, ms) {
 async function runSection() {
   const { createWatchRuns, makeRunDir, removeRunDir } = require('../lib/watchrun');
   const { killTree } = require('../lib/army');
-  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-run-'));
+  const t = makeDir('cfx-run-');
   try {
     const runs = createWatchRuns({ killTree });
+    stops.push(() => runs.stopAll(true));
     const node = code => ({ exe: process.execPath, args: ['-e', code], cwd: t, env: process.env });
     check('the deadline ends a run and marks it timed out', (await runs.run({ ...node('setInterval(() => {}, 1000)'), deadlineMs: 300 })).timedOut === true);
     // The child starts a grandchild, records its pid, then waits. Stop must take both.
@@ -97,7 +108,7 @@ async function runSection() {
 // section result (Task 6): report assembly
 async function resultSection() {
   const { assembleResult } = require('../lib/watchvideo');
-  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-result-'));
+  const t = makeDir('cfx-result-');
   try {
     const work = path.join(t, 'run-1', 'watch-x', 'frames');
     fs.mkdirSync(work, { recursive: true });
@@ -243,7 +254,7 @@ async function handlerSection() {
   const { createWatchRuns } = require('../lib/watchrun');
   const { killTree } = require('../lib/army');
   const { DENIED } = require('../lib/watchgate');
-  const t = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-handler-'));
+  const t = makeDir('cfx-handler-');
   try {
     const stub = path.join(t, 'stub-watch.js');
     fs.writeFileSync(stub, [
@@ -257,6 +268,7 @@ async function handlerSection() {
     ].join('\n'));
     const base = path.join(t, 'watch');
     const runs = createWatchRuns({ killTree });
+    stops.push(() => runs.stopAll(true));
     const pyOk = async () => ({ exe: process.execPath, args: [] });
     const deps = (over = {}) => ({ enabled: false, permission: { ask: async () => ({ ok: true }) }, folderOf: () => '', baseDir: base,
       scriptPath: stub, getPython: pyOk, runs, deadlineMs: 20000, ...over });
@@ -309,6 +321,7 @@ function listedTools(extraEnv, base) {
     for (const k of ['CLAUDEFOX_WATCH', 'CLAUDEFOX_PANEL', 'CLAUDEFOX_ARMY_TOKEN', 'CLAUDEFOX_ARMY_LEAD']) delete env[k];
     Object.assign(env, extraEnv);
     const child = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-mcp.js')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
+    procs.push(child);
     const timer = setTimeout(() => { child.kill(); reject(new Error('the tool server did not answer tools/list')); }, 8000);
     child.on('error', e => { clearTimeout(timer); reject(e); });
     child.stdin.on('error', () => {});
@@ -334,7 +347,7 @@ async function surfaceSection() {
   const { WORKER_TOOLS, checkCall } = require('../lib/armyguard');
   const { chatPrompt } = require('../lib/chatargs');
   const { format } = require('../claudefox-mcp');   // loads without starting the tool server: its startup runs only as the main module
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-surface-'));
+  const base = makeDir('cfx-surface-');
   try {
     const listed = env => listedTools(env, base).catch(() => []);
     const t = TOOLS.find(x => x.name === 'watch_video');

@@ -11,8 +11,18 @@ const { onLines, sendLine } = require('../lib/lines');
 
 if (process.platform === 'win32') { console.log('SKIP the tool server part uses a unix socket'); process.exit(0); }
 
+// The temp folder this test makes is removed however it ends (passing, failed checks, an exception or an early exit), and
+// the tool servers it starts are stopped first, so nothing writes into the folder meanwhile.
+const madeDirs = [], children = [];
+process.on('exit', () => {
+  for (const c of children.splice(0)) { try { c.kill('SIGKILL'); } catch {} }
+  for (const d of madeDirs.splice(0)) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));   // Ctrl-C or a kill cleans up too
+
 const HOST = path.join(__dirname, '..');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-effort-'));
+madeDirs.push(tmp);
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
 
@@ -52,8 +62,6 @@ const base = path.join(tmp, 'claudefox');
 fs.mkdirSync(base, { recursive: true });
 fs.writeFileSync(path.join(base, 'pipe-token'), 'test-token');
 const ENV = { LOCALAPPDATA: tmp, CLAUDEFOX_TEST: '1', CLAUDEFOX_PIPE: sock, CLAUDEFOX_CLIENT: 'effort-smoke' };
-const children = [];
-
 function session(extra) {
   const child = spawn(process.execPath, [path.join(HOST, 'claudefox-mcp.js')], {
     env: { ...process.env, ...ENV, CLAUDEFOX_PANEL: '', CLAUDEFOX_ARMY_TOKEN: '', ...extra },

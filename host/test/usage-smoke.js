@@ -10,6 +10,16 @@ const path = require('path');
 
 if (process.platform === 'win32') { console.log('SKIP  usage-smoke runs on Linux/macOS only'); process.exit(0); }
 
+// The temp folders this test makes are removed however it ends (passing, failed checks, an exception or an early exit), and
+// the helper and the fake workers it starts are stopped first, so nothing writes into the folders meanwhile.
+const madeDirs = [], helpers = [], stops = [];
+process.on('exit', () => {
+  for (const H of helpers.splice(0)) { try { H.proc.kill('SIGKILL'); } catch {} try { H.stop(); } catch {} }
+  for (const stop of stops.splice(0)) { try { stop(); } catch {} }
+  for (const d of madeDirs.splice(0)) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));   // Ctrl-C or a kill cleans up too
+
 const SID = '11111111-2222-3333-4444-555555555555';
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
@@ -57,6 +67,7 @@ function fakeChat(cfg) {
 
 function startHelper() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-usage-'));
+  madeDirs.push(dir);
   const fake = path.join(dir, 'claude');
   fs.writeFileSync(fake, `#!${process.execPath}\n(${fakeChat.toString()})(${JSON.stringify({ dir, sid: SID })});\n`, { mode: 0o755 });
   fs.mkdirSync(path.join(dir, 'claudefox'), { recursive: true });
@@ -91,6 +102,7 @@ function startHelper() {
   H.chat = async (id, fields) => { H.send({ type: 'chat', id, text: id, resume: '', ...(fields || {}) }); return H.next(m => m.type === 'chat_done' && m.id === id, 15000); };
   H.hello = async () => { H.send({ type: 'hello', version: 'test' }); await H.next(m => m.type === 'hello'); await H.next(m => m.type === 'confirmed_state'); };
   H.stop = () => { try { proc.kill(); } catch {} for (const s of H.spawns()) if (alive(s.pid)) { try { process.kill(s.pid, 'SIGKILL'); } catch {} } };
+  helpers.push(H);
   return H;
 }
 
@@ -153,6 +165,7 @@ function fakeWorker() {
 // A real army run, in this process, with the add-on and the lead's chat turn stubbed.
 async function partArmy() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-usage-army-'));
+  madeDirs.push(dir);
   process.env.LOCALAPPDATA = dir;
   const fake = path.join(dir, 'claude');
   fs.writeFileSync(fake, `#!${process.execPath}\n(${fakeWorker.toString()})();\n`, { mode: 0o755 });
@@ -167,6 +180,7 @@ async function partArmy() {
     envFor: () => ({ ...process.env }), mcpServer: path.join(__dirname, '..', 'claudefox-mcp.js'), limitRe: /usage limit/i,
     workerSettings: () => ({}),
   });
+  stops.push(() => { for (const run of a.runs.values()) for (const w of run.workers) if (w.child && alive(w.child.pid)) { try { process.kill(w.child.pid, 'SIGKILL'); } catch {} } });
   try {
     const go = async tasks => {
       const st = await a.start({ tasks: tasks.map(goal => ({ goal, start_url: 'https://example.com/' })) });

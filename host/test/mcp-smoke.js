@@ -6,7 +6,17 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// The temp folders this test makes are removed however it ends (passing, failed checks, an exception or an early exit), and
+// the helper and the tool server it starts are stopped first, so nothing writes into the folders meanwhile.
+const madeDirs = [], helpers = [];
+process.on('exit', () => {
+  for (const h of helpers.splice(0)) { try { h.kill('SIGKILL'); } catch {} }
+  for (const d of madeDirs.splice(0)) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));   // Ctrl-C or a kill cleans up too
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-mcp-'));
+madeDirs.push(tmp);
 const pipe = process.platform === 'win32' ? `\\\\.\\pipe\\claude-in-claudefox-mcp-${process.pid}` : path.join(tmp, 'mcp.sock');
 // The fake confirm window (the helper runs CLAUDEFOX_CONFIRM, read only with CLAUDEFOX_TEST=1, with the question in
 // CFX_Q_TEXT): it saves each question and says no, so the test can read what the window would have said. POSIX only: it is
@@ -19,6 +29,7 @@ const hostDir = path.join(__dirname, '..');
 // Two folders for local_files to ask about: new ones, kept outside the helper's data folder. The real spelling of the
 // path is the one the helper shows in its window (on macOS the temp folder is a link).
 const sites = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-mcp-sites-')));
+madeDirs.push(sites);
 const folderA = path.join(sites, 'a'), folderB = path.join(sites, 'b');
 fs.mkdirSync(folderA);
 fs.mkdirSync(folderB);
@@ -35,6 +46,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ---- helper with a fake add-on on its native messaging side
 const helper = spawn(process.execPath, [path.join(hostDir, 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+helpers.push(helper);
 let hbuf = Buffer.alloc(0);
 const fakeAddon = {
   tabs_list: () => [{ id: 1, title: 'Docs', url: 'https://example.com/docs', active: true }],
@@ -64,6 +76,7 @@ toHelper({ type: 'hello', version: 'fake' });
 
 // ---- tool server driven over MCP
 const mcp = spawn(process.execPath, [path.join(hostDir, 'claudefox-mcp.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+helpers.push(mcp);
 let mbuf = '';
 const replies = new Map();
 mcp.stdout.setEncoding('utf8');

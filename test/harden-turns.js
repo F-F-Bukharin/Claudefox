@@ -9,8 +9,21 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
+// The temp folder and the processes this check starts are cleaned up however it ends: the checks pass or fail, an error stops
+// them, or the 90-second watchdog ends the run. The chat turn and the leftover processes are stopped first.
+const madeDirs = [], procs = [], stops = [];
+process.on('exit', () => {
+  for (const stop of stops.splice(0)) { try { stop(); } catch {} }
+  for (const c of procs.splice(0)) {
+    if (c.exitCode === null && c.signalCode === null) { try { process.kill(-c.pid, 'SIGKILL'); } catch {} try { c.kill('SIGKILL'); } catch {} }
+  }
+  for (const d of madeDirs.splice(0)) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));   // Ctrl-C or a kill cleans up too
+
 const root = path.join(__dirname, '..');
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-harden-turns-')));
+madeDirs.push(tmp);
 process.env.LOCALAPPDATA = path.join(tmp, 'local');   // paths.js reads it when it loads, so this comes before any lib
 
 const P = require('../host/lib/paths');
@@ -92,6 +105,7 @@ exit 0
     ROOT: root,
     shuttingDown: () => false,
   });
+  stops.push(() => turns.cancelChat('*', 'the check ended'));
   let listedWhileRunning = false;
   try {
     turns.startChat({ id: 'chk-1', text: 'hello', model: 'selfimprove' });
@@ -120,6 +134,7 @@ async function trackChecks() {
   try { children().track(null, 'probe'); children().track({}, 'probe'); } catch { threw = true; }
   check('track() ignores a child that has no pid', !threw);
   const probe = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 400)'], { stdio: 'ignore' });
+  procs.push(probe);
   probe.on('error', () => {});
   children().track(probe, 'probe');
   const during = listed().find(e => e.pid === probe.pid);
@@ -134,6 +149,7 @@ async function reapChecks() {
   if (WINDOWS) { console.log('SKIP  the leftover check starts sleep and uses process groups, so it does not run on Windows'); return; }
   const node = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });
   const sleeper = spawn('sleep', ['60'], { detached: true, stdio: 'ignore' });
+  procs.push(node, sleeper);
   node.on('error', () => {});
   sleeper.on('error', () => {});
   try {
@@ -157,6 +173,7 @@ async function reapChecks() {
   // A pid that was reused: the entry was listed a minute before this node process started, so it is someone else's
   // node (the user's own), not the helper's leftover, and it is left running.
   const reused = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });
+  procs.push(reused);
   reused.on('error', () => {});
   try {
     await sleep(200);

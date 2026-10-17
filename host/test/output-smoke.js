@@ -5,10 +5,16 @@ const os = require('os');
 const path = require('path');
 const OUT = require('../lib/output');
 
+// The temp folder this test makes is removed however it ends (passing, failed checks, an exception or an early exit).
+const madeDirs = [];
+process.on('exit', () => { for (const d of madeDirs.splice(0)) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} } });
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));   // Ctrl-C or a kill cleans up too
+
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? 'PASS ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); };
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-output-'));
+madeDirs.push(root);
 const dir = path.join(root, 'extension', 'output');
 const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 
