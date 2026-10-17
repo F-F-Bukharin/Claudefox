@@ -543,5 +543,11 @@
   "stream_signInAgain": { "message": "Sign in again" },
   "stream_newConversation": { "message": "That conversation is not on this account, so Claude started a new one." },
   "ui_downloadOnce": { "message": "Allow covers every picture Claude saves for this message." },
-  "bg_nativeRerun": { "message": "Re-run Set up Claudefox.bat to finish the update." }
+  "bg_nativeRerun": { "message": "Re-run Set up Claudefox.bat to finish the update." },
+  "bg_reasonUnparseable": { "message": "unparseable URL" },
+  "bg_reasonFileShare": { "message": "file: pages on network shares or odd paths are off-limits" },
+  "bg_reasonFolder": { "message": "the user has not allowed Claude to look in $1" },
+  "bg_reasonProtocol": { "message": "$1 pages are off-limits" },
+  "bg_reasonGoogle": { "message": "Google sign-in pages are hands-off (the user can turn on Unsafe mode in Settings)" },
+  "bg_reasonPasswords": { "message": "that page shows saved passwords" }
 }

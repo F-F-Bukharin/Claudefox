@@ -231,6 +231,11 @@ function storeOutput(out) {
   });
 }
 
+// Why a page is off-limits, in the language in use: the translation of the reason's key (policy.js), or the English reason when it has none.
+function cfxBlockText(gate) {
+  return gate.reasonKey && cfxI18n.has(gate.reasonKey) ? t(gate.reasonKey, gate.reasonArg) : gate.reason;
+}
+
 // The + menu's "Screenshot of this tab": a PNG of the current tab, attached to the next message.
 async function snapTab(port, req, windowId) {
   const reply = m => { try { port.postMessage(Object.assign({ type: 'snap', req }, m)); } catch {} };
@@ -238,7 +243,7 @@ async function snapTab(port, req, windowId) {
     const [tab] = await browser.tabs.query(typeof windowId === 'number' ? { active: true, windowId } : { active: true, lastFocusedWindow: true });
     if (!tab) return reply({ error: t('bg_snapNoTab') });
     const gate = cfxUrlBlocked(tab.url || '', { unsafe: !!cfxState.get().unsafe });
-    if (gate.blocked) return reply({ error: t('bg_snapBlocked', gate.reason) });
+    if (gate.blocked) return reply({ error: t('bg_snapBlocked', cfxBlockText(gate)) });
     const data = await browser.tabs.captureTab(tab.id, { format: 'png' });
     let host = 'tab';
     try { host = new URL(tab.url).hostname.replace(/^www\./, '') || 'tab'; } catch {}

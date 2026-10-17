@@ -543,5 +543,11 @@
   "stream_signInAgain": { "message": "Entrar de novo" },
   "stream_newConversation": { "message": "Essa conversa não está nesta conta, então o Claude começou uma nova." },
   "ui_downloadOnce": { "message": "Permitir vale para todas as imagens que o Claude salvar nesta mensagem." },
-  "bg_nativeRerun": { "message": "Execute Set up Claudefox.bat de novo para concluir a atualização." }
+  "bg_nativeRerun": { "message": "Execute Set up Claudefox.bat de novo para concluir a atualização." },
+  "bg_reasonUnparseable": { "message": "URL inválida" },
+  "bg_reasonFileShare": { "message": "páginas file: em compartilhamentos de rede ou em caminhos incomuns ficam fora do alcance" },
+  "bg_reasonFolder": { "message": "você não permitiu que o Claude olhe dentro da pasta $1" },
+  "bg_reasonProtocol": { "message": "páginas $1 ficam fora do alcance" },
+  "bg_reasonGoogle": { "message": "as páginas de login do Google ficam fora do alcance (você pode ativar o modo inseguro em Configurações)" },
+  "bg_reasonPasswords": { "message": "essa página mostra senhas salvas" }
 }

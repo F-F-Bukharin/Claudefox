@@ -16,7 +16,7 @@ w.Element.prototype.getBoundingClientRect=()=>({width:10,height:10});
 Object.defineProperty(w.HTMLElement.prototype,'innerText',{get(){return this.textContent}});
 w.Element.prototype.scrollIntoView=()=>{};
 // run the injected page code (cfxPageCode) inside the jsdom window, the way executeScript does
-const ctx=vm.createContext({URL});vm.runInContext(src+';this.cfxPageCode=cfxPageCode;this.cfxSensitiveField=cfxSensitiveField;this.cfxUrlBlocked=cfxUrlBlocked;',ctx);
+const ctx=vm.createContext({URL});vm.runInContext(src+';this.cfxPageCode=cfxPageCode;this.cfxSensitiveField=cfxSensitiveField;this.cfxUrlBlocked=cfxUrlBlocked;this.cfxViewBlocked=cfxViewBlocked;',ctx);
 const run=(op,args)=>w.eval(ctx.cfxPageCode(op,args));
 const err=(op,args)=>{try{run(op,args);return null}catch(e){return e.message}};
 const r=run('read',{});
@@ -52,6 +52,16 @@ for (const [u,b] of [['https://accounts.google.com/signin','y'],['https://www.go
 ok('unsafe allows Google sign-in', ctx.cfxUrlBlocked('https://accounts.google.com/signin',{unsafe:true}).blocked===false);
 ok('unsafe still refuses about:config', ctx.cfxUrlBlocked('about:config',{unsafe:true}).blocked===true);
 ok('unsafe still refuses file: pages', ctx.cfxUrlBlocked('file:///C:/x',{unsafe:true}).blocked===true);
+// Each block reason has a key for the panel's translation (bg_reason*, in both language files) and its argument (the folder or
+// the protocol). The English reason stays as it is: Claude reads it in tool errors.
+const LOC=require('./lib/locales').load();
+const reasonOf=(g,key,reason,arg)=>g.blocked===true&&g.reasonKey===key&&g.reason===reason&&g.reasonArg===arg&&key in LOC.en&&key in LOC.pt_BR;
+ok('reason key: unparseable URL', reasonOf(ctx.cfxUrlBlocked('not a url'),'bg_reasonUnparseable','unparseable URL',undefined));
+ok('reason key: file: page on a network share', reasonOf(ctx.cfxUrlBlocked('file://server/share/x.html'),'bg_reasonFileShare','file: pages on network shares or odd paths are off-limits',undefined));
+ok('reason key: a folder the user has not allowed, with the folder', reasonOf(ctx.cfxUrlBlocked('file:///C:/Users/x/a.html'),'bg_reasonFolder','the user has not allowed Claude to look in C:\\Users\\x','C:\\Users\\x'));
+ok('reason key: a non-web page, with its protocol', reasonOf(ctx.cfxUrlBlocked('about:config'),'bg_reasonProtocol','about: pages are off-limits','about:'));
+ok('reason key: Google sign-in pages', reasonOf(ctx.cfxUrlBlocked('https://accounts.google.com/signin'),'bg_reasonGoogle','Google sign-in pages are hands-off (the user can turn on Unsafe mode in Settings)',undefined));
+ok('reason key: saved passwords', reasonOf(ctx.cfxViewBlocked('about:logins'),'bg_reasonPasswords','that page shows saved passwords',undefined));
 // real-click sequence, coordinates, display:contents, media
 const seen=[]; const go2=w.document.getElementById('go');
 for (const e of ['pointerdown','mousedown','mouseup','click']) go2.addEventListener(e,()=>seen.push(e));

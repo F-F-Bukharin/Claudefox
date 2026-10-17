@@ -62,6 +62,16 @@ async function chatError(state, extra) {
   const done = panelIn.find(m => m.type === 'chatDone' && m.id === id);
   return done && done.error;
 }
+// The panel's screenshot request for a tab at url: the error the panel is told (undefined when it has none).
+async function snapError(url) {
+  browser.tabs.query = async () => [{ id: 7, url, title: 'Page' }];
+  const req = 'r' + (++seq);
+  panelIn.length = 0;
+  panel.onMessage.fire({ type: 'snapTab', req });
+  await tick();
+  const m = panelIn.find(x => x.type === 'snap' && x.req === req);
+  return m && m.error;
+}
 const menuTitles = () => ['ask-selection', 'ask-page', 'ask-link'].map(id => {
   const up = menuUpdated.filter(u => u[0] === id).pop();
   return up ? up[1].title : (menuCreated.find(m => m.id === id) || {}).title;
@@ -83,6 +93,12 @@ const menuTitles = () => ['ask-selection', 'ask-page', 'ask-link'].map(id => {
     ok('en: helper not connected', /^The helper is not connected\./.test(await chatError({ native: 'unknown' })));
     ok('en: Claude Code not installed', await chatError({ claude: { installed: false } }) === 'Claude Code is not installed on this PC.');
     ok('en: Claude Code not signed in', /^Claude Code is not signed in\./.test(await chatError({ claude: { installed: true, loggedIn: false } })));
+    // A tab that cannot be captured says why: in English here, as the add-on always showed it.
+    const TAB_QUERY = browser.tabs.query, TAB_GET = browser.tabs.get;
+    ok('en: a tab that cannot be captured says why, in English', await snapError('about:config') === "This tab can't be captured: about: pages are off-limits.");
+    ok('en: the Google sign-in reason, in English', await snapError('https://accounts.google.com/signin')
+      === "This tab can't be captured: Google sign-in pages are hands-off (the user can turn on Unsafe mode in Settings).");
+    browser.tabs.query = TAB_QUERY;
     await g('cfxState').set({ agent: 'stopped' });
     notes.length = 0;
     g("startChat({ id: 'm1', text: 'x', scheduled: { macro: 'Daily', sites: [] } })"); await tick();
@@ -102,6 +118,23 @@ const menuTitles = () => ['ask-selection', 'ask-page', 'ask-link'].map(id => {
     ok('pt_BR: helper not connected', await chatError({ native: 'unknown' }) === pt.bg_helperNotConnected.message);
     ok('pt_BR: Claude Code not installed', await chatError({ claude: { installed: false } }) === pt.bg_claudeNotInstalled.message);
     ok('pt_BR: Claude Code not signed in', await chatError({ claude: { installed: true, loggedIn: false } }) === pt.bg_claudeNotSignedIn.message);
+    // The panel's text for a tab that cannot be captured: each reason in Portuguese, with its argument (the folder, the protocol),
+    // and no English reason left in it.
+    const ENGLISH_REASON = /hands-off|off-limits|unparseable|has not allowed|saved passwords|Unsafe|Settings/;
+    for (const [url, key, arg] of [['https://accounts.google.com/signin', 'bg_reasonGoogle', ''], ['about:config', 'bg_reasonProtocol', 'about:'],
+      ['file:///C:/Users/x/a.html', 'bg_reasonFolder', 'C:\\Users\\x'], ['file://server/share/a.html', 'bg_reasonFileShare', ''], ['', 'bg_reasonUnparseable', '']]) {
+      const got = await snapError(url);
+      const want = pt.bg_snapBlocked.message.replace('$1', (pt[key] || { message: '' }).message.replace('$1', arg));
+      ok(`pt_BR: a tab that cannot be captured (${key}) says why in Portuguese, with no English`, got === want && !ENGLISH_REASON.test(got), JSON.stringify(got));
+    }
+    // Claude's tool errors keep the English reason in every language: Claude reads them, and the panel does not translate them.
+    browser.tabs.get = async id => ({ id, url: 'https://accounts.google.com/signin', title: 'Sign in' });
+    const GOOGLE_EN = 'Google sign-in pages are hands-off (the user can turn on Unsafe mode in Settings).';
+    const toolError = async (name, args) => { try { await g(`CFX_TOOLS.${name}(${JSON.stringify(args)})`); return null; } catch (e) { return e.message; } };
+    ok('pt_BR: a click on a Google tab fails with the English reason for Claude', await toolError('click', { tab_id: 7, selector: '#go' }) === `Cannot use tab 7: ${GOOGLE_EN}`);
+    ok('pt_BR: a screenshot of that tab fails the same way', await toolError('screenshot', { tab_id: 7 }) === `Cannot use tab 7: ${GOOGLE_EN}`);
+    ok('pt_BR: a tab_open to it is refused with the English reason', await toolError('tab_open', { url: 'https://accounts.google.com/signin' }) === `Refused: ${GOOGLE_EN}`);
+    browser.tabs.get = TAB_GET; browser.tabs.query = TAB_QUERY;
     await g('cfxState').set({ agent: 'stopped' });
     notes.length = 0;
     g("startChat({ id: 'm2', text: 'x', scheduled: { macro: 'Daily', sites: [] } })"); await tick();

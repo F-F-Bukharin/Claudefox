@@ -28,28 +28,30 @@ const GOOGLE_HANDS_OFF = 'Google sign-in pages are hands-off (the user can turn 
 
 // Local pages (lib/local.js): a file: page is open to Claude only inside a folder the user allowed (opts.localGrants).
 // Outside them the answer names the folder to ask about. Army workers never get this far (lib/pageTools.js).
+// Each refusal also carries reasonKey (its bg_reason* text in the language files, which the panel shows) and reasonArg (the $1 of
+// that text, when it has one). reason stays English: Claude reads it in tool errors.
 function cfxUrlBlocked(rawUrl, opts) {
   let u;
-  try { u = new URL(rawUrl); } catch { return { blocked: true, reason: 'unparseable URL' }; }
+  try { u = new URL(rawUrl); } catch { return { blocked: true, reason: 'unparseable URL', reasonKey: 'bg_reasonUnparseable' }; }
   if (u.protocol === 'file:') {
     const path = cfxFilePath(rawUrl);
-    if (!path) return { blocked: true, reason: 'file: pages on network shares or odd paths are off-limits' };
+    if (!path) return { blocked: true, reason: 'file: pages on network shares or odd paths are off-limits', reasonKey: 'bg_reasonFileShare' };
     if (((opts && opts.localGrants) || []).some(f => cfxInFolder(path, f))) return { blocked: false, local: true, path };
     // A URL ending in / is Zen's listing of a folder, so that folder is the one to ask about.
     const folder = /\/$/.test(u.pathname) ? path : cfxFolderOf(path);
-    return { blocked: true, needGrant: folder, path, reason: `the user has not allowed Claude to look in ${folder}` };
+    return { blocked: true, needGrant: folder, path, reason: `the user has not allowed Claude to look in ${folder}`, reasonKey: 'bg_reasonFolder', reasonArg: folder };
   }
   if (!/^https?:$/.test(u.protocol)) {
-    return { blocked: true, reason: `${u.protocol} pages are off-limits` };
+    return { blocked: true, reason: `${u.protocol} pages are off-limits`, reasonKey: 'bg_reasonProtocol', reasonArg: u.protocol };
   }
   if (opts && opts.unsafe) return { blocked: false };
   const host = u.hostname.toLowerCase();
   if (BLOCKED_HOSTS.some(h => host === h || host.endsWith('.' + h))) {
-    return { blocked: true, reason: GOOGLE_HANDS_OFF };
+    return { blocked: true, reason: GOOGLE_HANDS_OFF, reasonKey: 'bg_reasonGoogle' };
   }
   for (const p of BLOCKED_PATH_PATTERNS) {
     if (p.host.test(host) && p.path.test(u.pathname)) {
-      return { blocked: true, reason: GOOGLE_HANDS_OFF };
+      return { blocked: true, reason: GOOGLE_HANDS_OFF, reasonKey: 'bg_reasonGoogle' };
     }
   }
   return { blocked: false };
@@ -63,7 +65,7 @@ const VIEW_BLOCKED_ABOUT = /^about:(logins|loginsimportreport|keychain|certifica
 function cfxViewBlocked(rawUrl, opts) {
   const url = String(rawUrl || '');
   if (/^about:/i.test(url)) {
-    return VIEW_BLOCKED_ABOUT.test(url) ? { blocked: true, reason: 'that page shows saved passwords' } : { blocked: false, about: true };
+    return VIEW_BLOCKED_ABOUT.test(url) ? { blocked: true, reason: 'that page shows saved passwords', reasonKey: 'bg_reasonPasswords' } : { blocked: false, about: true };
   }
   return cfxUrlBlocked(url, opts);
 }
