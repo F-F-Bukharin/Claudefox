@@ -14,6 +14,8 @@ const { panelPage, evalPanel } = require('./lib/panel-scripts');
 
 const root = path.join(__dirname, '..');
 const EXT = path.join(root, 'extension') + path.sep;
+// A friends copy has no tools\ folder and is branded already, so the C5 texts (Zen) and the brand step run in the source tree only.
+const SOURCE_TREE = fs.existsSync(path.join(root, 'tools', 'brand.js'));
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { if (cond) pass++; else { fail++; console.log('FAIL ' + name + (extra ? '  ' + extra : '')); } };
 const tick = (ms = 15) => new Promise(r => setTimeout(r, ms));
@@ -67,7 +69,7 @@ if (data) {
   const copied = enKeys.filter(k => data.pt_BR[k] && data.pt_BR[k].message === data.en[k].message
     && /\s/.test(data.en[k].message.trim()) && !SKIP_TEXT.test(data.en[k].message.trim()));
   ok('a Portuguese message equal to its English is only a single word or a brand/symbol text (no copied English)', copied.length === 0, copied.join(', '));
-  ok('the reserved keys of contract C5 are there with their exact texts', [
+  if (SOURCE_TREE) ok('the reserved keys of contract C5 are there with their exact texts', [
     ['ui_emptyTitle', 'What should I do in Zen?', 'O que devo fazer no Zen?'],
     ['ui_signedOutText', 'Uses the claude.ai session already open in Zen. Sign in to claude.ai in a normal tab first, then click below. Zen remembers it after that, until you sign out here or on claude.ai.',
       'Usa a sessão do claude.ai já aberta no Zen. Entre no claude.ai em uma aba normal primeiro e depois clique abaixo. O Zen se lembra disso depois, até você sair aqui ou no claude.ai.'],
@@ -92,40 +94,42 @@ if (data) {
   ok('the Language row has its keys (lang_label, lang_auto), Auto translated', !!(data.en.lang_label && data.pt_BR.lang_label && data.en.lang_auto.message === 'Auto'
     && data.pt_BR.lang_auto.message === 'Automático'));
 
-  // The friends build: contract C5, through the real brand step on a copy of extension\.
-  const brand = require(path.join(root, 'tools', 'brand.js'));
-  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-i18n-brand-'));
-  try {
-    fs.cpSync(path.join(root, 'extension'), path.join(stage, 'extension'), { recursive: true });
-    for (const sub of ['mods', 'output']) {
-      const d = path.join(stage, 'extension', sub);
-      if (fs.existsSync(d)) for (const n of fs.readdirSync(d)) if (n !== 'README.txt') fs.rmSync(path.join(d, n), { recursive: true, force: true });
-    }
-    // Only the extension is staged here, so the rules for host\ files find nothing; test/brand.js stages everything.
-    const problems = brand.brand(stage).filter(p => !/^no match for/.test(p) || /_locales/.test(p));
-    ok('the friends build brands the language files with no problem', problems.length === 0, problems.join(' | '));
-    const fr = {};
-    for (const l of ['en', 'pt_BR']) fr[l] = JSON.parse(fs.readFileSync(path.join(stage, 'extension', '_locales', l, 'messages.json'), 'utf8'));
-    const m = (l, k) => (fr[l][k] || {}).message || '';
-    ok('friends, English: Firefox in the C5 texts', m('en', 'ui_emptyTitle') === 'What should Claude do in Firefox?'
-      && m('en', 'ui_signedOutText').includes('already open in Firefox.') && m('en', 'ui_signedOutText').includes('Firefox remembers it after that,')
-      && m('en', 'ui_usingZenNow') === 'Using Firefox now'
-      && m('en', 'ui_panelPlace') === 'The panel opens in the sidebar. Open and close it with the toolbar button or'
-      && m('en', 'ui_panelPlaceEnd') === ". Drag the sidebar's inner edge to make it wider."
-      && m('en', 'main_signInHint').includes('then press Sign in. Firefox remembers it after that.')
-      && m('en', 'main_unsafeOn').endsWith('until you press Stop or restart Firefox.')
-      && m('en', 'main_acctDiffers').endsWith('the claude.ai account signed in to Firefox.'));
-    ok('friends, Portuguese: Firefox in the C5 texts', m('pt_BR', 'ui_emptyTitle') === 'O que o Claude deve fazer no Firefox?'
-      && m('pt_BR', 'ui_signedOutText').includes('já aberta no Firefox.') && m('pt_BR', 'ui_signedOutText').includes('O Firefox se lembra disso depois')
-      && m('pt_BR', 'ui_usingZenNow') === 'Usando o Firefox agora'
-      && m('pt_BR', 'ui_panelPlace') === 'O painel abre na barra lateral. Abra e feche pelo botão da barra de ferramentas ou com'
-      && m('pt_BR', 'ui_panelPlaceEnd') === '. Arraste a borda interna da barra lateral para deixá-lo mais largo.'
-      && m('pt_BR', 'main_signInHint').includes('O Firefox se lembra disso depois.')
-      && m('pt_BR', 'main_unsafeOn').endsWith('ou reiniciar o Firefox.')
-      && m('pt_BR', 'main_acctDiffers').endsWith('conectada no Firefox.'));
-    const zenLeft = Object.keys(fr.pt_BR).filter(k => /\bZen\b/.test(fr.pt_BR[k].message));
-    ok('friends, Portuguese: no message still says Zen', zenLeft.length === 0, zenLeft.join(', '));
-  } finally { fs.rmSync(stage, { recursive: true, force: true }); }
+  // The friends build: contract C5, through the real brand step on a copy of extension\. Source tree only (see SOURCE_TREE).
+  if (SOURCE_TREE) {
+    const brand = require(path.join(root, 'tools', 'brand.js'));
+    const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-i18n-brand-'));
+    try {
+      fs.cpSync(path.join(root, 'extension'), path.join(stage, 'extension'), { recursive: true });
+      for (const sub of ['mods', 'output']) {
+        const d = path.join(stage, 'extension', sub);
+        if (fs.existsSync(d)) for (const n of fs.readdirSync(d)) if (n !== 'README.txt') fs.rmSync(path.join(d, n), { recursive: true, force: true });
+      }
+      // Only the extension is staged here, so the rules for host\ files find nothing; test/brand.js stages everything.
+      const problems = brand.brand(stage).filter(p => !/^no match for/.test(p) || /_locales/.test(p));
+      ok('the friends build brands the language files with no problem', problems.length === 0, problems.join(' | '));
+      const fr = {};
+      for (const l of ['en', 'pt_BR']) fr[l] = JSON.parse(fs.readFileSync(path.join(stage, 'extension', '_locales', l, 'messages.json'), 'utf8'));
+      const m = (l, k) => (fr[l][k] || {}).message || '';
+      ok('friends, English: Firefox in the C5 texts', m('en', 'ui_emptyTitle') === 'What should Claude do in Firefox?'
+        && m('en', 'ui_signedOutText').includes('already open in Firefox.') && m('en', 'ui_signedOutText').includes('Firefox remembers it after that,')
+        && m('en', 'ui_usingZenNow') === 'Using Firefox now'
+        && m('en', 'ui_panelPlace') === 'The panel opens in the sidebar. Open and close it with the toolbar button or'
+        && m('en', 'ui_panelPlaceEnd') === ". Drag the sidebar's inner edge to make it wider."
+        && m('en', 'main_signInHint').includes('then press Sign in. Firefox remembers it after that.')
+        && m('en', 'main_unsafeOn').endsWith('until you press Stop or restart Firefox.')
+        && m('en', 'main_acctDiffers').endsWith('the claude.ai account signed in to Firefox.'));
+      ok('friends, Portuguese: Firefox in the C5 texts', m('pt_BR', 'ui_emptyTitle') === 'O que o Claude deve fazer no Firefox?'
+        && m('pt_BR', 'ui_signedOutText').includes('já aberta no Firefox.') && m('pt_BR', 'ui_signedOutText').includes('O Firefox se lembra disso depois')
+        && m('pt_BR', 'ui_usingZenNow') === 'Usando o Firefox agora'
+        && m('pt_BR', 'ui_panelPlace') === 'O painel abre na barra lateral. Abra e feche pelo botão da barra de ferramentas ou com'
+        && m('pt_BR', 'ui_panelPlaceEnd') === '. Arraste a borda interna da barra lateral para deixá-lo mais largo.'
+        && m('pt_BR', 'main_signInHint').includes('O Firefox se lembra disso depois.')
+        && m('pt_BR', 'main_unsafeOn').endsWith('ou reiniciar o Firefox.')
+        && m('pt_BR', 'main_acctDiffers').endsWith('conectada no Firefox.'));
+      const zenLeft = Object.keys(fr.pt_BR).filter(k => /\bZen\b/.test(fr.pt_BR[k].message));
+      ok('friends, Portuguese: no message still says Zen', zenLeft.length === 0, zenLeft.join(', '));
+    } finally { fs.rmSync(stage, { recursive: true, force: true }); }
+  }
 }
 
 // ---------- the manifest and the page's script tags ----------
@@ -334,12 +338,13 @@ function pageGlobals({ ui, nav, local, stored } = {}) {
     const d = new JSDOM(html, { runScripts: 'outside-only' });
     evalPanel(d, EXT, [], { lang: 'pt_BR' });
     const doc = d.window.document;
-    ok('lang pt_BR: #emptyTitle reads "O que devo fazer no Zen?"', doc.getElementById('emptyTitle').textContent === 'O que devo fazer no Zen?', doc.getElementById('emptyTitle').textContent);
+    ok('lang pt_BR: #emptyTitle reads its ui_emptyTitle text', doc.getElementById('emptyTitle').textContent === data.pt_BR.ui_emptyTitle.message, doc.getElementById('emptyTitle').textContent);
     ok('lang pt_BR: a placeholder, a title and an aria-label are Portuguese', doc.getElementById('input').placeholder !== 'Message Claude…' && /Mensagem/.test(doc.getElementById('input').placeholder)
       && doc.getElementById('stopBtn').title.startsWith('Parar') && doc.getElementById('histBtn').getAttribute('aria-label') === 'Histórico de conversas');
     ok('lang pt_BR: the Advanced panel note keeps Alt+Shift+C between its two Portuguese halves', (() => {
       const p = doc.querySelector('#advancedBody .sub p');
-      return /^O painel fica à direita\..* ou com Alt\+Shift\+C\. A barra de título/.test(p.textContent) && p.querySelector('b').textContent === 'Alt+Shift+C';
+      const pt = data.pt_BR;   // the note is its two halves (ui_panelPlace, ui_panelPlaceEnd) around the key, as panel.html writes it
+      return p.textContent === `${pt.ui_panelPlace.message} Alt+Shift+C${pt.ui_panelPlaceEnd.message}` && p.querySelector('b').textContent === 'Alt+Shift+C';
     })(), doc.querySelector('#advancedBody .sub p').textContent);
     const pse = new JSDOM(html, { runScripts: 'outside-only' });
     evalPanel(pse, EXT, [], { lang: 'pt_BR', locales: pseudo() });

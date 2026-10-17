@@ -57,7 +57,8 @@ const RULES = [
   { from: 'No Zen tab showed', to: 'No Firefox tab showed' },
   { from: 'or Zen or the helper restarted', to: 'or Firefox or the helper restarted' },
 ];
-const TEXT = /\.(js|json|html|css|svg|txt|md|bat|cmd|ps1)$/i;
+// .py: the vendored claude-video engine's comments name the add-on (its NOTICE.md is branded too).
+const TEXT = /\.(js|json|html|css|svg|txt|md|bat|cmd|ps1|py)$/i;
 
 // Files are read as latin1 (below), so a rule with non-ASCII text (the Portuguese ones) only matches when it is written
 // the same way: the latin1 view of the UTF-8 bytes. For plain ASCII this changes nothing.

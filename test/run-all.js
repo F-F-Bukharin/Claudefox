@@ -31,11 +31,13 @@ const TESTS = [
   'test/i18n-chat.js',
   'test/i18n-settings-js.js',
 ];
+// test/brand.js runs the friends copy's whole suite once more (about two minutes), so it gets more time.
+const LONG = { 'test/brand.js': 900000 };
 // A test that cannot run here (no jsdom, or a POSIX-only test on Windows) prints SKIP and exits 0: it counts as
 // skipped, never as passed.
 let failed = 0, skipped = 0;
 for (const t of TESTS) {
-  const r = spawnSync(process.execPath, [path.join(root, t)], { encoding: 'utf8', timeout: 120000 });
+  const r = spawnSync(process.execPath, [path.join(root, t)], { encoding: 'utf8', timeout: LONG[t] || 120000 });
   const out = `${r.stdout || ''}${r.stderr || ''}`.trim().split('\n');
   const lines = out.filter(l => l.trim());
   const last = lines[lines.length - 1] || '(no output)';

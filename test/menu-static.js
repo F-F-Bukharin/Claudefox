@@ -7,6 +7,8 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+// The setup menu is a repo file: a friends copy has no tools\menu.ps1, so there is nothing to check there.
+if (!fs.existsSync(path.join(root, 'tools', 'menu.ps1'))) { console.log('SKIP  tools\\menu.ps1 is not in a friends copy'); process.exit(0); }
 const menu = read('tools/menu.ps1');
 const launcher = read('tools/Claudefox menu.bat');
 const lines = (text) => text.split(/\r?\n/);

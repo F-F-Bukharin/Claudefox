@@ -1,6 +1,6 @@
 'use strict';
 // The source and this PC's install say Claudefox, and Zen where they mean the browser. The friends build (tools/brand.js)
-// turns that Zen into Firefox. Stages the files the way tools/build-friends.ps1 does, brands them, and checks the result.
+// turns that Zen into Firefox. Stages the files the way tools/build-friends.ps1 does, brands them, checks the result, and runs the branded copy's suite.
 // The last section (D3) checks the rename itself: no old name is left outside a short allowlist, the migration in
 // host/install.ps1, and the helper's registration.   node test/brand.js
 const fs = require('fs');
@@ -15,6 +15,9 @@ const OLD_WORD = sep => ['claude', 'in', 'zen'].join(sep);       // OLD_WORD('_'
 const OLD_NAME = ['Claude', 'in', 'Zen'].join(' ');              // the old product name
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
+// tools\ and friends\ are repo folders: a friends copy (the zip, or the copy the friends suite below runs) has neither, so
+// this file SKIPs there. The inner run of the friends suite sets CLAUDEFOX_FRIENDS_INNER, which keeps it from staging again.
+if (!fs.existsSync(path.join(root, 'tools', 'brand.js'))) { console.log('SKIP  tools\\ and friends\\ are not in a friends copy'); process.exit(0); }
 
 function copy(from, to) {
   fs.mkdirSync(path.dirname(to), { recursive: true });
@@ -41,6 +44,10 @@ function stage() {
   for (const f of fs.readdirSync(path.join(root, 'host', 'lib')).filter(f => f.endsWith('.js'))) copy(path.join(root, 'host', 'lib', f), path.join(s, 'host', 'lib', f));
   for (const f of ['Set up Claudefox.bat', 'START HERE.txt']) copy(path.join(root, 'friends', f), path.join(s, f));
   copy(path.join(root, 'tools', 'Sign in Claude Code.bat'), path.join(s, 'tools', 'Sign in Claude Code.bat'));
+  // The tests come along (Improve runs them on the copy), and so does the vendored claude-video engine (the watch tool).
+  copy(path.join(root, 'test'), path.join(s, 'test'));
+  copy(path.join(root, 'host', 'test'), path.join(s, 'host', 'test'));
+  copy(path.join(root, 'host', 'vendor', 'claude-video'), path.join(s, 'host', 'vendor', 'claude-video'));
   return s;
 }
 const run = dir => spawnSync(process.execPath, [path.join(root, 'tools', 'brand.js'), dir], { encoding: 'utf8' });
@@ -98,7 +105,7 @@ try {
     && !/\bZen\b/.test(['ui_emptyTitle', 'ui_signedOutText', 'ui_usingZenNow', 'ui_panelPlace', 'ui_panelPlaceEnd', 'main_signInHint', 'main_unsafeOn', 'main_acctDiffers'].map(k => msg('pt_BR', k)).join(' ')));
   const mcp = fs.readFileSync(path.join(s, 'host', 'claudefox-mcp.js'), 'utf8'), args = fs.readFileSync(path.join(s, 'host', 'lib', 'chatargs.js'), 'utf8');
   check('Claude is told it works in Firefox, and its errors say Firefox', mcp.includes("real Firefox browser") && !mcp.includes('real Zen browser') && args.includes('which field to fill in Firefox.')
-    && fs.readFileSync(path.join(s, 'host', 'lib', 'toolSchemas.js'), 'utf8').includes('in a new tab, in front') && !/Zen did not answer|No answer from Zen|No Zen tab/.test(walk(s).filter(f => /\.js$/.test(f)).map(f => fs.readFileSync(f, 'utf8')).join('\n')));
+    && fs.readFileSync(path.join(s, 'host', 'lib', 'toolSchemas.js'), 'utf8').includes('in a new tab, in front') && !/Zen did not answer|No answer from Zen|No Zen tab/.test(walk(s).filter(f => /\.js$/.test(f) && !/(^|[\\/])test[\\/]/.test(path.relative(s, f))).map(f => fs.readFileSync(f, 'utf8')).join('\n')));
   check('the helper\'s windows say Claudefox', /Claudefox: switch on something that runs programs\?/.test(fs.readFileSync(path.join(s, 'host', 'lib', 'confirmtexts.js'), 'utf8')));
   check('inside names in the friends copy: the helper\'s registry name, the old name for the fallback, the data folder, and the add-on id', /NATIVE_HOST: 'claudefox'/.test(fs.readFileSync(path.join(s, 'extension', 'lib', 'policy.js'), 'utf8'))
     && fs.readFileSync(path.join(s, 'extension', 'lib', 'policy.js'), 'utf8').includes(`NATIVE_HOST_OLD: '${OLD_WORD('_')}'`)
@@ -139,7 +146,11 @@ check('the friends zip and signing share one clean, branded copy (New-ClaudefoxS
   && /& node \(Join-Path \$Root 'tools\\brand\.js'\) \$Stage/.test(stageFn) && /if \(\$LASTEXITCODE -ne 0\) \{ throw/.test(stageFn)
   && /extension\\mods'\) -Directory/.test(stageFn) && /extension\\output'\) -Exclude 'README\.txt'/.test(stageFn));
 check('build-friends packs the branded copy as claudefox.xpi into Claudefox-v<version>.zip', /build-xpi\.ps1'\) -Source \(Join-Path \$stage 'extension'\) -Out \$xpi/.test(friends)
-  && /'claudefox\.xpi'/.test(friends) && /"Claudefox-v\$v\.zip"/.test(friends) && /Remove-Item \(Join-Path \$stage 'extension'\) -Recurse -Force/.test(friends));
+  && /'claudefox\.xpi'/.test(friends) && /"Claudefox-v\$v\.zip"/.test(friends));
+check('build-friends keeps the staged extension\\ folder after packing, so the zip carries the add-on\'s source (Improve copies it)',
+  !/Remove-Item \(Join-Path \$stage 'extension'\)/.test(friends) && /New-FolderZip \$stage \$zip/.test(friends));
+check('the friends stage carries the tests, test\\ and host\\test\\ (Improve runs them on a friend\'s copy)', /Copy-Item \(Join-Path \$Root 'test'\) \(Join-Path \$Stage 'test'\) -Recurse/.test(stageFn)
+  && /Copy-Item \(Join-Path \$Root 'host\\test'\) \(Join-Path \$Stage 'host\\test'\) -Recurse/.test(stageFn));
 check('friends get the Firefox setup and START HERE, without Zen\'s profile settings', /'Set up Claudefox\.bat', 'START HERE\.txt'\) \{ Copy-Item \(Join-Path \$Root "friends\\\$f"\)/.test(stageFn)
   && !/zen-profile|Apply Zen settings/.test(stageFn + friends) && /Set-Content -Path \(Join-Path \$stage 'SIGNED'\)/.test(friends) && /'confirm\.ps1'/.test(stageFn));
 const sign = read('tools/sign-claudefox.ps1'), signBat = read('tools/Sign add-on.bat');
@@ -256,6 +267,24 @@ const un = inst.slice(inst.indexOf('if ($Uninstall)'), inst.indexOf('exit 0'));
 check('D3: -Uninstall removes the new registration, and the old one if it is still there', /\$regKey/.test(un) && /\$oldRegKey/.test(un) && /\$launcher/.test(un) && /\$oldLauncher/.test(un) && /Test-Path/.test(un));
 check('D3: install.ps1 keeps CRLF', inst.includes('\r\n') && !/[^\r]\n/.test(inst));
 check('D3: the setup says Claudefox in its messages', /Claudefox helper installed\./.test(inst) && /Claudefox helper removed\./.test(inst) && !inst.includes(OLD_NAME));
+
+// The friends copy is what Improve tests: the whole suite (test/run-all.js) must pass on the branded copy. The inner run
+// sets CLAUDEFOX_FRIENDS_INNER, which skips this block, so the copy never stages a copy of its own.
+if (!process.env.CLAUDEFOX_FRIENDS_INNER) {
+  const sf = stage();
+  try {
+    const r = run(sf);
+    check('friends suite: the staged copy is branded', r.status === 0, r.stderr);
+    const left = walk(sf).filter(f => fs.readFileSync(f, 'latin1').includes(OLD_NAME)).map(f => path.relative(sf, f));
+    check('friends suite: no old product name is left in any file of the copy', left.length === 0, left.join(', '));
+    const inner = spawnSync(process.execPath, [path.join(sf, 'test', 'run-all.js')], { cwd: sf, encoding: 'utf8', timeout: 600000,
+      env: { ...process.env, CLAUDEFOX_FRIENDS_INNER: '1' } });
+    const out = `${inner.stdout || ''}${inner.stderr || ''}`;
+    const last = out.trim().split('\n').pop() || '';
+    check('friends suite: the full suite passes on the branded copy', inner.status === 0 && /test file\(s\) passed/.test(last),
+      inner.error ? inner.error.message : out.split('\n').filter(l => /^FAIL/.test(l)).join(' | ') || last);
+  } finally { fs.rmSync(sf, { recursive: true, force: true }); }
+}
 
 console.log(`${passed} checks passed${failed ? `, ${failed} failed` : ''}`);
 process.exitCode = failed ? 1 : 0;

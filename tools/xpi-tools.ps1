@@ -33,7 +33,7 @@ function Find-SignedXpi([string]$Root, [string]$Version, [string]$Name) {
 }
 
 # A clean copy for people outside this PC, branded for Firefox (tools\brand.js): the add-on (without this PC's own mods
-# and saved files: of those two folders only the READMEs go), the helper, and the friends' setup and START HERE.
+# and saved files: of those two folders only the READMEs go), the helper, the tests (test\ and host\test\), and the friends' setup and START HERE.
 # Used by build-friends.ps1 (the zip) and sign-claudefox.ps1 (what Mozilla signs). Throws when branding fails.
 function New-ClaudefoxStage([string]$Root, [string]$Stage) {
   if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
@@ -46,6 +46,9 @@ function New-ClaudefoxStage([string]$Root, [string]$Stage) {
   Copy-Item (Join-Path $Root 'host\lib\*.js') (Join-Path $Stage 'host\lib')
   # The trimmed claude-video engine of the watch tool (its LICENSE and NOTICE.md come along).
   Copy-Item (Join-Path $Root 'host\vendor\claude-video') (Join-Path $Stage 'host\vendor\claude-video') -Recurse
+  # The tests: Improve runs them on a copy of the add-on, so the friends' zip carries them too.
+  Copy-Item (Join-Path $Root 'test') (Join-Path $Stage 'test') -Recurse
+  Copy-Item (Join-Path $Root 'host\test') (Join-Path $Stage 'host\test') -Recurse
   # Friends get the Firefox setup and instructions (friends\); Zen's own profile settings stay out.
   foreach ($f in 'Set up Claudefox.bat', 'START HERE.txt') { Copy-Item (Join-Path $Root "friends\$f") (Join-Path $Stage $f) }
   Copy-Item (Join-Path $Root 'tools\Sign in Claude Code.bat') (Join-Path $Stage 'tools\Sign in Claude Code.bat')

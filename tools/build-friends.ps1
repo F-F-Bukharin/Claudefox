@@ -21,7 +21,7 @@ if ($signed) {
   & (Join-Path $PSScriptRoot 'build-xpi.ps1') -Source (Join-Path $stage 'extension') -Out $xpi | Out-Host
   Write-Host "No signed Claudefox build for v$v in build\signed: the zip has an UNSIGNED add-on, which Firefox loads as a temporary add-on (about:debugging, START HERE.txt step 2)." -ForegroundColor Yellow
 }
-Remove-Item (Join-Path $stage 'extension') -Recurse -Force
+# extension\ stays in the zip: Improve copies the add-on's source, and its tests, from there.
 
 $zip = Join-Path $dist "Claudefox-v$v.zip"
 New-FolderZip $stage $zip

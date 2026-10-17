@@ -43,17 +43,19 @@ check('the host says VERSION 0.11.0', /const VERSION = '0\.11\.0';/.test(HOST));
 check('the tool server says VERSION 0.11.0', /const VERSION = '0\.11\.0';/.test(fs.readFileSync(path.join(ROOT, 'host', 'claudefox-mcp.js'), 'utf8')));
 
 // section friends (Task 12): the setup files and the build stage. CRLF throughout; the PowerShell and .bat parts run on the PC.
-const readText = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
-const PS1 = readText('tools/xpi-tools.ps1');
-const BAT = readText('friends/Set up Claudefox.bat');
-const START = readText('friends/START HERE.txt');
-const engineLine = PS1.split('\n').find(l => l.includes('host\\vendor\\claude-video')) || '';
-check('the build stage copies the claude-video engine, recursively', /-Recurse/.test(engineLine) && /Copy-Item/.test(engineLine));
-check('the setup check runs the Python, yt-dlp and ffmpeg checks', BAT.includes('py -3 -m yt_dlp --version') && BAT.includes('ffmpeg -version'));
-check('the setup check installs nothing: no line starts with winget', !BAT.split('\n').some(l => /^\s*winget/.test(l)));
-check('START HERE has the video section, with the ffmpeg package', START.includes('Video watching (optional)') && START.includes('Gyan.FFmpeg'));
-for (const [name, text] of [['xpi-tools.ps1', PS1], ['Set up Claudefox.bat', BAT], ['START HERE.txt', START]]) {
-  check(`${name}: every line ends with CRLF`, text.split('\n').slice(0, -1).every(l => l.endsWith('\r')));
+if (fs.existsSync(path.join(ROOT, 'tools', 'xpi-tools.ps1'))) {   // a friends copy has no tools\ or friends\ folder
+  const readText = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  const PS1 = readText('tools/xpi-tools.ps1');
+  const BAT = readText('friends/Set up Claudefox.bat');
+  const START = readText('friends/START HERE.txt');
+  const engineLine = PS1.split('\n').find(l => l.includes('host\\vendor\\claude-video')) || '';
+  check('the build stage copies the claude-video engine, recursively', /-Recurse/.test(engineLine) && /Copy-Item/.test(engineLine));
+  check('the setup check runs the Python, yt-dlp and ffmpeg checks', BAT.includes('py -3 -m yt_dlp --version') && BAT.includes('ffmpeg -version'));
+  check('the setup check installs nothing: no line starts with winget', !BAT.split('\n').some(l => /^\s*winget/.test(l)));
+  check('START HERE has the video section, with the ffmpeg package', START.includes('Video watching (optional)') && START.includes('Gyan.FFmpeg'));
+  for (const [name, text] of [['xpi-tools.ps1', PS1], ['Set up Claudefox.bat', BAT], ['START HERE.txt', START]]) {
+    check(`${name}: every line ends with CRLF`, text.split('\n').slice(0, -1).every(l => l.endsWith('\r')));
+  }
 }
 
 console.log(failed ? `${failed} failed, ${passed} passed` : `All ${passed} checks passed`);

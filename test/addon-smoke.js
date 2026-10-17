@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ext = path.join(__dirname, '..', 'extension');
+// The line background.js logs when the browser opens (it names the browser: Zen here, Firefox in the friends copy).
+const OPENED_LOG = /'([^']*opened: the agent is on\.)'/.exec(fs.readFileSync(path.join(ext, 'background.js'), 'utf8'))[1];
 const results = [];
 const check = (name, ok, extra) => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  ' + extra : ''}`); };
 const tick = (ms = 20) => new Promise(r => setTimeout(r, ms));
@@ -420,7 +422,7 @@ const answerConfirm = async ok => {
     normalWindows = [{ id: 3, type: 'normal' }];   // Zen was closed and is opened again
     winCreated.fire({ id: 3, type: 'normal' }); await tick(30);
     check('opening Zen again turns the agent on by itself', g('cfxState').get().agent === 'active' && native !== beforeOpen && !native.disconnected);
-    check('opening Zen is logged', g('cfxState').log().some(e => /Zen opened: the agent is on/.test(e.text)));
+    check('opening Zen is logged', g('cfxState').log().some(e => e.text.includes(OPENED_LOG)));
     const beforeSecond = native;
     normalWindows.push({ id: 4, type: 'normal' }); winCreated.fire({ id: 4, type: 'normal' }); await tick(30);
     check('a second window does not reconnect the helper', native === beforeSecond && g('cfxState').get().agent === 'active');
