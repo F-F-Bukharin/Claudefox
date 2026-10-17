@@ -20,8 +20,8 @@ const tabs = [
   { id: 1, windowId: 1, active: true, title: 'Shop', url: 'https://shop.example/', status: 'complete' },
   { id: 2, windowId: 1, active: false, title: 'Sign in', url: 'https://accounts.google.com/signin/v2', status: 'complete' },
   { id: 3, windowId: 1, active: false, title: 'Config', url: 'about:config', status: 'complete' },
-  { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/H/Mods/claudefox/claudefox.xpi', status: 'complete' },
-  { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/H/notes/claudefox-notes.txt', status: 'complete' },
+  { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/you/Mods/claudefox/claudefox.xpi', status: 'complete' },
+  { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/you/notes/claudefox-notes.txt', status: 'complete' },
   { id: 6, windowId: 1, active: false, title: 'Lista 3 - Google Docs', url: 'https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit', status: 'complete' },
 ];
 const webRequest = { onBeforeRequest: ev(), onSendHeaders: ev(), onHeadersReceived: ev(), onBeforeRedirect: ev(), onCompleted: ev(), onErrorOccurred: ev() };
@@ -258,10 +258,10 @@ const answerConfirm = async ok => {
     await fromPanel({ type: 'pickFolder' });
     check('Choose folder asks the helper for a folder window', native.sent.some(m => m.type === 'pick_folder') && g('cfxState').get().folderPicking === true);
     await helperSays({ type: 'pick_folder_result', ok: true, path: '', cancelled: true });
-    check('a cancelled folder window changes nothing', g('cfxState').get().folderPicking === false && g('cfxState').get().filesFolder !== 'C:\\Users\\F\\Notes');
+    check('a cancelled folder window changes nothing', g('cfxState').get().folderPicking === false && g('cfxState').get().filesFolder !== 'C:\\Users\\you\\Notes');
     await fromPanel({ type: 'pickFolder' });
-    await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\F\\Notes', cancelled: false });
-    check('the folder picked becomes the file tools folder', g('cfxState').get().filesFolder === 'C:\\Users\\F\\Notes' && g('cfxState').get().folderPicking === false);
+    await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\you\\Notes', cancelled: false });
+    check('the folder picked becomes the file tools folder', g('cfxState').get().filesFolder === 'C:\\Users\\you\\Notes' && g('cfxState').get().folderPicking === false);
     await fromPanel({ type: 'pickFolder' });
     await helperSays({ type: 'pick_folder_result', ok: false, error: 'The folder window did not finish. Type the path instead.' });
     check('a folder window that fails says so and stops waiting', g('cfxState').get().folderPicking === false && g('cfxState').log().some(e => /did not finish/.test(e.text)));
@@ -269,12 +269,12 @@ const answerConfirm = async ok => {
     // file tools setting (sign-out check is at the end)
     await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'notes' });
     check('relative folder refused', g('cfxState').get().filesEnabled === false);
-    await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'C:\\Users\\F\\notes' });
+    await fromPanel({ type: 'setFiles', value: true, mode: 'write', folder: 'C:\\Users\\you\\notes' });
     const waitingFiles = g('cfxState').get();
     check('file tools wait for the helper\'s confirm window before they go on', waitingFiles.filesEnabled === false && waitingFiles.confirmPending && waitingFiles.confirmPending.kind === 'files');
     const fq = await answerConfirm(true);
     check('a yes in the confirm window turns file tools on for that folder and mode', g('cfxState').get().filesEnabled && g('cfxState').get().filesMode === 'write'
-      && fq.kind === 'files' && fq.mode === 'write' && fq.folder === 'C:\\Users\\F\\notes' && g('cfxState').get().confirmPending === null, JSON.stringify(fq));
+      && fq.kind === 'files' && fq.mode === 'write' && fq.folder === 'C:\\Users\\you\\notes' && g('cfxState').get().confirmPending === null, JSON.stringify(fq));
     await fromPanel({ type: 'setPlus', value: true });
     await fromPanel({ type: 'chat', id: 'pp', text: 'plus' });
     check('Speed Plus sends speedplus', native.sent.find(m => m.type === 'chat' && m.id === 'pp').model === 'speedplus');
@@ -282,26 +282,26 @@ const answerConfirm = async ok => {
     await fromPanel({ type: 'setModel', value: 'quality' });
     await fromPanel({ type: 'chat', id: 'p4', text: 'list files' });
     const withFiles = native.sent.find(m => m.type === 'chat' && m.id === 'p4');
-    check('chat carries the file mode, folder and Quality', withFiles.files === 'write' && withFiles.folder === 'C:\\Users\\F\\notes' && withFiles.model === 'quality');
+    check('chat carries the file mode, folder and Quality', withFiles.files === 'write' && withFiles.folder === 'C:\\Users\\you\\notes' && withFiles.model === 'quality');
 
     // A folder picked while file tools are on goes through the confirm window before it replaces the old one; a no keeps the old folder.
     await fromPanel({ type: 'pickFolder' });
-    await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\F\\Other', cancelled: false });
+    await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\you\\Other', cancelled: false });
     const pickAsk = await answerConfirm(false);
-    check('a picked folder asks the confirm window while file tools are on', !!pickAsk && pickAsk.kind === 'files' && pickAsk.folder === 'C:\\Users\\F\\Other' && pickAsk.mode === 'write', JSON.stringify(pickAsk));
-    check('a no for the picked folder keeps file tools on, for the old folder', g('cfxState').get().filesEnabled === true && g('cfxState').get().filesFolder === 'C:\\Users\\F\\notes' && g('cfxState').get().filesMode === 'write'
+    check('a picked folder asks the confirm window while file tools are on', !!pickAsk && pickAsk.kind === 'files' && pickAsk.folder === 'C:\\Users\\you\\Other' && pickAsk.mode === 'write', JSON.stringify(pickAsk));
+    check('a no for the picked folder keeps file tools on, for the old folder', g('cfxState').get().filesEnabled === true && g('cfxState').get().filesFolder === 'C:\\Users\\you\\notes' && g('cfxState').get().filesMode === 'write'
       && g('cfxState').get().confirmPending === null, JSON.stringify([g('cfxState').get().filesEnabled, g('cfxState').get().filesFolder]));
-    check('the log says the old folder was kept', g('cfxState').log().some(e => /Kept C:\\Users\\F\\notes/.test(e.text) && /C:\\Users\\F\\Other/.test(e.text)), g('cfxState').log().slice(-3).map(e => e.text).join(' | '));
+    check('the log says the old folder was kept', g('cfxState').log().some(e => /Kept C:\\Users\\you\\notes/.test(e.text) && /C:\\Users\\you\\Other/.test(e.text)), g('cfxState').log().slice(-3).map(e => e.text).join(' | '));
     await fromPanel({ type: 'pickFolder' });
-    await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\F\\Other', cancelled: false });
+    await helperSays({ type: 'pick_folder_result', ok: true, path: 'C:\\Users\\you\\Other', cancelled: false });
     await answerConfirm(true);
-    check('a yes for the picked folder moves file tools to it', g('cfxState').get().filesEnabled === true && g('cfxState').get().filesFolder === 'C:\\Users\\F\\Other');
+    check('a yes for the picked folder moves file tools to it', g('cfxState').get().filesEnabled === true && g('cfxState').get().filesFolder === 'C:\\Users\\you\\Other');
 
     // The helper says what it allowed, and the switches follow it (a restarted helper has forgotten them).
-    await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: { mode: 'read', folder: 'C:\\Users\\F\\Mirror' } });
-    check('confirmed_state with files turns file tools on for that mode and folder', g('cfxState').get().filesEnabled === true && g('cfxState').get().filesMode === 'read' && g('cfxState').get().filesFolder === 'C:\\Users\\F\\Mirror');
+    await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: { mode: 'read', folder: 'C:\\Users\\you\\Mirror' } });
+    check('confirmed_state with files turns file tools on for that mode and folder', g('cfxState').get().filesEnabled === true && g('cfxState').get().filesMode === 'read' && g('cfxState').get().filesFolder === 'C:\\Users\\you\\Mirror');
     await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: null });
-    check('confirmed_state with no files turns file tools off and keeps the remembered mode and folder', g('cfxState').get().filesEnabled === false && g('cfxState').get().filesMode === 'read' && g('cfxState').get().filesFolder === 'C:\\Users\\F\\Mirror');
+    check('confirmed_state with no files turns file tools off and keeps the remembered mode and folder', g('cfxState').get().filesEnabled === false && g('cfxState').get().filesMode === 'read' && g('cfxState').get().filesFolder === 'C:\\Users\\you\\Mirror');
     check('the log says the helper did not keep the file tools', g('cfxState').log().some(e => /File tools are off: the helper restarted and did not keep them/.test(e.text)));
     const logLen = g('cfxState').log().length;
     await helperSays({ type: 'confirmed_state', unsafe: false, trusted: false, files: null });
@@ -437,7 +437,7 @@ const answerConfirm = async ok => {
     const saveMsg = native.sent.slice(sentAt).find(m => m.type === 'save_output');
     check('a stored file goes to the helper with its bytes', !!saveMsg && saveMsg.name === 'notes.txt' && Buffer.from(saveMsg.data, 'base64').toString('utf8') === 'Olá, mundo', saveMsg ? saveMsg.name : 'no save_output sent');
     check('nothing is downloaded while the helper stores it', downloads.length === 0);
-    await helperSays({ type: 'output_saved', req: saveMsg.req, ok: true, name: 'notes.txt', path: 'C:\\Users\\H\\AppData\\Local\\claudefox\\output\\notes.txt' });
+    await helperSays({ type: 'output_saved', req: saveMsg.req, ok: true, name: 'notes.txt', path: 'C:\\Users\\you\\AppData\\Local\\claudefox\\output\\notes.txt' });
     check('the stored path reaches the panel', panelIn.some(m => m.type === 'outputSaved' && m.name === 'notes.txt' && /output\\notes\.txt$/.test(m.path)));
     check('a stored file is logged, and not downloaded', g('cfxState').log().some(e => /Stored notes\.txt in the output folder/.test(e.text)) && downloads.length === 0);
     sentAt = native.sent.length;

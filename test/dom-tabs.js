@@ -16,7 +16,7 @@ const sent = []; let onMsg;
 // Window 5 has four tabs (one is not a web page); window 6 has one more, which the picker must not list.
 const TABS = [
   { id: 11, windowId: 5, title: 'Example Domain', url: 'https://example.com/' },
-  { id: 12, windowId: 5, title: 'Inteli Portal', url: 'https://www.portal.inteli.edu.br/aulas' },
+  { id: 12, windowId: 5, title: 'School Portal', url: 'https://portal.example.edu/classes' },
   { id: 13, windowId: 5, title: 'Pesquisa  Example [docs]', url: 'https://example.org/busca' },
   { id: 15, windowId: 5, title: 'New Tab', url: 'about:newtab' },
   { id: 14, windowId: 6, title: 'Other window', url: 'https://other.example.net/' },
@@ -44,7 +44,7 @@ function makeBg() {
   const ev = () => { const fns = []; return { addListener: f => fns.push(f), removeListener() {}, fns, fire: (...a) => fns.forEach(f => f(...a)) }; };
   const bgTabs = [
     { id: 11, windowId: 5, active: true, title: 'Example Domain', url: 'https://example.com/', status: 'complete' },
-    { id: 12, windowId: 5, active: false, title: 'Inteli Portal', url: 'https://www.portal.inteli.edu.br/aulas', status: 'complete' },
+    { id: 12, windowId: 5, active: false, title: 'School Portal', url: 'https://portal.example.edu/classes', status: 'complete' },
   ];
   const connectEv = ev();
   const nat = { sent: [], onMessage: ev(), onDisconnect: ev(), postMessage(m) { this.sent.push(m); }, disconnect() {} };
@@ -97,12 +97,12 @@ const messagesText = () => $('messages').textContent;
     await tick(50);   // the window id is read first
     typed('@'); await tick();
     ok('"@" at the start of the text opens the picker with this window\'s web tabs only', JSON.stringify(pickerIds()) === '["11","12","13"]', JSON.stringify(pickerIds()));
-    ok('each choice shows its title and its site', /Inteli Portal/.test(($('tabMenu') || { textContent: '' }).textContent) && /portal\.inteli\.edu\.br/.test(($('tabMenu') || { textContent: '' }).textContent));
+    ok('each choice shows its title and its site', /School Portal/.test(($('tabMenu') || { textContent: '' }).textContent) && /portal\.example\.edu/.test(($('tabMenu') || { textContent: '' }).textContent));
     typed('a@b'); await tick();
     ok('"a@b" does not open the picker', !pickerOpen());
     typed('@domain'); await tick();
     ok('the picker narrows by title', JSON.stringify(pickerIds()) === '["11"]', JSON.stringify(pickerIds()));
-    typed('@inteli.edu'); await tick();
+    typed('@example.edu'); await tick();
     ok('the picker narrows by site', JSON.stringify(pickerIds()) === '["12"]', JSON.stringify(pickerIds()));
     typed('@'); await tick();
     key('ArrowDown'); key('ArrowDown');
@@ -116,20 +116,20 @@ const messagesText = () => $('messages').textContent;
     key('Enter');
     ok('Enter inserts @[title](tab:id) and a space, and does not send', $('input').value === 'see @[Pesquisa Example docs](tab:13) ' && !pickerOpen() && bubbles().length === before, JSON.stringify($('input').value));
     const n0 = chatsSent().length;
-    typed('see @[Inteli Portal](tab:12) and @[Other window](tab:14) what is due?'); await tick();
+    typed('see @[School Portal](tab:12) and @[Other window](tab:14) what is due?'); await tick();
     key('Enter'); await tick(60);
     const c = chatsSent().slice(n0).pop() || {};
-    ok('a send names this window\'s tab as [tab id: title (site)] and leaves the other window\'s mention', c.text === 'see [tab 12: Inteli Portal (portal.inteli.edu.br)] and @[Other window](tab:14) what is due?', JSON.stringify(c.text));
-    ok('the chat message carries the sites of the tabs it names', JSON.stringify(c.tabSites) === '["portal.inteli.edu.br"]', JSON.stringify(c.tabSites));
+    ok('a send names this window\'s tab as [tab id: title (site)] and leaves the other window\'s mention', c.text === 'see [tab 12: School Portal (portal.example.edu)] and @[Other window](tab:14) what is due?', JSON.stringify(c.text));
+    ok('the chat message carries the sites of the tabs it names', JSON.stringify(c.tabSites) === '["portal.example.edu"]', JSON.stringify(c.tabSites));
     const n1 = chatsSent().length;
     typed('/research'); key('Enter'); await tick();
     ok('/research with no tab mentioned says so and sends nothing', messagesText().includes('Mention at least one tab with @') && chatsSent().length === n1);
     typed('/research @por'); await tick();
     key('Enter'); await tick();
-    ok('/research picks a tab from the @ picker', $('input').value === '/research @[Inteli Portal](tab:12) ', JSON.stringify($('input').value));
+    ok('/research picks a tab from the @ picker', $('input').value === '/research @[School Portal](tab:12) ', JSON.stringify($('input').value));
     key('Enter'); await tick(60);
     const r = chatsSent()[n1] || {};
-    ok('/research sends the compare text with the tab as [tab id: title (site)], its site, and no army forced', r.text === 'Read these tabs and compare them.\n\n[tab 12: Inteli Portal (portal.inteli.edu.br)]' && JSON.stringify(r.tabSites) === '["portal.inteli.edu.br"]' && r.army === undefined, JSON.stringify(r));
+    ok('/research sends the compare text with the tab as [tab id: title (site)], its site, and no army forced', r.text === 'Read these tabs and compare them.\n\n[tab 12: School Portal (portal.example.edu)]' && JSON.stringify(r.tabSites) === '["portal.example.edu"]' && r.army === undefined, JSON.stringify(r));
     // The long title, in the picker (80) and in a send (100)
     TABS.push({ id: 16, windowId: 5, title: 'X'.repeat(130), url: 'https://long.example/' });
     typed('@long'); await tick(); key('Enter');
@@ -143,7 +143,7 @@ const messagesText = () => $('messages').textContent;
     await bg.start();
     await bg.fromPanel(Object.assign({ windowId: 5 }, { type: 'chat', id: 'tb1', text: c.text, tabSites: c.tabSites }));
     const m1 = bg.lastChat() || {};
-    ok('the helper\'s chat message lists the open page\'s site and the mentioned tab\'s site', m1.id === 'tb1' && JSON.stringify(m1.sites) === '["example.com","portal.inteli.edu.br"]', JSON.stringify(m1.sites));
+    ok('the helper\'s chat message lists the open page\'s site and the mentioned tab\'s site', m1.id === 'tb1' && JSON.stringify(m1.sites) === '["example.com","portal.example.edu"]', JSON.stringify(m1.sites));
     await bg.done('tb1');
     await bg.fromPanel({ type: 'chat', id: 'tb2', text: 'x', windowId: 5, tabSites: ['!!!', 'OTHER.example.org'] });
     ok('tabSites are cleaned like sites (lower case, junk dropped)', JSON.stringify((bg.lastChat() || {}).sites) === '["example.com","other.example.org"]', JSON.stringify((bg.lastChat() || {}).sites));

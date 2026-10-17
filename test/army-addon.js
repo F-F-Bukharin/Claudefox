@@ -155,7 +155,7 @@ const answerConfirm = async ok => {
     const onGoogle = await armyCall('read_page', { tab_id: A });
     const toGoogle = await armyCall('tab_open', { url: 'https://accounts.google.com/ServiceLogin' });
     const normal = await call('read_page', { tab_id: A });   // the lead itself, in Unsafe mode, still may
-    tabOf(A).url = 'file:///C:/Users/F/notes.txt';
+    tabOf(A).url = 'file:///C:/Users/you/notes.txt';
     const onFile = await armyCall('get_page_text', { tab_id: A });
     tabOf(A).url = 'about:config';
     const onAbout = await armyCall('read_page', { tab_id: A });

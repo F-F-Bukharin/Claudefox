@@ -30,6 +30,7 @@ const TESTS = [
   'test/i18n.js', 'host/test/confirm-lang-smoke.js', 'test/i18n-bg.js', 'test/i18n-stream.js',
   'test/i18n-chat.js',
   'test/i18n-settings-js.js',
+  'test/fixtures-clean.js',
 ];
 // test/brand.js runs the friends copy's whole suite once more (about two minutes), so it gets more time.
 const LONG = { 'test/brand.js': 900000 };

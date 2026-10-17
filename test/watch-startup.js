@@ -19,8 +19,8 @@ const tabs = [
   { id: 1, windowId: 1, active: true, title: 'Shop', url: 'https://shop.example/', status: 'complete' },
   { id: 2, windowId: 1, active: false, title: 'Sign in', url: 'https://accounts.google.com/signin/v2', status: 'complete' },
   { id: 3, windowId: 1, active: false, title: 'Config', url: 'about:config', status: 'complete' },
-  { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/H/Mods/claudefox/claudefox.xpi', status: 'complete' },
-  { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/H/notes/claudefox-notes.txt', status: 'complete' },
+  { id: 4, windowId: 1, active: false, title: 'xpi', url: 'file:///C:/Users/you/Mods/claudefox/claudefox.xpi', status: 'complete' },
+  { id: 5, windowId: 1, active: false, title: 'other', url: 'file:///C:/Users/you/notes/claudefox-notes.txt', status: 'complete' },
   { id: 6, windowId: 1, active: false, title: 'Lista 3 - Google Docs', url: 'https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit', status: 'complete' },
 ];
 const webRequest = { onBeforeRequest: ev(), onSendHeaders: ev(), onHeadersReceived: ev(), onBeforeRedirect: ev(), onCompleted: ev(), onErrorOccurred: ev() };

@@ -15,7 +15,7 @@ const ev = () => { const fns = []; return { addListener: f => fns.push(f), remov
 // ---- mocked browser, with spies on the calls that could move the user's focus
 const store = {};
 const local = {};
-const F = 'file:///C:/Users/H/Downloads/';
+const F = 'file:///C:/Users/you/Downloads/';
 let tabs = [
   { id: 1, windowId: 1, active: true, title: 'Shop', url: 'https://shop.example/', status: 'complete' },
   { id: 10, windowId: 1, active: false, title: 'Game', url: F + 'game/index.html', status: 'complete' },
@@ -122,7 +122,7 @@ const tabOf = id => tabs.find(t => t.id === id);
 const ASKED = /^Claude asks to look in /;
 const asks = () => g('cfxState').log().filter(e => ASKED.test(e.text)).length;
 const st = () => g('cfxState').get();
-const W = 'C:\\Users\\H\\Downloads\\';
+const W = 'C:\\Users\\you\\Downloads\\';
 const DENY = f => `You did not allow Claude to look in ${f}.`;
 const ACCESS = "Zen keeps add-ons out of files on this computer. Turn on 'Access local files on your computer' for Claudefox: about:addons -> Claudefox -> Permissions and data.";
 let nid = 0;
@@ -132,7 +132,7 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
   try {
     // ---- pure path rules
     const fp = u => g('cfxFilePath')(u);
-    check('cfxFilePath: Windows drive path', fp('file:///C:/Users/H/Downloads/game/index.html') === 'C:\\Users\\H\\Downloads\\game\\index.html', fp('file:///C:/Users/H/Downloads/game/index.html'));
+    check('cfxFilePath: Windows drive path', fp('file:///C:/Users/you/Downloads/game/index.html') === 'C:\\Users\\you\\Downloads\\game\\index.html', fp('file:///C:/Users/you/Downloads/game/index.html'));
     check('cfxFilePath: POSIX path', fp('file:///home/f/game/index.html') === '/home/f/game/index.html');
     check('cfxFilePath: %20 and raw spaces decode to spaces', fp('file:///C:/My%20Games/a%20b.html') === 'C:\\My Games\\a b.html' && fp('file:///C:/My Games/a.html') === 'C:\\My Games\\a.html');
     check('cfxFilePath: . and .. are resolved, also when percent-encoded, never above the drive',
@@ -143,7 +143,7 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
       && g('cfxUrlBlocked')('file:///%5C%5Cserver/share/x.html', { localGrants: [] }).needGrant === undefined, fp('file:///%5C%5Cserver/share/x.html'));
     check('cfxFilePath: NUL and non-file URLs are null', fp('file:///home/f/a%00b.html') === null && fp('https://example.com/x.html') === null && fp('about:config') === null);
     const inF = (p, f) => g('cfxInFolder')(p, f);
-    check('cfxInFolder: drive paths ignore case and slash direction', inF('c:/users/h/downloads/game/x.html', 'C:\\Users\\H\\Downloads\\game') && inF('C:\\A\\b', 'c:/a/'));
+    check('cfxInFolder: drive paths ignore case and slash direction', inF('c:/users/you/downloads/game/x.html', 'C:\\Users\\you\\Downloads\\game') && inF('C:\\A\\b', 'c:/a/'));
     check('cfxInFolder: a folder holds itself and its subfolders', inF('C:\\a', 'C:\\a') && inF('C:\\a\\b\\c\\d.html', 'C:\\a') && inF('/home/f/game/x', '/home/f'));
     check('cfxInFolder: a sibling with the same prefix is not inside, POSIX keeps case, drives differ',
       !inF('C:\\ab\\x.html', 'C:\\a') && !inF('/home/F/x', '/home/f') && !inF('D:\\a\\x', 'C:\\a') && !inF('/a/x', 'C:\\a'));
@@ -213,12 +213,12 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
     check('one yes answers them all', r1.ok && r2.ok && en.ok === true && st().localGrants.length === 2, `${r1.error || ''} ${r2.error || ''}`);
 
     // ---- the helper's list and its question
-    await helperSays({ type: 'local_grants', folders: [W + 'game', 'c:/users/h/downloads/game/', '/home/f/x/', 'relative\\path', 42] });
+    await helperSays({ type: 'local_grants', folders: [W + 'game', 'c:/users/you/downloads/game/', '/home/f/x/', 'relative\\path', 42] });
     check('the helper\'s list is kept normalized, without doubles or paths that are not full', JSON.stringify(st().localGrants) === JSON.stringify([W + 'game', '/home/f/x']), JSON.stringify(st().localGrants));
-    await helperSays({ type: 'local_question', folder: 'C:/Users/H/Desktop/new/' });
+    await helperSays({ type: 'local_question', folder: 'C:/Users/you/Desktop/new/' });
     const q = st().grantAsk;
     await helperSays({ type: 'local_question', folder: '' });
-    check('while the helper\'s window asks, the panel gets the folder; then it clears', q && q.folder === 'C:\\Users\\H\\Desktop\\new' && st().grantAsk === null, JSON.stringify(q));
+    check('while the helper\'s window asks, the panel gets the folder; then it clears', q && q.folder === 'C:\\Users\\you\\Desktop\\new' && st().grantAsk === null, JSON.stringify(q));
 
     // ---- localGrantRemove goes to the helper
     await fromPanel({ type: 'localGrantRemove', folder: '/home/f/x' });
@@ -291,15 +291,15 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
     p = call('read_page', { tab_id: 20 });
     await tick();
     const mv1 = lastAsk();
-    tabOf(20).url = 'file:///C:/Users/H/Documents/private.txt';
+    tabOf(20).url = 'file:///C:/Users/you/Documents/private.txt';
     await helperAnswers(true);
     await tick();
     const mv2 = lastAsk();
     check('a tab that moves to another folder during the question is asked about again, and nothing runs yet',
-      mv1 && mv1.folder === W + 'game2' && mv2 && mv2.id !== mv1.id && mv2.folder === 'C:\\Users\\H\\Documents' && injected.length === n, JSON.stringify([mv1, mv2]));
+      mv1 && mv1.folder === W + 'game2' && mv2 && mv2.id !== mv1.id && mv2.folder === 'C:\\Users\\you\\Documents' && injected.length === n, JSON.stringify([mv1, mv2]));
     await helperAnswers(false);
     r = await p;
-    check('a no about the new folder means the tool never ran on the new page', !r.ok && /did not allow Claude to look in C:\\Users\\H\\Documents/.test(r.error) && injected.length === n, r.error);
+    check('a no about the new folder means the tool never ran on the new page', !r.ok && /did not allow Claude to look in C:\\Users\\you\\Documents/.test(r.error) && injected.length === n, r.error);
     tabs.push({ id: 21, windowId: 1, active: false, title: 'G3', url: F + 'game3/index.html', status: 'complete' });
     n = injected.length;
     p = call('read_page', { tab_id: 21 });
@@ -324,9 +324,9 @@ const nativeAsk = async (m, type) => { const id = `n${++nid}`; native.onMessage.
 
     // ---- the helper's local_tab
     let m;
-    tabs.push({ id: 30, windowId: 1, active: true, title: 'Loading', url: 'file:///c:/Users/H/Downloads/new%20game/index.html', status: 'loading' });
+    tabs.push({ id: 30, windowId: 1, active: true, title: 'Loading', url: 'file:///c:/Users/you/Downloads/new%20game/index.html', status: 'loading' });
     setTimeout(() => { const t = tabOf(30); t.status = 'complete'; t.title = 'New Game'; }, 300);
-    m = await nativeAsk({ type: 'local_tab', url: 'file:///C:/Users/H/Downloads/new game/index.html' }, 'local_tab_result');
+    m = await nativeAsk({ type: 'local_tab', url: 'file:///C:/Users/you/Downloads/new game/index.html' }, 'local_tab_result');
     check('local_tab finds the tab by its decoded path (drive letter case aside) once it has loaded', m.ok === true && m.tab_id === 30 && m.title === 'New Game', JSON.stringify(m));
     L.TAB_MS = 300;
     const t0 = Date.now();
