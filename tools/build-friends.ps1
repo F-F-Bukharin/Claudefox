@@ -1,7 +1,7 @@
 # Claudefox: builds the zip for people outside this PC, build\friends\Claudefox-v<version>.zip. A staged copy is
 # branded for Firefox (tools\brand.js turns the source's Zen into Firefox, since friends may use plain Firefox); this
-# PC's own install and the source keep saying Zen. Uses a signed Claudefox .xpi from build\signed for this exact
-# version if there is one, otherwise a fresh unsigned build.
+# PC's own install and the source keep saying Zen. Uses a signed friends .xpi (Claudefox with the update address)
+# from build\signed for this exact version if there is one, otherwise a fresh unsigned build.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot 'xpi-tools.ps1')
@@ -11,7 +11,7 @@ $stage = Join-Path $dist 'Claudefox'
 New-ClaudefoxStage $root $stage
 
 $xpi = Join-Path $stage 'claudefox.xpi'
-$signed = Find-SignedXpi $root $v 'Claudefox'
+$signed = Find-SignedXpi $root $v 'Claudefox' 'friends'
 if ($signed) {
   Copy-Item $signed $xpi
   # Set up Claudefox.bat then opens about:addons for a lasting install instead of about:debugging.

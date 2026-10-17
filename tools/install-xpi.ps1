@@ -1,6 +1,7 @@
 # Claudefox: builds the add-on and opens it in Zen for a permanent install (Zen shows its install prompt).
-# Uses a signed .xpi from build\signed when its version matches extension\manifest.json, otherwise the fresh
-# unsigned build (needs about:config -> xpinstall.signatures.required = false).
+# Uses a signed build from build\signed when its version matches extension\manifest.json, otherwise the fresh
+# unsigned build (needs about:config -> xpinstall.signatures.required = false). A friends build (it has an update
+# address) is never picked here: the call below asks for the 'local' flavour.
 # Does nothing while Zen is linked to this folder: then "update" in Settings is a reload.
 #   Exit codes: 0 handed to Zen, 2 linked (nothing to do), 1 error.
 param([switch]$Quiet)
@@ -16,7 +17,7 @@ if (Test-Linked $root) {
 try {
   $version = Get-SourceVersion $root
   & (Join-Path $PSScriptRoot 'build-xpi.ps1') | Out-Host
-  $xpi = Find-SignedXpi $root $version 'Claudefox'
+  $xpi = Find-SignedXpi $root $version 'Claudefox' 'local'
   if ($xpi) { Write-Host "Using the signed build for v${version}: $(Split-Path $xpi -Leaf)" }
   else {
     $xpi = Join-Path $root 'build\claudefox.xpi'

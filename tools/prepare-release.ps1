@@ -8,7 +8,7 @@ $root = Split-Path $PSScriptRoot -Parent
 $v = Get-SourceVersion $root
 $repo = (Get-Content (Join-Path $PSScriptRoot 'release.json') -Raw | ConvertFrom-Json).repo
 $updates = "https://github.com/$repo/releases/latest/download/updates.json"
-$xpi = Find-SignedXpi $root $v 'Claudefox'
+$xpi = Find-SignedXpi $root $v 'Claudefox' 'friends'
 if (-not $xpi) { throw "No signed Claudefox $v in build\signed. Run Sign add-on.bat first." }
 $m = Get-XpiManifest $xpi
 if ($m.browser_specific_settings.gecko.update_url -ne $updates) {

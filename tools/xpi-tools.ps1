@@ -20,13 +20,16 @@ function Get-XpiVersion([string]$Path) { $m = Get-XpiManifest $Path; if ($m) { r
 
 # The newest signed .xpi in build\signed built from this exact version, or $null. With -Name, only one whose
 # add-on name matches (both builds are called Claudefox since 0.11, so this only keeps out files of another add-on).
-function Find-SignedXpi([string]$Root, [string]$Version, [string]$Name) {
+# -Flavour tells the two builds apart, which share that name: 'friends' takes the one whose manifest has an update
+# address (tools\brand.js puts it in the friends copy), 'local' the one without (this PC's own build).
+function Find-SignedXpi([string]$Root, [string]$Version, [string]$Name, [Parameter(Mandatory)][ValidateSet('friends', 'local')][string]$Flavour) {
   $dir = Join-Path $Root 'build\signed'
   if (-not (Test-Path $dir)) { return $null }
   foreach ($f in (Get-ChildItem $dir -Filter *.xpi | Sort-Object LastWriteTime -Descending)) {
     try {
       $m = Get-XpiManifest $f.FullName
-      if ($m -and $m.version -eq $Version -and (-not $Name -or $m.name -eq $Name)) { return $f.FullName }
+      $friends = [bool]($m -and $m.browser_specific_settings.gecko.update_url)
+      if ($m -and $m.version -eq $Version -and (-not $Name -or $m.name -eq $Name) -and $friends -eq ($Flavour -eq 'friends')) { return $f.FullName }
     } catch {}
   }
   return $null
