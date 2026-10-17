@@ -200,7 +200,7 @@ const ALLOWED = {   // file -> what may still be said there, as a pattern
   'README.md': oldWord,                           // says what the setup moves and removes
   'zen-profile/apply.ps1': new RegExp(OLD_NAME + ' (BEGIN|END)|' + OLD_NAME + ' BEGIN/END', 'g'),   // the marker lines already in people's Zen profile files
 };
-const SCANNED = ['extension', 'host', 'tools', 'test', 'friends', 'zen-profile', 'build'];
+const SCANNED = ['extension', 'host', 'tools', 'test', 'friends', 'zen-profile'];   // build\ holds only made files (git ignores them), old builds included: just its README counts
 const scanFiles = [];
 const gather = rel => {
   for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
@@ -209,6 +209,7 @@ const gather = rel => {
   }
 };
 SCANNED.forEach(gather);
+if (fs.existsSync(path.join(root, 'build', 'README.txt'))) scanFiles.push('build/README.txt');
 for (const e of fs.readdirSync(root, { withFileTypes: true })) if (e.isFile()) scanFiles.push(e.name);
 const offenders = [];
 for (const rel of scanFiles) {
