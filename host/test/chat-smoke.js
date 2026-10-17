@@ -9,7 +9,17 @@ const path = require('path');
 
 if (process.platform === 'win32') { console.log('SKIP  chat-smoke runs on Linux/macOS only'); process.exit(0); }
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-chat-'));
+// The temp folders this test makes are removed however it ends (passing, failed checks, an exception or an early exit), and
+// nothing else is. A helper still running at an early exit is killed first, so nothing writes into the folders meanwhile.
+const madeDirs = [], helpers = [];
+const makeDir = prefix => { const d = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); madeDirs.push(d); return d; };
+process.on('exit', () => {
+  for (const h of helpers) if (h.exitCode === null && h.signalCode === null) { try { h.kill('SIGKILL'); } catch {} }
+  for (const d of madeDirs.splice(0)) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+});
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(1));   // Ctrl-C or a kill cleans up too
+
+const tmp = makeDir('cfx-chat-');
 const pipe = path.join(tmp, 'chat.sock');
 const fake = path.join(tmp, 'claude');
 const record = path.join(tmp, 'argv.json');
@@ -155,6 +165,7 @@ fs.mkdirSync(path.join(tmp, 'claudefox'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'claudefox', 'tools.json'), JSON.stringify({ on: { plugins: ['desktop-commander@test'], servers: [] }, decided: ['desktop-commander@test'], cat: {} }));
 
 const helper = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env, stdio: ['pipe', 'pipe', 'inherit'] });
+helpers.push(helper);
 const inbox = []; let waiters = []; let hbuf = Buffer.alloc(0);
 const calls = [];
 function toHelper(msg) {
@@ -189,6 +200,16 @@ function next(pred, ms = 8000) {
 const eventsFor = id => inbox.filter(m => m.type === 'chat_event' && m.id === id).map(m => m.event);
 // Older tools lists still in the inbox would answer a wait for the next one.
 const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[i].type === 'tools') inbox.splice(i, 1); };
+// Ends a helper the way Stop does (its stdin closes, and it ends the Claude Code it runs) and waits until it has exited.
+// A helper still there after 3 s is killed.
+async function stopHelper(h) {
+  if (h.exitCode !== null || h.signalCode !== null) return;
+  const gone = new Promise(r => h.once('exit', r));
+  const timer = setTimeout(() => h.kill('SIGKILL'), 3000);
+  h.stdin.end();
+  await gone;
+  clearTimeout(timer);
+}
 
 (async () => {
   try {
@@ -536,13 +557,14 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
     check('and not in the project folder', !fs.existsSync(path.join(__dirname, '..', '..', 'extension', 'output', 'made.txt')));
 
     // The test hooks count only with CLAUDEFOX_TEST=1: a second helper without it ignores the PICK stub.
-    const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-pick-'));
+    const tmp2 = makeDir('cfx-pick-');
     const env2 = { ...process.env, LOCALAPPDATA: tmp2, CLAUDEFOX_PICK: pickedDir };
     for (const k of ['CLAUDEFOX_TEST', 'CLAUDEFOX_PIPE', 'CLAUDEFOX_CONFIRM', 'CLAUDEFOX_CLAUDE', 'CLAUDEFOX_SCRIPT']) delete env2[k];
     // Without the test hooks this helper would look for the real Claude Code in the home folder and on PATH: give it neither.
-    const empty2 = fs.mkdtempSync(path.join(os.tmpdir(), 'cfx-nopath-'));
+    const empty2 = makeDir('cfx-nopath-');
     Object.assign(env2, { HOME: tmp2, USERPROFILE: tmp2, PATH: empty2 });
     const helper2 = spawn(process.execPath, [path.join(__dirname, '..', 'claudefox-host.js')], { env: env2, stdio: ['pipe', 'pipe', 'inherit'] });
+    helpers.push(helper2);
     const got2 = []; let buf2 = Buffer.alloc(0);
     helper2.stdout.on('data', chunk => {
       buf2 = Buffer.concat([buf2, chunk]);
@@ -612,7 +634,7 @@ const dropTools = () => { for (let i = inbox.length - 1; i >= 0; i--) if (inbox[
   } catch (e) {
     check('no unexpected errors', false, e.message);
   } finally {
-    try { helper.kill(); } catch {}
+    for (const h of helpers) await stopHelper(h);
     const failed = results.filter(r => !r).length;
     console.log(failed ? `\n${failed} check(s) failed` : `\nAll ${results.length} checks passed`);
     process.exit(failed ? 1 : 0);
