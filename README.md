@@ -42,6 +42,11 @@ Friends: see `START HERE.txt` (it ships in the friends zip, where Zen is Firefox
   video. Near-duplicate frames are dropped, and the rest come as 5 x 4 sheets, with the time on each frame and what was
   said under each row, plus the captions as text (YouTube's, the video's own track, or a .vtt or .srt next to a local
   file). `watch_zoom` looks closer: four frames a second over up to 30 s. Nothing is installed, downloaded or saved.
+- **Watching videos** (Profile, Permissions, Watch videos; asks first): `watch_video` plays a video muted in a small
+  window of its own (a link, a tab, or a file in an allowed folder) and catches one frame a second straight from the
+  video. Near-duplicate frames are dropped, and the rest come as 5 x 4 sheets, with the time on each frame and what was
+  said under each row, plus the captions as text (YouTube's, the video's own track, or a .vtt or .srt next to a local
+  file). `watch_zoom` looks closer: four frames a second over up to 30 s. Nothing is installed, downloaded or saved.
 - **Debugging pages** (for the Google sign-in bug): `network_log` shows a tab's requests and redirect chain with
   cookie names and flags (never values; secret-looking query values hidden), `console_log` its console messages.
   No debug port.
@@ -114,6 +119,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `extension/lib/pageOp.js`, `pageOpRead.js`, `pageOpAct.js` | The page-side code the tools run inside a tab: shared helpers, then the read and act operations. pageOp.js joins them into one script and pageTools.js injects it. |
 | `extension/lib/netlog.js` | `network_log` and `console_log` (metadata only). |
 | `extension/lib/bg-watch.js`, `watchPage.js`, `watchCore.js` | Video watching: the watch window, frames and sheets (background), the frame catcher inside the video's tab, and the plain parts (times, duplicates, sheets, captions). |
+| `extension/lib/bg-watch.js`, `watchPage.js`, `watchCore.js` | Video watching: the watch window, frames and sheets (background), the frame catcher inside the video's tab, and the plain parts (times, duplicates, sheets, captions). |
 | `extension/lib/docx.js` | Builds real Word and Excel files (and web pages) from what Claude wrote. |
 | `extension/lib/files.js`, `extension/viewer.*` | Files Claude made, kept in the add-on; the viewer with Save as. |
 | `extension/background.js` | The entry: startup, the state the concerns share, the Zen-opened rule and the toolbar button. Loads after the `extension/lib/bg-*.js` files. |
@@ -136,6 +142,7 @@ panel  <->  background page  <->  helper (native messaging host, started by Zen)
 | `host/lib/guard.js` | The file guard's deny rules and folder checks. |
 | `host/lib/uploads.js`, `host/lib/doctext.js` | Attached files; text out of Word, PowerPoint, Excel and OpenDocument files. |
 | `host/claudefox-mcp.js` | The Zen tool server (MCP over stdio). It serves the catalog in `host/lib/toolSchemas.js`. |
+| `host/lib/watchvideo.js`, `watchgate.js`, `watchcaptions.js` | Video watching, the helper's side: the checks, the permission card, subtitle files next to a local video. |
 | `host/lib/watchvideo.js`, `watchgate.js`, `watchcaptions.js` | Video watching, the helper's side: the checks, the permission card, subtitle files next to a local video. |
 | `host/lib/toolSchemas.js` | The Zen tool catalog: each tool's name, description and input schema. The add-on implements each one. |
 | `host/install.ps1` | Registers the helper with Zen for this Windows user (no admin). |
