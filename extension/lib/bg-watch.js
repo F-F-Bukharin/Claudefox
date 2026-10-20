@@ -7,7 +7,17 @@
 // element (lib/watchPage.js). Near-duplicate frames are dropped, the rest go into 5 x 4 sheets with the time on each
 // frame and what was said under each row, and the captions go along as text. Nothing is saved to disk.
 
-const CFX_WATCH_WIN = { width: 760, height: 480 };
+const CFX_WATCH_WIN = { width: 480, height: 320 };
+
+// Where the watch window goes. It never takes focus. It starts just off the right edge of the screen, out of sight;
+// Firefox stops video it thinks nobody can see, so if the video stalls there the window moves into the bottom-right
+// corner (cfxWatchCatch), still without focus, and only as a last try comes to the front.
+function cfxWatchPlace(where) {
+  const sc = (typeof screen === 'object' && screen) || {};
+  const L = Number(sc.availLeft) || 0, T = Number(sc.availTop) || 0, W = Number(sc.availWidth) || 1280, H = Number(sc.availHeight) || 720;
+  if (where === 'off') return { left: L + W + 40, top: T + Math.max(0, H - CFX_WATCH_WIN.height - 40) };
+  return { left: L + Math.max(0, W - CFX_WATCH_WIN.width - 16), top: T + Math.max(0, H - CFX_WATCH_WIN.height - 16) };
+}
 const CFX_WATCH_HOLD_MS = 5 * 60 * 1000;   // a watched video stays open (minimised) this long for watch_zoom
 const cfxWatchSessions = new Map();         // watch_id -> session
 const cfxWatchRuns = new Set();             // running watches: { cancel() }
@@ -61,11 +71,11 @@ async function cfxWatchOpen(src) {
   let win;
   if (src.tabId != null) {
     // A tab made for this watch (a local file the helper opened): moved into the watch window.
-    try { win = await browser.windows.create(Object.assign({ tabId: src.tabId, type: 'popup', focused: true }, CFX_WATCH_WIN)); }
+    try { win = await browser.windows.create(Object.assign({ tabId: src.tabId, type: 'popup', focused: false }, CFX_WATCH_WIN, cfxWatchPlace('off'))); }
     catch { return { windowId: null, tabId: src.tabId, moved: false }; }
     return { windowId: win.id, tabId: src.tabId, moved: true };
   }
-  win = await browser.windows.create(Object.assign({ url: src.url, type: 'popup', focused: true }, CFX_WATCH_WIN));
+  win = await browser.windows.create(Object.assign({ url: src.url, type: 'popup', focused: false }, CFX_WATCH_WIN, cfxWatchPlace('off')));
   const tabId = win.tabs && win.tabs[0] ? win.tabs[0].id : (await browser.tabs.query({ windowId: win.id }))[0].id;
   return { windowId: win.id, tabId, moved: false };
 }
@@ -114,7 +124,7 @@ async function cfxWatchFind(tabId, signal) {
 async function cfxWatchCatch(s, t0, t1, step, opts, signal) {
   const o = Object.assign({ rate: 4, maxWallMs: 600000, maxFrames: 2400 }, opts || {});
   const frames = [], seen = [], notes = new Set();
-  let next = t0, rate = o.rate, adWaits = 0, focused = false, partial = '';
+  let next = t0, rate = o.rate, adWaits = 0, shown = 0, partial = '';
   const began = Date.now();
   while (next < t1 - 1e-3) {
     if (signal && signal.aborted) throw new Error('Stopped');
@@ -139,9 +149,9 @@ async function cfxWatchCatch(s, t0, t1, step, opts, signal) {
     const gaps = r.frames.filter((f, i) => i && f.t - r.frames[i - 1].t > step * 1.5).length;
     if (r.frames.length > 4 && gaps / r.frames.length > 0.2 && rate > 1) rate = Math.max(1, rate / 2);
     if (r.stalled || (r.hidden && !r.frames.length)) {
-      if (!focused && s.windowId != null) {   // a hidden or covered window can stop the video: bring it forward once
-        focused = true;
-        try { await browser.windows.update(s.windowId, { focused: true, state: 'normal' }); } catch {}
+      if (shown < 2 && s.windowId != null) {   // a hidden window can stop the video: the corner first, then the front
+        shown++;
+        try { await browser.windows.update(s.windowId, Object.assign({ state: 'normal' }, cfxWatchPlace('corner'), shown === 2 ? { focused: true } : {})); } catch {}
         continue;
       }
       partial = 'stalled';
@@ -420,7 +430,7 @@ async function cfxWatchZoomTool(args, signal) {
       await cfxWaitLoaded(s.tabId, 25000);
       await cfxWatchFind(s.tabId, local.signal);
     } else if (s.windowId != null) {
-      try { await browser.windows.update(s.windowId, { state: 'normal', focused: true }); } catch {}
+      try { await browser.windows.update(s.windowId, Object.assign({ state: 'normal' }, cfxWatchPlace('off'))); } catch {}
     }
     s.zooms++;
     const end = Math.min(t1, s.duration);

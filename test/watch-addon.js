@@ -141,7 +141,7 @@ const errOf = async p => { try { await p; return ''; } catch (e) { return e.mess
   drawn.length = 0;
   const r = await T.watch_run(gated({ kind: 'url', url: 'https://v.example/talk', start: 0, end: '', lang: 'en' }));
   const w0 = log.windows[0];
-  check('the video opens in a small focused popup window of its own', w0 && w0.type === 'popup' && w0.focused === true && w0.url === 'https://v.example/talk' && w0.width <= 800);
+  check('the video opens in a small popup window of its own, off screen, without taking focus', w0 && w0.type === 'popup' && w0.focused === false && w0.url === 'https://v.example/talk' && w0.width <= 500 && w0.left >= 1280, JSON.stringify(w0));
   const tab = [...tabs.values()][0];
   check('its tab is muted', log.tabUpdates.some(u => u.id === tab.id && u.muted === true));
   check('the site goes through the chat\'s site check first', log.opens[0] === 'https://v.example/talk');
@@ -161,7 +161,7 @@ const errOf = async p => { try { await p; return ''; } catch (e) { return e.mess
   check('a zoom catches four frames a second at 2x', zg.step === 0.25 && zg.rate === 2 && zg.t0 === 10 && zg.t1 === 15);
   check('20 frames in one sheet, with exact times', z.sheets.length === 1 && z.sheets[0].label === 'Sheet 1 of 1: 0:10.00 to 0:15.00, 20 frames.' && drawn.includes('0:10.25'), z.sheets[0] && z.sheets[0].label);
   check('the zoom says which one it is and what was said there', /^Zoom 1 of 10: 0:10\.00 to 0:15\.00, four frames a second: 20 frames in 1 sheet\./.test(z.head) && z.text === '(nothing said in this part)', z.head);
-  check('the window comes back up for the zoom', log.updates.some(u => u.state === 'normal' && u.focused === true));
+  check('the window comes back up for the zoom, off screen and without focus', log.updates.some(u => u.state === 'normal' && u.focused === undefined && u.left >= 1280));
   check('a zoom over 30 s is refused', /up to 30 s apart/.test(await errOf(T.watch_zoom_run(gated({ watch_id: 'w1', start: 0, end: 31 })))));
   check('a zoom past the end is refused', /only 1:05 long/.test(await errOf(T.watch_zoom_run(gated({ watch_id: 'w1', start: 70, end: 75 })))));
   check('an unknown watch_id is refused', /not open any more/.test(await errOf(T.watch_zoom_run(gated({ watch_id: 'w9', start: 0, end: 5 })))));
@@ -197,7 +197,8 @@ const errOf = async p => { try { await p; return ''; } catch (e) { return e.mess
   nextPageCfg = { duration: 90, stall: { at: 30 } };
   const r3 = await T.watch_run(gated({ kind: 'url', url: 'https://v.example/stall' }));
   const p3 = pages.get([...tabs.values()].find(t => t.url === 'https://v.example/stall').id);
-  check('a stalled video is tried again once with its window brought forward', p3.stall.count === 2 && log.updates.some(u => u.focused === true && u.state === 'normal'));
+  const moves = log.updates.filter(u => u.state === 'normal' && u.left < 1280);
+  check('a stalled video: its window moves into the corner without focus, then comes to the front', p3.stall.count === 3 && moves.length === 2 && moves[0].focused === undefined && moves[1].focused === true, JSON.stringify(moves));
   check('then it stops early and says where to go on from', /Stopped early: the video stopped playing/.test(r3.head) && /Call watch_video again with start 0:29 for the rest/.test(r3.head) && /Watched 0:00 to 0:29/.test(r3.head), r3.head);
 
   // ---- an ad first
