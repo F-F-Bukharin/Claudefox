@@ -1,32 +1,42 @@
 'use strict';
-// Static checks for the watch tool (the plan's Task 1 section "vendor", more sections come later).
-// The vendored claude-video copy must carry no cookie handling, no cloud engine, no setup script and no reads of the user's settings.   node test/watch-static.js
+// Static checks for video watching (plan 2026-10-20-video-watching-native): nothing to install (no Python engine left),
+// the add-on's watch tools only answer the helper's own calls, the wiring, the version and the friends files.   node test/watch-static.js
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const VENDOR = path.join(ROOT, 'host', 'vendor', 'claude-video');
 let passed = 0, failed = 0;
 const check = (name, ok, extra) => { if (ok) passed++; else { failed++; console.log(`FAIL ${name}${extra ? '  ' + extra : ''}`); } };
+const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
-// section vendor
-const KEPT = ['watch.py', 'download.py', 'frames.py', 'transcribe.py', 'config.py', 'runtime.py'];
-for (const f of ['gemini.py', 'whisper.py', 'local_whisperx.py', 'setup.py']) check(`${f} is gone`, !fs.existsSync(path.join(VENDOR, f)));
-check('LICENSE and NOTICE.md are there', fs.existsSync(path.join(VENDOR, 'LICENSE')) && fs.existsSync(path.join(VENDOR, 'NOTICE.md')));
-for (const f of KEPT) {
-  const file = path.join(VENDOR, f);
-  check(`${f} is there`, fs.existsSync(file));
-  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-  check(`${f}: no cookie handling`, !/cookie/i.test(text));
-  check(`${f}: no network or cloud import`, !/urlopen|urllib\.request|import requests|httpx|import (gemini|whisper|local_whisperx|setup|groq|openai|genai|whisperx)\b/.test(text));
-  check(`${f}: no removed-engine or setup.py text`, !/setup\.py|whisperx|groq|openai|gemini|WATCH_/i.test(text));
-  check(`${f}: reads no environment, home folder or .env`, !/environ|Path\.home|expanduser|\.env\b/.test(text));
-}
-// Windows' python3 alias (the Microsoft Store stub) runs and says "Python was not found": only a real Python prints its version.
-const hasPython = (r => !r.error && r.status === 0 && /^Python 3\./.test(`${r.stdout || ''}${r.stderr || ''}`.trim()))(spawnSync('python3', ['--version'], { encoding: 'utf8' }));
-const py = !hasPython ? { error: new Error('no python3') } : spawnSync('python3', ['-I', '-B', '-c', `import sys; sys.path.insert(0, ${JSON.stringify(VENDOR)}); import watch, download, frames, transcribe, config, runtime; print('imports ok')`], { encoding: 'utf8' });
-if (!py.error) check('the vendored modules import under python3 -I', py.status === 0 && /imports ok/.test(py.stdout), (py.stderr || '').trim().split('\n').pop());
+// section native: the watcher lives in the add-on, and nothing runs Python, yt-dlp or ffmpeg any more
+check('the vendored Python engine is gone', !fs.existsSync(path.join(ROOT, 'host', 'vendor', 'claude-video')));
+check('the child-process runner is gone', !fs.existsSync(path.join(ROOT, 'host', 'lib', 'watchrun.js')));
+const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(d => (d.isDirectory() ? walk(path.join(dir, d.name)) : [path.join(dir, d.name)]));
+const shipped = [...walk(path.join(ROOT, 'extension')), ...walk(path.join(ROOT, 'host')).filter(f => !f.includes(`${path.sep}test${path.sep}`))]
+  .filter(f => /\.(js|json|html|ps1|bat|txt)$/.test(f));
+// The one place that may name them: the third-party notice Claude reads when a video has no captions (lib/bg-watch.js).
+const NOTICE = /const CFX_WATCH_THIRD_PARTY = [^;]*;/;
+const named = shipped.filter(f => /\bpython\b|yt-dlp|yt_dlp|ffmpeg|whisper/i.test(fs.readFileSync(f, 'utf8').replace(/text\/x-python/g, '').replace(NOTICE, '')));
+check('no add-on or helper file names Python, yt-dlp, ffmpeg or Whisper (except the third-party notice)', named.length === 0, named.map(f => path.relative(ROOT, f)).join(', '));
+const notice = (NOTICE.exec(read('extension/lib/bg-watch.js')) || [''])[0];
+check('the third-party notice says it is made by another developer, not by Claudefox, and is never installed from here',
+  /made by another developer/.test(notice) && /not by Claudefox/.test(notice) && /never install it/.test(notice));
+const MANIFEST_SCRIPTS = JSON.parse(read('extension/manifest.json')).background.scripts;
+const at = n => MANIFEST_SCRIPTS.indexOf(n);
+check('the manifest loads watchCore, watchPage and bg-watch after pageTools and before the router',
+  at('lib/watchCore.js') > at('lib/pageTools.js') && at('lib/watchPage.js') > at('lib/watchCore.js') && at('lib/bg-watch.js') > at('lib/watchPage.js') && at('lib/bg-router.js') > at('lib/bg-watch.js'));
+const BGW = read('extension/lib/bg-watch.js'), PAGE = read('extension/lib/watchPage.js'), ROUTER = read('extension/lib/bg-router.js'), BGCHAT = read('extension/lib/bg-chat.js');
+check('both add-on watch tools refuse a call the helper did not make', (BGW.match(/cfxWatchRefuseUngated\(args\);/g) || []).length === 2 && /args\.__gated !== true/.test(BGW));
+check('the router drops a caller\'s own __gated and sets it only for the helper\'s gated calls',
+  /hasOwnProperty\.call\(args, '__gated'\)\) \{ args = Object\.assign\(\{\}, args\); delete args\.__gated; \}/.test(ROUTER) && /if \(gated === true && !army\)/.test(ROUTER));
+check('only the helper\'s message field makes a call gated', BGCHAT.includes('msg.gated === true') && !/__gated/.test(BGCHAT));
+const HOSTMAIN = read('host/claudefox-host.js');
+check('the helper marks only its two watch calls as gated', (HOSTMAIN.match(/\{ gated: true \}/g) || []).length === 2);
+check('the watch window\'s tab is muted, and so is the video itself', /tabs\.update\(s\.tabId, \{ muted: true \}\)/.test(BGW) && /v\.muted = true;/.test(PAGE));
+check('the watcher saves nothing: no downloads, no stored frames', !/browser\.downloads|storage\.(local|sync)\.set|indexedDB/.test(BGW + PAGE));
+check('Stop and the switch end a watch and close its window', read('extension/lib/bg-permissions.js').split('cfxWatchCancelAll()').length === 3);
+check('the add-on\'s watch tools are listed as reading tools', /'watch_run', 'watch_zoom_run'\]\);/.test(ROUTER));
 
 // section wiring (Task 7): the host hooks the permission card, the saved option and the handler
 const HOST = fs.readFileSync(path.join(ROOT, 'host', 'claudefox-host.js'), 'utf8');
@@ -38,11 +48,11 @@ for (const token of ['createWatchGate', "case 'watch_load'", "case 'watch_set_on
 }
 check('paths.js defines WATCH_ON_LOAD', fs.readFileSync(path.join(ROOT, 'host', 'lib', 'paths.js'), 'utf8').includes('WATCH_ON_LOAD'));
 
-// section version (Task 11): the add-on, the host and the tool server all say 0.11.0
+// section version: the add-on, the host and the tool server all say 0.12.0 (native video watching)
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension', 'manifest.json'), 'utf8'));
-check('the manifest version is 0.11.0', MANIFEST.version === '0.11.0');
-check('the host says VERSION 0.11.0', /const VERSION = '0\.11\.0';/.test(HOST));
-check('the tool server says VERSION 0.11.0', /const VERSION = '0\.11\.0';/.test(fs.readFileSync(path.join(ROOT, 'host', 'claudefox-mcp.js'), 'utf8')));
+check('the manifest version is 0.12.0', MANIFEST.version === '0.12.0');
+check('the host says VERSION 0.12.0', /const VERSION = '0\.12\.0';/.test(HOST));
+check('the tool server says VERSION 0.12.0', /const VERSION = '0\.12\.0';/.test(fs.readFileSync(path.join(ROOT, 'host', 'claudefox-mcp.js'), 'utf8')));
 
 // section friends (Task 12): the setup files and the build stage. CRLF throughout; the PowerShell and .bat parts run on the PC.
 if (fs.existsSync(path.join(ROOT, 'tools', 'xpi-tools.ps1'))) {   // a friends copy has no tools\ or friends\ folder
@@ -50,11 +60,10 @@ if (fs.existsSync(path.join(ROOT, 'tools', 'xpi-tools.ps1'))) {   // a friends c
   const PS1 = readText('tools/xpi-tools.ps1');
   const BAT = readText('friends/Set up Claudefox.bat');
   const START = readText('friends/START HERE.txt');
-  const engineLine = PS1.split('\n').find(l => l.includes('host\\vendor\\claude-video')) || '';
-  check('the build stage copies the claude-video engine, recursively', /-Recurse/.test(engineLine) && /Copy-Item/.test(engineLine));
-  check('the setup check runs the Python, yt-dlp and ffmpeg checks', BAT.includes('py -3 -m yt_dlp --version') && BAT.includes('ffmpeg -version'));
-  check('the setup check installs nothing: no line starts with winget', !BAT.split('\n').some(l => /^\s*winget/.test(l)));
-  check('START HERE has the video section, with the ffmpeg package', START.includes('Video watching (optional)') && START.includes('Gyan.FFmpeg'));
+  check('the build stage copies no vendored engine', !PS1.includes('host\\vendor'));
+  check('the setup checks for no Python, yt-dlp or ffmpeg', !/py -3|yt_dlp|ffmpeg/i.test(BAT));
+  check('the setup installs nothing: no line starts with winget', !BAT.split('\n').some(l => /^\s*winget/.test(l)));
+  check('START HERE says video watching needs nothing installed', /Video watching\r\n/.test(START) && START.includes('Nothing to install') && !/python|yt-dlp|ffmpeg/i.test(START));
   for (const [name, text] of [['xpi-tools.ps1', PS1], ['Set up Claudefox.bat', BAT], ['START HERE.txt', START]]) {
     check(`${name}: every line ends with CRLF`, text.split('\n').slice(0, -1).every(l => l.endsWith('\r')));
   }

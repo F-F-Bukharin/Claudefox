@@ -50,17 +50,13 @@ Using it
     the small Claudefox window. Firefox also needs this switch on, once: about:addons ->
     Claudefox -> Permissions and data -> Access local files on your computer.
 
-Video watching (optional)
-  Claude can watch a video: a web address, or a video file in a folder you allowed under
-  Local folders (Profile, Permissions). It needs Python 3.10 or newer, yt-dlp and ffmpeg
-  on this PC. Install them once:
-    winget install Python.Python.3.12
-    py -3 -m pip install -U yt-dlp
-    winget install Gyan.FFmpeg
-  Open a new window and check: py -3 --version, py -3 -m yt_dlp --version, ffmpeg -version.
-  Then switch it on: Profile -> Permissions -> Watch videos, and press Yes in the small
-  Claudefox window. Stop turns it off. The captions and frames Claude reads go to Claude
-  like any page it reads.
+Video watching
+  Claude can watch a video: a web address, a tab that shows one, or a video file in a folder
+  you allowed under Local folders (Profile, Permissions). Nothing to install: the video plays
+  muted in a small window of its own while Claude looks at its frames and reads its captions,
+  and nothing is downloaded or saved. Switch it on: Profile -> Permissions -> Watch videos,
+  and press Yes in the small Claudefox window. Stop turns it off. The captions and frames go
+  to Claude like any page it reads. Protected videos (Netflix and the like) can't be watched.
 
 Remove it
   about:addons -> remove Claudefox (a temporary one is gone when Firefox closes), then in

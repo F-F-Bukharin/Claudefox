@@ -212,6 +212,13 @@ function render(s, log) {
     $('uploadCardText').textContent = t('main_uploadWants', String(s.uploadAsk.name || '').slice(0, 200), String(s.uploadAsk.size || '').slice(0, 20), String(s.uploadAsk.site || '').slice(0, 253));
     if (upPrev !== upId) send('uploadShown', { id: upId });   // once per card
   }
+  // A video being watched: its title, how far it got and how many frames so far.
+  const ws = s.watching;
+  $('watchStatus').hidden = !ws;
+  if (ws) {
+    const clock = n => { const x = Math.max(0, Math.floor(Number(n) || 0)); const h = Math.floor(x / 3600), m = Math.floor(x % 3600 / 60), sec = String(x % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`; };
+    $('watchStatus').textContent = t('main_watching', String(ws.title || '').slice(0, 80), clock(ws.at), clock(ws.end), String(Number(ws.frames) || 0));
+  }
   $('watchCard').hidden = !s.watchAsk;
   if (s.watchAsk) {
     $('watchCardSource').textContent = String(s.watchAsk.source || '').slice(0, 200);

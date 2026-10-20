@@ -45,10 +45,9 @@ function stage() {
   for (const f of fs.readdirSync(path.join(root, 'host', 'lib')).filter(f => f.endsWith('.js'))) copy(path.join(root, 'host', 'lib', f), path.join(s, 'host', 'lib', f));
   for (const f of ['Set up Claudefox.bat', 'START HERE.txt']) copy(path.join(root, 'friends', f), path.join(s, f));
   copy(path.join(root, 'tools', 'Sign in Claude Code.bat'), path.join(s, 'tools', 'Sign in Claude Code.bat'));
-  // The tests come along (Improve runs them on the copy), and so does the vendored claude-video engine (the watch tool).
+  // The tests come along: Improve runs them on the copy.
   copy(path.join(root, 'test'), path.join(s, 'test'));
   copy(path.join(root, 'host', 'test'), path.join(s, 'host', 'test'));
-  copy(path.join(root, 'host', 'vendor', 'claude-video'), path.join(s, 'host', 'vendor', 'claude-video'));
   return s;
 }
 const run = dir => spawnSync(process.execPath, [path.join(root, 'tools', 'brand.js'), dir], { encoding: 'utf8' });

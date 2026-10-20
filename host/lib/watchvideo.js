@@ -1,28 +1,32 @@
 'use strict';
-// Checks, the argument list and the environment for the watch_video tool (watch-tool plan, Task 3).
-// No shell: the child starts with this argument list, and the source always comes after '--'.
+// watch_video and watch_zoom, the helper's side (plan docs/superpowers/plans/2026-10-20-video-watching-native.md): the
+// checks, the user's permission (watchgate.js), then the add-on, which watches the video in a window of its own
+// (extension/lib/bg-watch.js). Nothing is installed, downloaded or saved: the add-on catches frames from the video
+// while it plays, muted. A local video is opened in Zen first (lib/localpages.js), and a subtitle file next to it is
+// read here (lib/watchcaptions.js).
 const fs = require('fs');
 const path = require('path');
 const { toPath } = require('./localpages');
 const guard = require('./guard');
-const { makeRunDir, removeRunDir } = require('./watchrun');
+const { findSubtitles } = require('./watchcaptions');
 
-const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.webm', '.mkv', '.avi', '.flv', '.wmv']);
-const SCRUB = /^WATCH_|^YTDLP_|^YT_DLP_|^GEMINI_|^GROQ_|^OPENAI_|^PYTHON(PATH|HOME|STARTUP)$|API_?KEY|TOKEN|SECRET|PASSWORD|COOKIE/i;
+const VIDEO_EXT = new Set(['.mp4', '.m4v', '.mov', '.webm', '.mkv', '.ogv', '.ogg']);
 const MAX_SOURCE = 2048;
 const MAX_QUESTION = 500;
+const ZOOM_MAX_SPAN = 30;
 
 function checkSource(raw, folderOf) {
   const source = String(raw == null ? '' : raw).trim();
-  if (!source) return { ok: false, error: 'Give a video address or the path of a video file.' };
+  if (!source) return { ok: false, error: 'Give a video address, a tab (tab:<id> from tabs_list) or the path of a video file.' };
   if (source.length > MAX_SOURCE) return { ok: false, error: `The source is longer than ${MAX_SOURCE} characters.` };
-  if (source.startsWith('-')) return { ok: false, error: 'A source cannot start with a dash.' };
+  if (/^tab:\d{1,10}$/i.test(source)) return { ok: true, kind: 'tab', tab_id: Number(source.slice(4)) };
   if (/^https?:\/\//i.test(source)) {
     let url;
     try { url = new URL(source); } catch { return { ok: false, error: 'That address is not valid.' }; }
     if (!url.hostname) return { ok: false, error: 'That address has no host.' };
-    return { ok: true, kind: 'url', source };
+    return { ok: true, kind: 'url', source: url.href };
   }
+  if (source.startsWith('-')) return { ok: false, error: 'A source cannot start with a dash.' };
   let real;
   try {
     real = fs.realpathSync.native(toPath(source));
@@ -30,7 +34,7 @@ function checkSource(raw, folderOf) {
     return { ok: false, error: e.code === 'ENOENT' ? 'That video file was not found.' : (e.message || 'That path is not valid.') };
   }
   if (!fs.statSync(real).isFile()) return { ok: false, error: 'That path is not a file.' };
-  if (!VIDEO_EXT.has(path.extname(real).toLowerCase())) return { ok: false, error: 'That file is not a video type this tool reads.' };
+  if (!VIDEO_EXT.has(path.extname(real).toLowerCase())) return { ok: false, error: 'The browser plays .mp4, .m4v, .mov, .webm, .mkv and .ogv files; this file is not one of them.' };
   const problem = guard.localProblem(real, false);
   if (problem) return { ok: false, error: `Claude cannot watch that file: ${problem}.` };
   if (!folderOf(real)) return { ok: false, error: 'Allow the folder that holds this video in Local folders first.' };
@@ -44,111 +48,83 @@ function checkQuestion(raw) {
   return { ok: true, value };
 }
 
-function checkTime(raw) {
-  const s = raw == null ? '' : String(raw).trim();
-  return /^(\d+(\.\d+)?|\d{1,2}:\d{2}(:\d{2})?(\.\d+)?)$/.test(s) ? s : null;
+// '90', '1:30', '1:02:03', '1:30.25' -> seconds (the same rules as extension/lib/watchCore.js parseClock).
+function parseClock(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return null;
+  if (/^\d+(\.\d+)?$/.test(s)) return Number(s);
+  const m = /^(?:(\d+):)?(\d{1,2}):(\d{2}(?:\.\d+)?)$/.exec(s);
+  if (!m) return null;
+  const sec = Number(m[3]);
+  if (sec >= 60 || Number(m[2]) >= 60 && m[1] !== undefined) return null;
+  return (Number(m[1] || 0) * 3600) + Number(m[2]) * 60 + sec;
 }
 
-function buildArgv({ script, source, question, start, end, runDir }) {
-  const argv = [script, '--detail', 'efficient', '--max-frames', '24', '--resolution', '512', '--no-whisper', '--out-dir', runDir];
-  if (question) argv.push(`--question=${question}`);
-  if (start) argv.push('--start', start);
-  if (end) argv.push('--end', end);
-  argv.push('--', source);
-  return argv;
-}
-
-function buildEnv(base) {
-  const env = {};
-  for (const [name, value] of Object.entries(base || {})) if (!SCRUB.test(name)) env[name] = value;
-  env.PYTHONUTF8 = '1';
-  return env;
-}
-
-const PY_CANDIDATES = [['py', ['-3']], ['python', []], ['python3', []]];
-const PY_CHECK = "import sys; print('%d.%d' % sys.version_info[:2])";
-const PY_HINT = 'Python 3.10 or newer was not found. Install it from python.org with "Add python.exe to PATH" ticked, then run Set up Claudefox.bat again.';
-
-// probe(exe, args) -> { code, stdout }, injected so the tests can fake the interpreters.
-async function findPython(probe) {
-  for (const [exe, args] of PY_CANDIDATES) {
-    const r = await probe(exe, [...args, '-c', PY_CHECK]);
-    const m = r && r.code === 0 ? /^3\.(\d+)$/.exec(String(r.stdout).trim()) : null;
-    if (m && Number(m[1]) >= 10) return { exe, args };
-  }
-  return { error: PY_HINT };
-}
-
-// Result assembly (Task 6). The report lists frames as ``- `<path>` (t=..., reason=...)``; only files inside the run folder are read.
-function parseFrames(stdout, runDir) {
-  const root = path.resolve(runDir) + path.sep;
-  const frames = [];
-  for (const line of String(stdout || '').split(/\r?\n/)) {
-    const m = /^- `([^`]+)` \(t=([^,)]*)/.exec(line);
-    if (!m) continue;
-    const p = path.resolve(m[1]);
-    if (p.startsWith(root)) frames.push({ path: p, t: m[2] });
-  }
-  return frames;
-}
-
-function isJpeg(buf) {
-  return !!buf && buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
-}
-
-function assembleResult({ stdout, stderr, code, runDir, readFile, maxFrames = 24, maxText = 60 * 1024 }) {
-  if (code !== 0) return { text: `watch failed (exit code ${code}): ${String(stderr || '').slice(-600)}`, frames: [] };
-  const listed = parseFrames(stdout, runDir);
-  const frames = [];
-  let unreadable = 0;
-  for (const f of listed.slice(0, maxFrames)) {
-    const buf = readFile(f.path);
-    if (isJpeg(buf)) frames.push({ mimeType: 'image/jpeg', data: buf.toString('base64') });
-    else unreadable++;
-  }
-  let text = String(stdout || '');
-  if (Buffer.byteLength(text) > maxText) text = Buffer.from(text).subarray(0, maxText).toString('utf8') + '\n(report cut at 60 KB)';
-  if (unreadable) text += `\n(${unreadable} frame(s) could not be read)`;
-  if (listed.length > maxFrames) text += `\n(frames beyond ${maxFrames} are not returned)`;
-  return { text, frames };
-}
-
-// The clock argument: empty, or a time the argument list can carry (checkTime). A bad one is refused at once.
-function clockArg(name, raw) {
+// An optional time: '' when not given; a bad one is refused at once.
+function timeArg(name, raw) {
   if (raw == null || String(raw).trim() === '') return '';
-  const t = checkTime(raw);
+  const t = parseClock(raw);
   if (t === null) throw new Error(`The ${name} time is not valid. Use seconds (90) or a clock time (1:30).`);
   return t;
 }
 
-const readOrNull = p => { try { return fs.readFileSync(p); } catch { return null; } };
-
-// The tool (watch-tool spec, "Gating and permission"). A refusal or a missing Python throws at once. Unless watching is on
-// for the session, the permission step asks the user first; a No throws its text and nothing runs.
-// deps: { enabled, permission: { ask(source) -> Promise<{ ok, message? }> }, folderOf, baseDir, scriptPath, getPython,
-//         runs: { run(opts) -> Promise<{ code, stdout, stderr, timedOut, stopped }> }, deadlineMs }
-async function watchVideo(args, deps) {
-  const src = checkSource(args.source, deps.folderOf);
-  if (!src.ok) throw new Error(src.error);
-  const q = checkQuestion(args.question);
-  if (!q.ok) throw new Error(q.error);
-  const start = clockArg('start', args.start);
-  const end = clockArg('end', args.end);
-  const py = await deps.getPython();
-  if (!deps.enabled) {
-    const v = await deps.permission.ask(args.source);
-    if (!v.ok) throw new Error(v.message);
-  }
-  const runDir = makeRunDir(deps.baseDir);
-  try {
-    const argv = buildArgv({ script: deps.scriptPath, source: src.source, question: q.value, start, end, runDir });
-    const r = await deps.runs.run({ exe: py.exe, args: [...py.args, ...argv], cwd: runDir, env: buildEnv(process.env), deadlineMs: deps.deadlineMs });
-    if (r.stopped) return { text: 'Stopped.', frames: [] };
-    if (r.timedOut) return { text: 'The video took longer than 10 minutes, so it was stopped.', frames: [] };
-    return assembleResult({ stdout: r.stdout, stderr: r.stderr, code: r.code, runDir, readFile: readOrNull });
-  } finally {
-    try { removeRunDir(runDir); } catch { /* still held by a child that is shutting down; the result is already read */ }
-  }
+// A caption language: '' (the video's own), or a code such as en, pt or pt-BR.
+function langArg(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return '';
+  if (!/^[a-z]{2,3}([-_][A-Za-z0-9]{2,8})?$/i.test(s)) throw new Error('The language is not valid. Use a code such as en, pt or pt-BR.');
+  return s.replace('_', '-');
 }
 
-module.exports = { checkSource, checkQuestion, checkTime, buildArgv, buildEnv, findPython, parseFrames, assembleResult, watchVideo };
+async function allowed(deps, what) {
+  if (deps.enabled) return;
+  const v = await deps.permission.ask(what);
+  if (!v.ok) throw new Error(v.message);
+}
+
+// The tool. A refusal throws at once. Unless watching is on for the session, the user is asked first; a No throws its
+// text and nothing opens.
+// deps: { enabled, permission: { ask(source) -> Promise<{ ok, message? }> }, folderOf(real), openLocal(real) ->
+//         Promise<{ tab_id }>, callAddon(tool, args, ms) -> Promise<{ ok, result, error }>, runMs }
+async function watchVideo(args, deps) {
+  const a = args || {};
+  const src = checkSource(a.source, deps.folderOf);
+  if (!src.ok) throw new Error(src.error);
+  const q = checkQuestion(a.question);
+  if (!q.ok) throw new Error(q.error);
+  const start = timeArg('start', a.start);
+  const end = timeArg('end', a.end);
+  if (start !== '' && end !== '' && end <= start) throw new Error('The end must come after the start.');
+  const lang = langArg(a.lang);
+  await allowed(deps, a.source);
+  const payload = { kind: src.kind, start: start === '' ? 0 : start, end, lang };
+  if (src.kind === 'url') payload.url = src.source;
+  if (src.kind === 'tab') payload.tab_id = src.tab_id;
+  if (src.kind === 'file') {
+    const subs = findSubtitles(src.source, lang);
+    if (subs) { payload.cues = subs.cues; payload.cueLabel = subs.label; }
+    const opened = await deps.openLocal(src.source);
+    payload.tab_id = opened.tab_id;
+  }
+  const r = await deps.callAddon('watch_run', payload, deps.runMs);
+  if (!r || !r.ok) throw new Error((r && r.error) || 'The video could not be watched.');
+  return r.result;
+}
+
+// watch_zoom: four frames a second over up to 30 s of a video watch_video opened (its watch_id).
+async function watchZoom(args, deps) {
+  const a = args || {};
+  const id = String(a.watch_id == null ? '' : a.watch_id).trim();
+  if (!/^w\d{1,6}$/.test(id)) throw new Error('Give the watch_id that watch_video returned (such as w1).');
+  const start = timeArg('start', a.start);
+  const end = timeArg('end', a.end);
+  if (start === '' || end === '') throw new Error('Give a start and an end, such as 12:40 and 12:55.');
+  if (end <= start) throw new Error('The end must come after the start.');
+  if (end - start > ZOOM_MAX_SPAN + 1e-6) throw new Error(`A zoom covers at most ${ZOOM_MAX_SPAN} seconds. Zoom into a shorter part, or into two parts.`);
+  await allowed(deps, `zoom ${id}`);
+  const r = await deps.callAddon('watch_zoom_run', { watch_id: id, start, end }, deps.zoomMs);
+  if (!r || !r.ok) throw new Error((r && r.error) || 'The zoom did not work.');
+  return r.result;
+}
+
+module.exports = { checkSource, checkQuestion, parseClock, timeArg, langArg, watchVideo, watchZoom, ZOOM_MAX_SPAN };

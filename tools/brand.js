@@ -87,7 +87,6 @@ const RULES = [
 // comments explain how they find Zen and must keep saying so.
 const COMMENT_FILES = /\.(js|ps1|py)$/i;
 const COMMENT_KEEP = ['host/lib/localpages.js', 'host/lib/updates.js', 'host/lib/guard.js'];
-// .py: the vendored claude-video engine's comments name the add-on (its NOTICE.md is branded too).
 const TEXT = /\.(js|json|html|css|svg|txt|md|bat|cmd|ps1|py)$/i;
 
 // Files are read as latin1 (below), so a rule with non-ASCII text (the Portuguese ones) only matches when it is written

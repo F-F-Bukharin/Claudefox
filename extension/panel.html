@@ -60,9 +60,11 @@
       <div id="watchCard" class="card" hidden>
         <p><strong data-i18n="ui_watchWants">Claude wants to watch a video</strong></p>
         <p id="watchCardSource" class="mono small"></p>
-        <p class="muted small" data-i18n="ui_watchNote">Watching runs Python, yt-dlp and ffmpeg on this PC.</p>
+        <p class="muted small" data-i18n="ui_watchNote">Videos play muted in a small window while Claude looks at their frames and captions. Nothing is installed.</p>
         <div class="row"><button id="watchAllow" type="button" data-i18n="ui_allow">Allow</button> <button id="watchDeny" type="button" data-i18n="ui_deny">Deny</button></div>
       </div>
+      <!-- A video being watched (lib/bg-watch.js): where it is. Stop ends it. -->
+      <p id="watchStatus" class="muted small" role="status" hidden></p>
       <!-- Claude asks to save a picture: only Allow and Deny answer it. Allow saves it in the pictures folder or a folder you allowed. -->
       <div id="downloadCard" class="card" hidden>
         <p><span data-i18n="ui_downloadWants">Claude wants to save a picture from</span> <strong id="downloadCardHost"></strong></p>

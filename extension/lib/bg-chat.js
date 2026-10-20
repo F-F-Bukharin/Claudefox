@@ -362,7 +362,8 @@ async function onNativeMessage(msg) {
       }
       const army = a != null ? { run: a.run.slice(0, 40), worker: a.worker.slice(0, 40) } : null;
       const turn = chatRuns.get(cfxChatId());
-      const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'), army, !army && !!(turn && turn.scheduled));
+      // gated: only the helper's own calls after the user allowed them carry it (host callAddon), never a client's.
+      const out = await dispatch(String(msg.tool), msg.args || {}, String(msg.source || 'Claude'), army, !army && !!(turn && turn.scheduled), msg.gated === true);
       sendNative({ type: 'result', id: msg.id, ...out });
       return;
     }

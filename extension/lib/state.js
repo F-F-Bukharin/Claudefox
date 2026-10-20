@@ -16,6 +16,7 @@ const CFX_DEFAULT_STATE = Object.freeze({
   watch: false,               // Watch videos (the watch_video tool): on for this session only (load() clears it)
   watchOnLoad: null,          // from the helper: true (watching starts on), false, or null (never asked)
   watchAsk: null,             // { id, source } while the helper's card waits for an answer in the panel
+  watching: null,             // { title, at, end, frames } while a video is being watched (lib/bg-watch.js)
   downloadAsk: null,          // { id, host, name, folder } while the helper's picture card waits for an answer in the panel
   siteAsk: null,              // { id, site, action, kind } while the panel's site card waits for an answer
   fillAsk: null,              // { id, site, rows } while the panel's fill card waits for an answer
@@ -62,7 +63,7 @@ const cfxState = {
 
   async load() {
     const got = await browser.storage.session.get(['state', 'log']);
-    this._cache = Object.assign({}, CFX_DEFAULT_STATE, got.state || {}, { unsafe: false, watch: false, watchAsk: null, downloadAsk: null, siteAsk: null, fillAsk: null, uploadAsk: null, trusted: false, draft: null });   // never survive a restart
+    this._cache = Object.assign({}, CFX_DEFAULT_STATE, got.state || {}, { unsafe: false, watch: false, watchAsk: null, watching: null, downloadAsk: null, siteAsk: null, fillAsk: null, uploadAsk: null, trusted: false, draft: null });   // never survive a restart
     this._log = Array.isArray(got.log) ? got.log : [];
     return this._cache;
   },

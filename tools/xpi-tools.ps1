@@ -41,16 +41,11 @@ function Find-SignedXpi([string]$Root, [string]$Version, [string]$Name, [Paramet
 function New-ClaudefoxStage([string]$Root, [string]$Stage) {
   if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
   New-Item -ItemType Directory -Force (Join-Path $Stage 'host\lib'), (Join-Path $Stage 'tools') | Out-Null
-  New-Item -ItemType Directory -Force (Join-Path $Stage 'host\vendor') | Out-Null
   Copy-Item (Join-Path $Root 'extension') (Join-Path $Stage 'extension') -Recurse
   Get-ChildItem (Join-Path $Stage 'extension\mods') -Directory -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
   Get-ChildItem (Join-Path $Stage 'extension\output') -Exclude 'README.txt' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
   foreach ($f in 'claudefox-host.js', 'claudefox-mcp.js', 'webfetch-hook.js', 'install.ps1', 'pick-folder.ps1', 'confirm.ps1') { Copy-Item (Join-Path $Root "host\$f") (Join-Path $Stage "host\$f") }
   Copy-Item (Join-Path $Root 'host\lib\*.js') (Join-Path $Stage 'host\lib')
-  # The trimmed claude-video engine of the watch tool (its LICENSE and NOTICE.md come along).
-  Copy-Item (Join-Path $Root 'host\vendor\claude-video') (Join-Path $Stage 'host\vendor\claude-video') -Recurse
-  # Python's own caches (__pycache__, made when the engine ran on this PC) never travel.
-  Get-ChildItem (Join-Path $Stage 'host\vendor\claude-video') -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
   # The tests: Improve runs them on a copy of the add-on, so the friends' zip carries them too.
   Copy-Item (Join-Path $Root 'test') (Join-Path $Stage 'test') -Recurse
   Copy-Item (Join-Path $Root 'host\test') (Join-Path $Stage 'host\test') -Recurse

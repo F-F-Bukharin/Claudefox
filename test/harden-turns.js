@@ -195,11 +195,10 @@ async function main() {
   }
   check('chat turns take their model from chatModel', read('host/lib/chatturns.js').includes('chatModel(msg.model)'));
 
-  // ---- B10: every spawn the helper makes for a chat, an army worker, a watch run or the Improve tests is listed
+  // ---- B10: every spawn the helper makes for a chat, an army worker or the Improve tests is listed
   const sites = [
     ['host/lib/chatturns.js', "children.track(child, 'chat');"],
     ['host/lib/army.js', "children.track(child, 'army');"],
-    ['host/lib/watchrun.js', "children.track(child, 'watch');"],
     ['host/lib/selfimprove.js', "children.track(child, 'improve-test');"],
   ];
   for (const [file, call] of sites) check(`${file} lists its child in children.json`, read(file).includes(call));

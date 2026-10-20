@@ -26,7 +26,6 @@ module.exports = {
   DOWNLOADS_DIR: testHook('CLAUDEFOX_DOWNLOADS') || path.join(process.env.USERPROFILE || os.homedir(), 'Downloads'),
   OUTPUT_DIR: path.join(BASE, 'output'),                // files Claude makes and the add-on stores here (Settings, Saving files; lib/output.js)
   LOCAL_GRANTS: path.join(BASE, 'local-grants.json'),   // folders the user allowed for local pages (lib/localpages.js)
-  WATCH_DIR: path.join(BASE, 'watch'),                 // one run folder per watch_video run (lib/watchrun.js)
   WATCH_ON_LOAD: path.join(BASE, 'watch-on-load.json'),   // the saved answer to "watch videos every time the panel opens?" (lib/watchgate.js)
   PIPE: testHook('CLAUDEFOX_PIPE') || (process.platform === 'win32'
     ? `\\\\.\\pipe\\claudefox-${USER}`

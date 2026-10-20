@@ -17,6 +17,7 @@ async function stopAll(source) {
     pendingActions.delete(id);
   }
   sendNative({ type: 'watch_off' });   // before the helper goes: watching off, and a waiting card is cancelled
+  if (typeof cfxWatchCancelAll === 'function') cfxWatchCancelAll();   // a video being watched stops, and its window closes
   sendNative({ type: 'download_off' });   // a picture card waiting is cancelled, and a download in progress stops
   sendNative({ type: 'trusted_off' });   // Automatic goes off with the other switches
   disconnectNative(t('bg_nativeUserStopped'));   // the helper exits, which kills any running Claude Code turn and its tool server
@@ -157,6 +158,7 @@ async function siteListSet(site, value) {
 async function setWatch(value) {
   if (!value) {
     sendNative({ type: 'watch_off' });
+    if (typeof cfxWatchCancelAll === 'function') cfxWatchCancelAll();
     if (cfxState.get().watch) {
       await cfxState.set({ watch: false });
       await cfxState.addLog('info', 'Watch videos off');

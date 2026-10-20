@@ -1,6 +1,7 @@
 'use strict';
 // Runs every test and prints one summary line each.   node test/run-all.js
-// The two DOM tests need jsdom (npm i --no-save jsdom) and skip without it; chat-smoke skips on Windows.
+// The DOM tests need jsdom (npm i --no-save jsdom) and skip without it; chat-smoke skips on Windows; watch-browser needs
+// Playwright's Chromium and ffmpeg, and skips without them.
 const { spawnSync } = require('child_process');
 const path = require('path');
 
@@ -17,7 +18,8 @@ const TESTS = [
   'test/dom-inject.js',
   'test/dom-render.js', 'test/dom-history.js', 'test/dom-windows.js',
   'test/menu-static.js', 'test/wall-ink.js', 'test/brand.js', 'test/shared-code.js', 'test/injection-page.js', 'test/hardening.js', 'test/harden-confirm.js', 'test/harden-turns.js', 'test/harden-native.js',
-  'test/watch-static.js', 'test/site-gate.js', 'test/site-wiring.js', 'host/test/watch-engine-smoke.js', 'host/test/watch-smoke.js',
+  'test/watch-static.js', 'test/site-gate.js', 'test/site-wiring.js', 'host/test/watch-smoke.js',
+  'test/watch-native.js', 'test/watch-addon.js', 'test/watch-browser.js',
   'host/test/scope-smoke.js',
   'host/test/trusted-smoke.js',
   'host/test/usage-smoke.js',

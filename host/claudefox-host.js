@@ -9,7 +9,7 @@
 // Local clients (the Zen tool server that Claude Code starts) connect over a named pipe and must
 // present the per-session token stored in %LOCALAPPDATA%\claudefox\pipe-token.
 
-const VERSION = '0.11.0';
+const VERSION = '0.12.0';
 
 const fs = require('fs');
 const net = require('net');
@@ -98,7 +98,7 @@ const chatTurns = createChatTurns({ sendAddon, callAddon, findClaude, claudeEnv,
   shuttingDown: () => shuttingDown });
 const { army, startChat, cancelChat, selfApply, selfDiscard } = chatTurns;
 const watchWiring = createWatchWiring({ confirm, confirmed, sendAddon, grants });
-const { watchWindow, saveWatchOnLoad, sendWatchState, watchLoad, gate, watchRuns, watchDeps } = watchWiring;
+const { watchWindow, saveWatchOnLoad, sendWatchState, watchLoad, gate, watchDeps } = watchWiring;
 // download_image (lib/downloadgate.js): the picture card, and the download in progress (download_off stops it).
 const downloadGate = createDownloadGate({
   showCard: (id, info) => sendAddon({ type: 'download_ask', id, host: info.host, name: info.name, folder: info.folder }),
@@ -222,7 +222,7 @@ function onAddon(msg) {
     case 'files_off':     confirmed.files = null; return sendConfirmedState();
     case 'watch_load':        watchLoad().catch(e => log.error('watch_load', e.message)); return;   // the panel loaded
     case 'watch_set_on_load': if (msg.value === false) saveWatchOnLoad(false); return sendWatchState();   // on is asked in a window
-    case 'watch_off':         confirmed.watch = false; gate.cancel(); watchRuns.stopAll(false); return;   // Stop
+    case 'watch_off':         confirmed.watch = false; gate.cancel(); return;   // Stop or the switch: the add-on ends a watch itself
     case 'watch_answer':      gate.answer(msg.id, !!msg.allow); return;
     case 'watch_shown':       gate.shown(msg.id); return;
     case 'download_shown':    downloadGate.shown(msg.id); return;
@@ -504,7 +504,7 @@ function announceClients() {
 // read_document: the text of a Word, PowerPoint, Excel or OpenDocument file in the file-tools folder or among the
 // files attached to the chat, with the same limits as the file tools (never a protected place).
 // The helper tools that read a page or a file: a read that worked in a running turn sends page_read (see the dispatch below).
-const PAGE_READ_TOOLS = new Set(['read_document', 'local_files', 'local_file_read', 'watch_video', 'army_wait']);
+const PAGE_READ_TOOLS = new Set(['read_document', 'local_files', 'local_file_read', 'watch_video', 'watch_zoom', 'army_wait']);
 // download_image (lib/downloadgate.js): a picture from a public address, saved only after the user allows it in a card.
 // The folder is the user's Downloads folder, or a folder the user allowed: a local-page folder, or the file-tools folder in write mode.
 async function downloadImage(args) {
@@ -536,7 +536,13 @@ const HELPER_TOOLS = {
   local_page_open: args => local.open(args),
   local_files: args => local.list(args),
   local_file_read: args => local.read(args),
-  watch_video: args => watchvideo.watchVideo(args, watchDeps()),
+  // Video watching (lib/watchvideo.js): asked first, then the add-on watches in a window of its own. gated marks the
+  // add-on call as the helper's own, after the user's yes (extension/lib/bg-router.js).
+  watch_video: args => watchvideo.watchVideo(args, Object.assign(watchDeps(), {
+    openLocal: real => local.open({ path: real }),
+    callAddon: (t, a, ms) => callAddon(t, a, { gated: true }, ms),
+  })),
+  watch_zoom: args => watchvideo.watchZoom(args, Object.assign(watchDeps(), { callAddon: (t, a, ms) => callAddon(t, a, { gated: true }, ms) })),
   download_image: args => downloadImage(args),
   // upload_file (lib/upload.js): a file from a local-page folder or the file-tools folder into a file field, after a card in the panel.
   upload_file: args => require('./lib/upload').uploadFile(args, {
@@ -578,7 +584,6 @@ function shutdown(reason) {
   gate.cancel();
   downloadGate.cancel();
   if (downloadAbort) downloadAbort.abort();
-  watchRuns.stopAll(true);   // a watch run in progress is cut
   forgetLogin();   // the window itself stays: finishing it still works later
   for (const c of clients.values()) { try { c.sock.destroy(); } catch {} }
   try { server.close(); } catch {}
